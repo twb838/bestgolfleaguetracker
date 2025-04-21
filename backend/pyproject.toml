@@ -1,0 +1,6 @@
+[tool.mypy]
+plugins = ["sqlalchemy.ext.mypy.plugin"]
+
+[[tool.mypy.overrides]]
+module = "sqlalchemy.*"
+follow_imports = "skip"
