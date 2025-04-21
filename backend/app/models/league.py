@@ -8,15 +8,15 @@ from app.db.base import Base
 league_team_association = Table(
     'league_teams',
     Base.metadata,
-    Column('league_id', Integer, ForeignKey('leagues.id')),
-    Column('team_id', Integer, ForeignKey('teams.id'))
+    Column('league_id', Integer, ForeignKey('leagues.id', ondelete='CASCADE'), primary_key=True),
+    Column('team_id', Integer, ForeignKey('teams.id', ondelete='CASCADE'), primary_key=True)
 )
 
 league_course_association = Table(
     'league_courses',
     Base.metadata,
-    Column('league_id', Integer, ForeignKey('leagues.id')),
-    Column('course_id', Integer, ForeignKey('courses.id'))
+    Column('league_id', Integer, ForeignKey('leagues.id', ondelete='CASCADE'), primary_key=True),
+    Column('course_id', Integer, ForeignKey('courses.id', ondelete='CASCADE'), primary_key=True)
 )
 
 class League(Base):
