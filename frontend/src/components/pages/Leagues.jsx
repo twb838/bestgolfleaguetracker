@@ -37,6 +37,8 @@ function Leagues() {
     const [leagues, setLeagues] = useState([]);
     const [teams, setTeams] = useState([]);
     const [courses, setCourses] = useState([]);
+    
+    // Create league state
     const [open, setOpen] = useState(false);
     const [newLeague, setNewLeague] = useState({
         name: '',
@@ -45,6 +47,21 @@ function Leagues() {
         courses: []
     });
     const [formError, setFormError] = useState('');
+    
+    // Edit league state
+    const [editOpen, setEditOpen] = useState(false);
+    const [editLeague, setEditLeague] = useState({
+        id: null,
+        name: '',
+        description: '',
+        teams: [],
+        courses: []
+    });
+    const [editError, setEditError] = useState('');
+    
+    // Delete league state
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [leagueToDelete, setLeagueToDelete] = useState(null);
 
     useEffect(() => {
         fetchLeagues();
@@ -55,8 +72,12 @@ function Leagues() {
     const fetchLeagues = async () => {
         try {
             const response = await fetch(env.API_ENDPOINTS.LEAGUES);
-            const data = await response.json();
-            setLeagues(data);
+            if (response.ok) {
+                const data = await response.json();
+                setLeagues(data);
+            } else {
+                console.error('Failed to fetch leagues');
+            }
         } catch (error) {
             console.error('Error fetching leagues:', error);
         }
@@ -82,6 +103,8 @@ function Leagues() {
         }
     };
 
+    // CREATE FUNCTIONALITY
+    
     const validateForm = () => {
         setFormError('');
         
@@ -145,19 +168,6 @@ function Leagues() {
         }
     };
 
-    const handleDeleteLeague = async (id) => {
-        try {
-            const response = await fetch(`${env.API_ENDPOINTS.LEAGUES}/${id}`, {
-                method: 'DELETE'
-            });
-            if (response.ok) {
-                fetchLeagues();
-            }
-        } catch (error) {
-            console.error('Error deleting league:', error);
-        }
-    };
-
     const handleTeamSelection = (teamId) => {
         const currentTeams = [...newLeague.teams];
         const teamIndex = currentTeams.indexOf(teamId);
@@ -192,6 +202,148 @@ function Leagues() {
             ...newLeague,
             courses: currentCourses
         });
+    };
+    
+    // EDIT FUNCTIONALITY
+    
+    const handleEditLeague = (league) => {
+        // Transform the league object to the format needed for editing
+        setEditLeague({
+            id: league.id,
+            name: league.name,
+            description: league.description || '',
+            teams: league.teams ? league.teams.map(team => team.id) : [],
+            courses: league.courses ? league.courses.map(course => course.id) : []
+        });
+        setEditOpen(true);
+        setEditError('');
+    };
+    
+    const handleEditTeamSelection = (teamId) => {
+        const currentTeams = [...editLeague.teams];
+        const teamIndex = currentTeams.indexOf(teamId);
+        
+        if (teamIndex === -1) {
+            // Add the team
+            currentTeams.push(teamId);
+        } else {
+            // Remove the team
+            currentTeams.splice(teamIndex, 1);
+        }
+        
+        setEditLeague({
+            ...editLeague,
+            teams: currentTeams
+        });
+    };
+    
+    const handleEditCourseSelection = (courseId) => {
+        const currentCourses = [...editLeague.courses];
+        const courseIndex = currentCourses.indexOf(courseId);
+        
+        if (courseIndex === -1) {
+            // Add the course
+            currentCourses.push(courseId);
+        } else {
+            // Remove the course
+            currentCourses.splice(courseIndex, 1);
+        }
+        
+        setEditLeague({
+            ...editLeague,
+            courses: currentCourses
+        });
+    };
+    
+    const validateEditForm = () => {
+        setEditError('');
+        
+        if (!editLeague.name.trim()) {
+            setEditError('League name is required');
+            return false;
+        }
+        
+        if (editLeague.teams.length === 0) {
+            setEditError('At least one team is required');
+            return false;
+        }
+        
+        if (editLeague.courses.length === 0) {
+            setEditError('At least one course is required');
+            return false;
+        }
+        
+        return true;
+    };
+    
+    const handleEditSubmit = async () => {
+        if (!validateEditForm()) {
+            return;
+        }
+        
+        try {
+            // Prepare the league data with team and course IDs
+            const leagueToSubmit = {
+                name: editLeague.name,
+                description: editLeague.description,
+                team_ids: editLeague.teams,
+                course_ids: editLeague.courses
+            };
+            
+            const response = await fetch(`${env.API_ENDPOINTS.LEAGUES}/${editLeague.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(leagueToSubmit),
+            });
+            
+            if (response.ok) {
+                setEditOpen(false);
+                setEditLeague({
+                    id: null,
+                    name: '', 
+                    description: '',
+                    teams: [],
+                    courses: []
+                });
+                setEditError('');
+                fetchLeagues();
+            } else {
+                const errorData = await response.json();
+                setEditError(errorData.detail || 'Error updating league');
+            }
+        } catch (error) {
+            console.error('Error updating league:', error);
+            setEditError('Network error. Please try again.');
+        }
+    };
+    
+    // DELETE FUNCTIONALITY
+
+    const handleConfirmDeleteClick = (league) => {
+        setLeagueToDelete(league);
+        setDeleteDialogOpen(true);
+    };
+
+    const handleDeleteLeague = async () => {
+        if (!leagueToDelete) return;
+        
+        try {
+            const response = await fetch(`${env.API_ENDPOINTS.LEAGUES}/${leagueToDelete.id}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                setDeleteDialogOpen(false);
+                setLeagueToDelete(null);
+                fetchLeagues();
+            } else {
+                console.error('Failed to delete league');
+            }
+        } catch (error) {
+            console.error('Error deleting league:', error);
+        }
     };
 
     return (
@@ -236,13 +388,18 @@ function Leagues() {
                                     }
                                 />
                                 <ListItemSecondaryAction>
-                                    <IconButton edge="end" aria-label="edit" sx={{ mr: 1 }}>
+                                    <IconButton 
+                                        edge="end" 
+                                        aria-label="edit" 
+                                        sx={{ mr: 1 }}
+                                        onClick={() => handleEditLeague(league)}
+                                    >
                                         <EditIcon />
                                     </IconButton>
                                     <IconButton 
                                         edge="end" 
                                         aria-label="delete"
-                                        onClick={() => handleDeleteLeague(league.id)}
+                                        onClick={() => handleConfirmDeleteClick(league)}
                                     >
                                         <DeleteIcon />
                                     </IconButton>
@@ -278,6 +435,7 @@ function Leagues() {
                 )}
             </Paper>
 
+            {/* Create League Dialog */}
             <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
                 <DialogTitle>Create New League</DialogTitle>
                 <DialogContent>
@@ -382,6 +540,141 @@ function Leagues() {
                         disabled={!newLeague.name || newLeague.teams.length === 0 || newLeague.courses.length === 0}
                     >
                         Create
+                    </Button>
+                </DialogActions>
+            </Dialog>
+            
+            {/* Edit League Dialog */}
+            <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="md" fullWidth>
+                <DialogTitle>Edit League</DialogTitle>
+                <DialogContent>
+                    {editError && (
+                        <Alert severity="error" sx={{ mb: 2 }}>
+                            {editError}
+                        </Alert>
+                    )}
+                    
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        label="League Name"
+                        fullWidth
+                        value={editLeague.name}
+                        onChange={(e) => setEditLeague({ ...editLeague, name: e.target.value })}
+                        sx={{ mb: 2 }}
+                        required
+                    />
+                    
+                    <TextField
+                        margin="dense"
+                        label="Description"
+                        fullWidth
+                        multiline
+                        rows={3}
+                        value={editLeague.description}
+                        onChange={(e) => setEditLeague({ ...editLeague, description: e.target.value })}
+                        sx={{ mb: 3 }}
+                    />
+                    
+                    {/* Teams Selection */}
+                    <Typography variant="h6" sx={{ mb: 1 }}>
+                        Teams
+                    </Typography>
+                    
+                    {teams.length > 0 ? (
+                        <Paper variant="outlined" sx={{ mb: 3, maxHeight: 200, overflow: 'auto' }}>
+                            <List dense>
+                                {teams.map((team) => (
+                                    <ListItem key={team.id} button onClick={() => handleEditTeamSelection(team.id)}>
+                                        <ListItemIcon>
+                                            <Checkbox
+                                                edge="start"
+                                                checked={editLeague.teams.includes(team.id)}
+                                                tabIndex={-1}
+                                                disableRipple
+                                            />
+                                        </ListItemIcon>
+                                        <ListItemText 
+                                            primary={team.name} 
+                                            secondary={`${team.players?.length || 0} players`} 
+                                        />
+                                    </ListItem>
+                                ))}
+                            </List>
+                        </Paper>
+                    ) : (
+                        <Alert severity="warning" sx={{ mb: 3 }}>
+                            No teams available. Please create teams first.
+                        </Alert>
+                    )}
+                    
+                    {/* Courses Selection */}
+                    <Typography variant="h6" sx={{ mb: 1 }}>
+                        Courses
+                    </Typography>
+                    
+                    {courses.length > 0 ? (
+                        <Paper variant="outlined" sx={{ mb: 2, maxHeight: 200, overflow: 'auto' }}>
+                            <List dense>
+                                {courses.map((course) => (
+                                    <ListItem key={course.id} button onClick={() => handleEditCourseSelection(course.id)}>
+                                        <ListItemIcon>
+                                            <Checkbox
+                                                edge="start"
+                                                checked={editLeague.courses.includes(course.id)}
+                                                tabIndex={-1}
+                                                disableRipple
+                                            />
+                                        </ListItemIcon>
+                                        <ListItemText 
+                                            primary={course.name} 
+                                            secondary={`${course.holes?.length || 0} holes`} 
+                                        />
+                                    </ListItem>
+                                ))}
+                            </List>
+                        </Paper>
+                    ) : (
+                        <Alert severity="warning" sx={{ mb: 2 }}>
+                            No courses available. Please create courses first.
+                        </Alert>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setEditOpen(false)}>Cancel</Button>
+                    <Button 
+                        onClick={handleEditSubmit} 
+                        color="primary"
+                        variant="contained"
+                        disabled={!editLeague.name || editLeague.teams.length === 0 || editLeague.courses.length === 0}
+                    >
+                        Update
+                    </Button>
+                </DialogActions>
+            </Dialog>
+            
+            {/* Delete Confirmation Dialog */}
+            <Dialog
+                open={deleteDialogOpen}
+                onClose={() => setDeleteDialogOpen(false)}
+            >
+                <DialogTitle>Delete League</DialogTitle>
+                <DialogContent>
+                    <Typography>
+                        Are you sure you want to delete the league "{leagueToDelete?.name}"?
+                    </Typography>
+                    <Typography color="error" sx={{ mt: 2 }}>
+                        This action cannot be undone.
+                    </Typography>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+                    <Button 
+                        onClick={handleDeleteLeague} 
+                        color="error"
+                        variant="contained"
+                    >
+                        Delete
                     </Button>
                 </DialogActions>
             </Dialog>
