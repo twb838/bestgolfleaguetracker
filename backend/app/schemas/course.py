@@ -43,3 +43,10 @@ class CourseResponse(CourseBase):
 
     class Config:
         from_attributes = True
+
+class CourseRead(CourseBase):
+    id: int
+    holes: List[HoleResponse] = []
+
+    class Config:
+        orm_mode = True

@@ -10,7 +10,7 @@ from app.db.base import init_db
 import app.db.init_models  # This import ensures all models are loaded
 
 # Import all routers
-from app.api.endpoints import teams, courses, leagues
+from app.api.endpoints import teams, courses, leagues, weeks, matches
 
 app = FastAPI(title="Golf Tracker API")
 
@@ -33,6 +33,8 @@ app.add_middleware(
 app.include_router(teams.router)
 app.include_router(courses.router)
 app.include_router(leagues.router)
+app.include_router(weeks.router)
+app.include_router(matches.router)
 
 @app.on_event("startup")
 def startup_event():

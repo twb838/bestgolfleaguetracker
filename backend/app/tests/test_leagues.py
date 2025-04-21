@@ -1,7 +1,7 @@
 import pytest
 from datetime import date, timedelta
 from app.models.league import League
-from app.models.season import Season, Week
+from app.models.week import Week
 from app.models.match import Match
 from app.models.team import Team
 from app.models.course import Course
@@ -40,22 +40,6 @@ def setup_test_league(db):
     db.commit()
     db.refresh(league)
     return league
-
-@pytest.fixture
-def setup_test_season(db, setup_test_league):
-    """Create a test season"""
-    today = date.today()
-    season = Season(
-        name="Test Season 2025",
-        league_id=setup_test_league.id,
-        start_date=today,
-        end_date=today + timedelta(days=90),
-        is_active=True
-    )
-    db.add(season)
-    db.commit()
-    db.refresh(season)
-    return season
 
 # League CRUD Tests
 def test_create_league(client):
@@ -122,23 +106,6 @@ def test_add_course_to_league(client, setup_test_league, setup_test_course):
     response = client.get(f"/leagues/{setup_test_league.id}")
     assert response.status_code == 200
     assert any(c["id"] == setup_test_course.id for c in response.json()["courses"])
-
-# Season and Match Management Tests
-def test_create_season(client, setup_test_league):
-    today = date.today()
-    response = client.post(
-        f"/leagues/{setup_test_league.id}/seasons",
-        json={
-            "name": "New Season",
-            "league_id": setup_test_league.id,
-            "start_date": str(today),
-            "end_date": str(today + timedelta(days=90)),
-            "is_active": True
-        }
-    )
-    assert response.status_code == 200
-    assert response.json()["name"] == "New Season"
-    assert response.json()["is_active"] == True
 
 def test_add_weekly_matchup(client, setup_test_league, setup_test_season, setup_test_teams, setup_test_course):
     # First add teams and course to league

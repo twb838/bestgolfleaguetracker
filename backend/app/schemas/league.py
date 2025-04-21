@@ -1,9 +1,6 @@
 from datetime import date
 from pydantic import BaseModel
-from typing import Optional, List, Set
-
-from app.schemas.course import CourseResponse
-from app.schemas.team import TeamResponse
+from typing import Optional, List
 
 # League schemas
 class LeagueBase(BaseModel):
@@ -11,60 +8,57 @@ class LeagueBase(BaseModel):
     description: Optional[str] = None
 
 class LeagueCreate(LeagueBase):
-    team_ids: List[int]
-    course_ids: List[int]
+    team_ids: List[int] = []
+    course_ids: List[int] = []
 
-class LeagueUpdate(LeagueBase):
+class LeagueUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
     team_ids: Optional[List[int]] = None
     course_ids: Optional[List[int]] = None
 
-class LeagueResponse(LeagueBase):
+class TeamBase(BaseModel):
     id: int
-    teams: List[TeamResponse] = []
-    courses: List[CourseResponse] = []
-
-    class Config:
-        from_attributes = True
-
-class LeagueDetailResponse(LeagueResponse):
-    teams: List[TeamResponse] = []
-    courses: List[CourseResponse] = []
-
-# Season schemas
-class SeasonBase(BaseModel):
     name: str
-    start_date: date
-    end_date: date
-
-class SeasonCreate(SeasonBase):
-    league_id: int
-
-class SeasonUpdate(SeasonBase):
-    name: Optional[str] = None
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    is_active: Optional[bool] = None
-
-class SeasonResponse(SeasonBase):
-    id: int
-    league_id: int
-    is_active: bool
     
     class Config:
         orm_mode = True
-        from_attributes = True
 
-# Week schemas
+class CourseBase(BaseModel):
+    id: int
+    name: str
+    
+    class Config:
+        orm_mode = True
+
 class WeekBase(BaseModel):
+    id: int
     week_number: int
     start_date: date
     end_date: date
+    
+    class Config:
+        orm_mode = True
 
+class LeagueResponse(LeagueBase):
+    id: int
+    teams: List[TeamBase] = []
+    courses: List[CourseBase] = []
+    
+    class Config:
+        orm_mode = True
+
+class LeagueDetailResponse(LeagueResponse):
+    weeks: List[WeekBase] = []
+    
+    class Config:
+        orm_mode = True
+
+# Week schemas
 class WeekCreate(WeekBase):
     season_id: int
 
 class WeekResponse(WeekBase):
-    id: int
     season_id: int
     
     class Config:

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-    Typography, 
-    Button, 
+import {
+    Typography,
+    Button,
     Dialog,
     DialogTitle,
     DialogContent,
@@ -17,8 +17,8 @@ import {
     Divider,
     Alert
 } from '@mui/material';
-import { 
-    Add as AddIcon, 
+import {
+    Add as AddIcon,
     Remove as RemoveIcon,
     Delete as DeleteIcon,
     Edit as EditIcon
@@ -60,10 +60,10 @@ function Teams() {
 
     const validateEmails = () => {
         const emails = newTeam.players.map(p => p.email.toLowerCase().trim());
-        const duplicates = emails.filter((email, index) => 
+        const duplicates = emails.filter((email, index) =>
             email && emails.indexOf(email) !== index
         );
-        
+
         let errors = {};
         if (duplicates.length > 0) {
             newTeam.players.forEach((player, index) => {
@@ -72,29 +72,29 @@ function Teams() {
                 }
             });
         }
-        
+
         setEmailErrors(errors);
         return Object.keys(errors).length === 0;
     };
 
     const checkExistingEmail = useCallback(async (email, index) => {
         if (!email || email.trim() === '') return false;
-        
+
         try {
             const response = await fetch(`${env.API_ENDPOINTS.TEAMS}/check-email?email=${encodeURIComponent(email)}`);
-            
+
             if (response.status === 422) {
                 setEmailErrors(prev => ({ ...prev, [index]: "Invalid email format" }));
                 return true;
             }
-            
+
             if (!response.ok) {
                 console.error('Error checking email:', response.statusText);
                 return false;
             }
-            
+
             const data = await response.json();
-            
+
             if (data.exists) {
                 setEmailErrors(prev => ({ ...prev, [index]: "Email already registered" }));
                 return true;
@@ -127,7 +127,7 @@ function Teams() {
     const handleRemovePlayer = (index) => {
         const updatedPlayers = newTeam.players.filter((_, i) => i !== index);
         setNewTeam({ ...newTeam, players: updatedPlayers });
-        
+
         setEmailErrors(prev => {
             const newErrors = { ...prev };
             delete newErrors[index];
@@ -143,7 +143,7 @@ function Teams() {
             return player;
         });
         setNewTeam({ ...newTeam, players: updatedPlayers });
-        
+
         if (field === 'email' && value.trim() !== '') {
             debouncedCheckEmail(value, index);
         }
@@ -151,23 +151,23 @@ function Teams() {
 
     const handleAddTeam = async () => {
         setFormError('');
-        
+
         if (!validateEmails()) {
             setFormError('Please fix the duplicate email addresses');
             return;
         }
-        
+
         const emailChecks = await Promise.all(
-            newTeam.players.map((player, index) => 
+            newTeam.players.map((player, index) =>
                 checkExistingEmail(player.email, index)
             )
         );
-        
+
         if (emailChecks.some(exists => exists)) {
             setFormError('One or more email addresses are already registered');
             return;
         }
-        
+
         try {
             const response = await fetch(env.API_ENDPOINTS.TEAMS, {
                 method: 'POST',
@@ -176,7 +176,7 @@ function Teams() {
                 },
                 body: JSON.stringify(newTeam),
             });
-            
+
             if (response.ok) {
                 setOpen(false);
                 setNewTeam({
@@ -198,7 +198,7 @@ function Teams() {
 
     const hasFormErrors = () => {
         return (
-            !newTeam.name || 
+            !newTeam.name ||
             newTeam.players.some(p => !p.first_name || !p.last_name || !p.email) ||
             Object.keys(emailErrors).length > 0
         );
@@ -209,7 +209,7 @@ function Teams() {
             const response = await fetch(`${env.API_ENDPOINTS.TEAMS}/${teamToDelete.id}`, {
                 method: 'DELETE',
             });
-            
+
             if (response.ok) {
                 setDeleteDialogOpen(false);
                 setTeamToDelete(null);
@@ -246,7 +246,7 @@ function Teams() {
         setEditTeam({
             ...editTeam,
             players: [
-                ...editTeam.players, 
+                ...editTeam.players,
                 { first_name: '', last_name: '', email: '', handicap: '' }
             ]
         });
@@ -259,9 +259,9 @@ function Teams() {
             }
             return player;
         });
-        
+
         setEditTeam({ ...editTeam, players: updatedPlayers });
-        
+
         if (field === 'email' && value.trim() !== '') {
             if (!editTeam.players[index].id) {
                 debouncedCheckEmail(value, `edit_${index}`);
@@ -271,7 +271,7 @@ function Teams() {
 
     const handleEditSubmit = async () => {
         setEditError('');
-        
+
         const newPlayers = editTeam.players.filter(p => !p.id);
         if (newPlayers.length > 0) {
             const emailChecks = await Promise.all(
@@ -280,13 +280,13 @@ function Teams() {
                     return checkExistingEmail(player.email, `edit_${originalIndex}`);
                 })
             );
-            
+
             if (emailChecks.some(exists => exists)) {
                 setEditError('One or more new player emails are already registered');
                 return;
             }
         }
-        
+
         try {
             const teamResponse = await fetch(`${env.API_ENDPOINTS.TEAMS}/${editTeam.id}`, {
                 method: 'PUT',
@@ -295,13 +295,13 @@ function Teams() {
                 },
                 body: JSON.stringify({ name: editTeam.name }),
             });
-            
+
             if (!teamResponse.ok) {
                 const errorData = await teamResponse.json();
                 setEditError(errorData.detail || 'Error updating team');
                 return;
             }
-            
+
             for (const player of editTeam.players) {
                 if (player.id) {
                     await fetch(`${env.API_ENDPOINTS.TEAMS}/players/${player.id}`, {
@@ -331,7 +331,7 @@ function Teams() {
                     });
                 }
             }
-            
+
             setEditOpen(false);
             setEditTeam(null);
             fetchTeams();
@@ -343,7 +343,7 @@ function Teams() {
 
     const hasEditFormErrors = () => {
         return (
-            !editTeam.name || 
+            !editTeam.name ||
             editTeam.players.some(p => !p.first_name || !p.last_name || !p.email) ||
             Object.keys(emailErrors).some(key => key.startsWith('edit_'))
         );
@@ -354,9 +354,9 @@ function Teams() {
             <Typography variant="h4" gutterBottom>
                 Teams
             </Typography>
-            <Button 
-                variant="contained" 
-                color="primary" 
+            <Button
+                variant="contained"
+                color="primary"
                 onClick={() => setOpen(true)}
                 sx={{ mb: 3 }}
             >
@@ -367,12 +367,12 @@ function Teams() {
                 {teams.length > 0 ? (
                     <List>
                         {teams.map((team) => (
-                            <ListItem 
-                                key={team.id} 
-                                button 
+                            <ListItem
+                                key={team.id}
+                                button
                                 onClick={() => handleEditTeam(team)}
                             >
-                                <ListItemText 
+                                <ListItemText
                                     primary={team.name}
                                     secondary={`Players: ${team.players?.length || 0}`}
                                 />
@@ -388,8 +388,8 @@ function Teams() {
                                     >
                                         <EditIcon />
                                     </IconButton>
-                                    <IconButton 
-                                        edge="end" 
+                                    <IconButton
+                                        edge="end"
                                         color="error"
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -404,11 +404,11 @@ function Teams() {
                         ))}
                     </List>
                 ) : (
-                    <Box 
-                        display="flex" 
-                        flexDirection="column" 
-                        alignItems="center" 
-                        justifyContent="center" 
+                    <Box
+                        display="flex"
+                        flexDirection="column"
+                        alignItems="center"
+                        justifyContent="center"
                         p={4}
                         textAlign="center"
                     >
@@ -418,10 +418,10 @@ function Teams() {
                         <Typography variant="body1" color="textSecondary">
                             Create your first team by clicking the "Add New Team" button above.
                         </Typography>
-                        <Button 
-                            variant="outlined" 
-                            color="primary" 
-                            onClick={() => setOpen(true)} 
+                        <Button
+                            variant="outlined"
+                            color="primary"
+                            onClick={() => setOpen(true)}
                             sx={{ mt: 3 }}
                         >
                             Create Team
@@ -430,8 +430,8 @@ function Teams() {
                 )}
             </Paper>
 
-            <Dialog 
-                open={open} 
+            <Dialog
+                open={open}
                 onClose={() => setOpen(false)}
                 maxWidth="md"
                 fullWidth
@@ -443,7 +443,7 @@ function Teams() {
                             {formError}
                         </Alert>
                     )}
-                    
+
                     <TextField
                         autoFocus
                         margin="dense"
@@ -454,11 +454,11 @@ function Teams() {
                         sx={{ mb: 3 }}
                         required
                     />
-                    
+
                     <Typography variant="h6" sx={{ mb: 2 }}>
                         Players
-                        <IconButton 
-                            color="primary" 
+                        <IconButton
+                            color="primary"
                             onClick={handleAddPlayer}
                             size="small"
                             sx={{ ml: 1 }}
@@ -473,8 +473,8 @@ function Teams() {
                                 <Typography variant="subtitle1">
                                     Player {index + 1}
                                 </Typography>
-                                <IconButton 
-                                    color="error" 
+                                <IconButton
+                                    color="error"
                                     onClick={() => handleRemovePlayer(index)}
                                     size="small"
                                     sx={{ ml: 1 }}
@@ -524,8 +524,8 @@ function Teams() {
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setOpen(false)}>Cancel</Button>
-                    <Button 
-                        onClick={handleAddTeam} 
+                    <Button
+                        onClick={handleAddTeam}
                         color="primary"
                         disabled={hasFormErrors()}
                     >
@@ -554,8 +554,8 @@ function Teams() {
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-                    <Button 
-                        onClick={handleDeleteTeam} 
+                    <Button
+                        onClick={handleDeleteTeam}
                         color="error"
                     >
                         Delete
@@ -563,8 +563,8 @@ function Teams() {
                 </DialogActions>
             </Dialog>
 
-            <Dialog 
-                open={editOpen} 
+            <Dialog
+                open={editOpen}
                 onClose={() => setEditOpen(false)}
                 maxWidth="md"
                 fullWidth
@@ -576,7 +576,7 @@ function Teams() {
                             {editError}
                         </Alert>
                     )}
-                    
+
                     <TextField
                         autoFocus
                         margin="dense"
@@ -587,12 +587,12 @@ function Teams() {
                         sx={{ mb: 3 }}
                         required
                     />
-                    
+
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                         <Typography variant="h6">
                             Players
                         </Typography>
-                        <Button 
+                        <Button
                             startIcon={<AddIcon />}
                             onClick={handleEditAddPlayer}
                             variant="outlined"
@@ -601,7 +601,7 @@ function Teams() {
                             Add Player
                         </Button>
                     </Box>
-                    
+
                     {editTeam?.players?.map((player, index) => (
                         <Box key={player.id || `new-${index}`} sx={{ mb: 3 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -609,8 +609,8 @@ function Teams() {
                                     {player.id ? `Player ID: ${player.id}` : 'New Player'}
                                 </Typography>
                                 {player.id && (
-                                    <IconButton 
-                                        color="error" 
+                                    <IconButton
+                                        color="error"
                                         onClick={() => handleEditRemovePlayer(player.id)}
                                         size="small"
                                         sx={{ ml: 1 }}
@@ -661,8 +661,8 @@ function Teams() {
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setEditOpen(false)}>Cancel</Button>
-                    <Button 
-                        onClick={handleEditSubmit} 
+                    <Button
+                        onClick={handleEditSubmit}
                         color="primary"
                         disabled={editTeam && hasEditFormErrors()}
                     >

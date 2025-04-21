@@ -7,16 +7,16 @@ from datetime import timedelta, date
 
 from app.db.base import get_db
 from app.models.league import League
-from app.models.season import Season, Week
+from app.models.week import Week    
 from app.models.match import Match
 from app.models.team import Team
 from app.models.course import Course
 from app.models.score import PlayerScore
 from app.schemas.league import (
-    LeagueCreate, LeagueUpdate, LeagueResponse, LeagueDetailResponse,
-    SeasonCreate, SeasonResponse
+    LeagueCreate, LeagueUpdate, LeagueResponse, LeagueDetailResponse
 )
 from app.schemas.match import MatchResponse  # Import MatchResponse
+from app.schemas.week import WeekCreate, WeekResponse
 
 # Make sure prefix matches what frontend is requesting
 router = APIRouter(prefix="/leagues", tags=["leagues"])
@@ -134,55 +134,41 @@ def add_course_to_league(league_id: int, course_id: int, db: Session = Depends(g
     db.commit()
     return {"message": "Course added to league"}
 
-@router.post("/{league_id}/seasons", response_model=SeasonResponse)
-def create_season(league_id: int, season: SeasonCreate, db: Session = Depends(get_db)):
+@router.post("/{league_id}/weeks", response_model=WeekResponse)
+def create_week(league_id: int, week: WeekCreate, db: Session = Depends(get_db)):
+    # Verify league exists
     db_league = db.query(League).filter(League.id == league_id).first()
-    if db_league is None:
+    if not db_league:
         raise HTTPException(status_code=404, detail="League not found")
     
-    db_season = Season(**season.model_dump())
-    db.add(db_season)
+    # Create the week
+    db_week = Week(
+        week_number=week.week_number,
+        start_date=week.start_date,
+        end_date=week.end_date,
+        league_id=league_id
+    )
+    
+    db.add(db_week)
     db.commit()
-    db.refresh(db_season)
-    return db_season
+    db.refresh(db_week)
+    return db_week
 
-@router.get("/seasons/{season_id}/weeks/{week_number}/schedule", response_model=List[dict])
-def get_week_schedule(
-    season_id: int,
-    week_number: int,
-    db: Session = Depends(get_db)
-):
-    """Get the schedule for a specific week in a season"""
-    # Verify the season exists
-    db_season = db.query(Season).filter(Season.id == season_id).first()
-    if not db_season:
-        raise HTTPException(status_code=404, detail="Season not found")
+@router.get("/{league_id}/weeks", response_model=List[WeekResponse])
+def get_league_weeks(league_id: int, db: Session = Depends(get_db)):
+    # Verify league exists
+    db_league = db.query(League).filter(League.id == league_id).first()
+    if not db_league:
+        raise HTTPException(status_code=404, detail="League not found")
     
-    # Get the week
-    week = db.query(Week).filter(
-        Week.season_id == season_id,
-        Week.week_number == week_number
-    ).first()
-    
+    # Get all weeks for this league ordered by week number
+    weeks = db.query(Week).filter(Week.league_id == league_id).order_by(Week.week_number).all()
+    return weeks
+
+@router.get("/weeks/{week_id}", response_model=WeekResponse)
+def get_week(week_id: int, db: Session = Depends(get_db)):
+    week = db.query(Week).filter(Week.id == week_id).first()
     if not week:
         raise HTTPException(status_code=404, detail="Week not found")
-    
-    # Get the matches for this week
-    matches = db.query(Match).filter(Match.week_id == week.id).all()
-    
-    # Format the matches
-    schedule = []
-    for match in matches:
-        schedule.append({
-            "match_id": match.id,
-            "match_date": match.match_date,
-            "course_id": match.course_id,
-            "course_name": match.course.name,
-            "home_team_id": match.home_team_id,
-            "home_team_name": match.home_team.name,
-            "away_team_id": match.away_team_id,
-            "away_team_name": match.away_team.name,
-            "is_completed": match.is_completed
-        })
-    
-    return schedule
+    return week
+

@@ -39,3 +39,10 @@ class TeamResponse(TeamBase):
 
     class Config:
         from_attributes = True
+
+class TeamRead(TeamBase):
+    id: int
+    players: List[PlayerResponse] = []
+
+    class Config:
+        orm_mode = True

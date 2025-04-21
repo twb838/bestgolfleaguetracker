@@ -6,7 +6,6 @@ import sqlalchemy as sa
 
 from app.db.base import get_db
 from app.models.league import League
-from app.models.season import Season
 from app.models.match import Match
 from app.models.team import Team
 from app.models.player import Player

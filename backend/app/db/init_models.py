@@ -4,10 +4,11 @@
 from app.models.course import Course, Hole
 from app.models.team import Team
 from app.models.player import Player
-from app.models.league import League, league_team_association, league_course_association
+from app.models.league import League
+from app.models.association_tables import league_courses, league_teams
 
 # Import models that depend on the base models
-from app.models.season import Season, Week
+from app.models.week import Week
 from app.models.match import Match
 from app.models.score import PlayerScore
 

@@ -5,7 +5,7 @@ from sqlalchemy import func
 from app.models.league import League
 from app.models.team import Team
 from app.models.course import Course
-from app.models.season import Season, Week
+from app.models.week import Week
 from app.models.match import Match
 from app.db.base import SessionLocal
 
@@ -86,44 +86,12 @@ def create_league_data(db: Session, num_leagues=5):
         # Create a current season for this league
         current_year = date.today().year
         current_season = create_season(db, league.id, current_year) # type: ignore
-        
-        # Create some matches for the season
-        create_matches_for_season(db, current_season, selected_teams, selected_courses)
-        
+                
         print(f"Created league {i}/{num_leagues}: {league_name} with {num_teams} teams and {num_courses} courses")
     
     # Commit all changes
     db.commit()
     print("All league data created successfully!")
-
-def create_season(db: Session, league_id: int, year: int) -> Season:
-    """Create a season for a league.
-    
-    Args:
-        db (Session): SQLAlchemy database session
-        league_id (int): ID of the league
-        year (int): Year for the season
-        
-    Returns:
-        Season: The created season object
-    """
-    # Create season from April to October
-    start_date = date(year, 4, 1)
-    end_date = date(year, 10, 31)
-    
-    season = Season(
-        name=f"{year} Season",
-        start_date=start_date,
-        end_date=end_date,
-        league_id=league_id
-    )
-    db.add(season)
-    db.flush()
-    
-    # Create weeks for the season
-    create_weeks(db, season.id, start_date, end_date) # type: ignore
-    
-    return season
 
 def create_weeks(db: Session, season_id: int, start_date: date, end_date: date):
     """Create weekly periods for a season.
@@ -150,58 +118,6 @@ def create_weeks(db: Session, season_id: int, start_date: date, end_date: date):
         )
         db.add(week)
 
-def create_matches_for_season(db: Session, season: Season, teams: list, courses: list):
-    """Create matches for a season.
-    
-    Args:
-        db (Session): SQLAlchemy database session
-        season (Season): Season object
-        teams (list): List of Team objects
-        courses (list): List of Course objects
-    """
-    # Get weeks for the season
-    db.flush()  # Ensure weeks are committed
-    weeks = db.query(Week).filter(Week.season_id == season.id).all()
-    
-    # Generate some matches for selected weeks
-    # For simplicity, we'll create matches for about half the weeks
-    selected_weeks = random.sample(weeks, min(len(weeks) // 2 + 1, len(weeks)))
-    
-    for week in selected_weeks:
-        # Generate 1-3 matches per week depending on number of teams
-        max_matches = min(3, len(teams) // 2)
-        num_matches = random.randint(1, max_matches)
-        
-        # Create matches with random team pairings
-        available_teams = teams.copy()
-        random.shuffle(available_teams)
-        
-        for i in range(num_matches):
-            if len(available_teams) < 2:
-                break
-                
-            # Select teams for this match
-            home_team = available_teams.pop()
-            away_team = available_teams.pop()
-            
-            # Select random course
-            course = random.choice(courses)
-            
-            # Set match date to middle of week
-            match_date = week.start_date + timedelta(days=random.randint(0, 6))
-            
-            # Create match (25% chance it's already completed)
-            is_completed = random.random() < 0.25
-            
-            match = Match(
-                match_date=match_date,
-                is_completed=is_completed,
-                week_id=week.id,
-                course_id=course.id,
-                home_team_id=home_team.id,
-                away_team_id=away_team.id
-            )
-            db.add(match)
 
 def main():
     """Main function to run the script"""

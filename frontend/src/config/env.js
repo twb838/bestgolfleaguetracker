@@ -9,6 +9,9 @@ const env = {
     TEAMS: `${API_BASE_URL}/teams`,
     COURSES: `${API_BASE_URL}/courses`,
     LEAGUES: `${API_BASE_URL}/leagues`,
+    WEEKS: `${API_BASE_URL}/weeks`,
+    MATCHES: `${API_BASE_URL}/matches`,
+
   }
 };
 
