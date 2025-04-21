@@ -93,6 +93,7 @@ function LeagueManagement() {
         matchDate: format(new Date(), 'yyyy-MM-dd')
     });
     const [generatedMatchups, setGeneratedMatchups] = useState([]);
+    const [matchupWarning, setMatchupWarning] = useState(null);
 
     useEffect(() => {
         // If league data wasn't passed via navigation state, fetch it
@@ -170,13 +171,28 @@ function LeagueManagement() {
     const fetchMatchesForWeek = async (weekId) => {
         setLoadingMatches(true);
         try {
-            const matchesResponse = await fetch(`${env.API_BASE_URL}/weeks/${weekId}/matches`);
+            const matchesResponse = await fetch(`${env.API_BASE_URL}/matches/weeks/${weekId}/matches`);
             if (!matchesResponse.ok) {
                 throw new Error('Failed to fetch matches');
             }
 
             const matchesData = await matchesResponse.json();
-            setMatches(matchesData);
+
+            // Enrich the matches data with full team objects from the league data
+            const enrichedMatches = matchesData.map(match => {
+                const homeTeam = league.teams.find(team => team.id === match.home_team_id);
+                const awayTeam = league.teams.find(team => team.id === match.away_team_id);
+                const course = league.courses.find(course => course.id === match.course_id);
+
+                return {
+                    ...match,
+                    home_team: homeTeam || { name: `Team #${match.home_team_id}` },
+                    away_team: awayTeam || { name: `Team #${match.away_team_id}` },
+                    course: course || { name: `Course #${match.course_id}` }
+                };
+            });
+
+            setMatches(enrichedMatches);
         } catch (error) {
             console.error('Error fetching matches:', error);
         } finally {
@@ -346,6 +362,21 @@ function LeagueManagement() {
         const selectedTeams = league.teams.filter(team => selectedTeamIds.includes(team.id));
         const selectedCourse = league.courses.find(course => course.id === courseId);
 
+        // Create a mapping of previous matchups
+        const previousMatchups = new Map();
+
+        // Check all past matches in the league to track which teams have already played each other
+        matches.forEach(match => {
+            // Create a unique key for each team pairing regardless of home/away
+            const pairingKey = [match.home_team_id, match.away_team_id].sort().join('-');
+
+            if (!previousMatchups.has(pairingKey)) {
+                previousMatchups.set(pairingKey, 1);
+            } else {
+                previousMatchups.set(pairingKey, previousMatchups.get(pairingKey) + 1);
+            }
+        });
+
         // Create a copy of teams to work with
         const teams = [...selectedTeams];
 
@@ -358,22 +389,84 @@ function LeagueManagement() {
             byeTeam = teams.pop();
         }
 
-        // Generate matches, ensuring each team plays exactly once
+        // Generate matches, trying to create unique pairings first
         const matchups = [];
+        const usedTeams = new Set();
+        let hasDuplicatePairings = false;
 
-        // Match teams in pairs: team[0] with team[1], team[2] with team[3], etc.
-        for (let i = 0; i < teams.length; i += 2) {
-            // Make sure we have a pair (should always be true due to bye handling)
-            if (i + 1 < teams.length) {
+        // Create a list of all possible team pairings
+        const possiblePairings = [];
+        for (let i = 0; i < teams.length; i++) {
+            for (let j = i + 1; j < teams.length; j++) {
+                const team1 = teams[i];
+                const team2 = teams[j];
+                const pairingKey = [team1.id, team2.id].sort().join('-');
+                const matchupCount = previousMatchups.get(pairingKey) || 0;
+
+                possiblePairings.push({
+                    team1,
+                    team2,
+                    pairingKey,
+                    matchupCount
+                });
+            }
+        }
+
+        // Sort pairings by the number of times they've played (ascending)
+        possiblePairings.sort((a, b) => a.matchupCount - b.matchupCount);
+
+        // First attempt to create matches with teams that haven't played each other yet
+        for (const pairing of possiblePairings) {
+            if (!usedTeams.has(pairing.team1.id) && !usedTeams.has(pairing.team2.id)) {
                 matchups.push({
-                    home_team_id: teams[i].id,
-                    home_team_name: teams[i].name,
-                    away_team_id: teams[i + 1].id,
-                    away_team_name: teams[i + 1].name,
+                    home_team_id: pairing.team1.id,
+                    home_team_name: pairing.team1.name,
+                    away_team_id: pairing.team2.id,
+                    away_team_name: pairing.team2.name,
                     course_id: courseId,
                     course_name: selectedCourse ? selectedCourse.name : 'Not selected',
-                    match_date: matchDate
+                    match_date: matchDate,
+                    previous_matchups: pairing.matchupCount
                 });
+
+                usedTeams.add(pairing.team1.id);
+                usedTeams.add(pairing.team2.id);
+
+                if (pairing.matchupCount > 0) {
+                    hasDuplicatePairings = true;
+                }
+            }
+        }
+
+        // Check if we have any unused teams due to all potential opponents being used
+        const unusedTeams = teams.filter(team => !usedTeams.has(team.id));
+
+        if (unusedTeams.length > 0) {
+            // We have teams that couldn't be paired optimally
+            // Create additional matches with teams that have played before
+            for (let i = 0; i < unusedTeams.length; i += 2) {
+                if (i + 1 < unusedTeams.length) {
+                    const team1 = unusedTeams[i];
+                    const team2 = unusedTeams[i + 1];
+                    const pairingKey = [team1.id, team2.id].sort().join('-');
+                    const matchupCount = previousMatchups.get(pairingKey) || 0;
+
+                    matchups.push({
+                        home_team_id: team1.id,
+                        home_team_name: team1.name,
+                        away_team_id: team2.id,
+                        away_team_name: team2.name,
+                        course_id: courseId,
+                        course_name: selectedCourse ? selectedCourse.name : 'Not selected',
+                        match_date: matchDate,
+                        previous_matchups: matchupCount,
+                        is_forced: true
+                    });
+
+                    if (matchupCount > 0) {
+                        hasDuplicatePairings = true;
+                    }
+                }
             }
         }
 
@@ -392,6 +485,10 @@ function LeagueManagement() {
         }
 
         setGeneratedMatchups(matchups);
+
+        // Set a warning state to display in the UI
+        setMatchupWarning(hasDuplicatePairings ?
+            "Some teams will play against each other more than once as all unique match combinations have been exhausted." : null);
     };
 
     const handleCreateWeek = async () => {
@@ -585,6 +682,28 @@ function LeagueManagement() {
                             </Button>
                         </Box>
 
+                        {/* Show selected week details */}
+                        {selectedWeek && (
+                            <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                                <Typography variant="h6" gutterBottom>
+                                    Week {selectedWeek.week_number}
+                                </Typography>
+                                <Box sx={{ display: 'flex', gap: 3, color: 'text.secondary' }}>
+                                    <Typography variant="body2">
+                                        Start: {format(new Date(selectedWeek.start_date), 'MMMM d, yyyy')}
+                                    </Typography>
+                                    <Typography variant="body2">
+                                        End: {format(new Date(selectedWeek.end_date), 'MMMM d, yyyy')}
+                                    </Typography>
+                                    <Chip
+                                        size="small"
+                                        label={new Date(selectedWeek.end_date) < new Date() ? "Completed" : "Current"}
+                                        color={new Date(selectedWeek.end_date) < new Date() ? "default" : "primary"}
+                                    />
+                                </Box>
+                            </Box>
+                        )}
+
                         {/* Matches grid or empty state */}
                         {loadingMatches ? (
                             <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
@@ -604,40 +723,119 @@ function LeagueManagement() {
                                 </Button>
                             </Box>
                         ) : matches && matches.length > 0 ? (
-                            <Grid container spacing={3}>
-                                {matches.map(match => (
-                                    <Grid item xs={12} md={6} key={match.id}>
-                                        <Card>
-                                            <CardContent>
-                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                                                    <Typography variant="subtitle2" color="text.secondary">
-                                                        {format(new Date(match.match_date), 'EEEE, MMM d, yyyy')}
-                                                    </Typography>
-                                                    <Chip
-                                                        label={match.is_completed ? "Completed" : "Scheduled"}
-                                                        color={match.is_completed ? "success" : "primary"}
-                                                        size="small"
-                                                    />
-                                                </Box>
-                                                <Box sx={{ mb: 2 }}>
-                                                    <Typography variant="body2" color="text.secondary">
-                                                        Course: {match.course ? match.course.name : 'N/A'}
-                                                    </Typography>
-                                                </Box>
-                                                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                    <Typography sx={{ fontWeight: 'bold' }}>
-                                                        {match.home_team ? match.home_team.name : 'Home Team'}
-                                                    </Typography>
-                                                    <Typography>vs</Typography>
-                                                    <Typography sx={{ fontWeight: 'bold' }}>
-                                                        {match.away_team ? match.away_team.name : 'Away Team'}
-                                                    </Typography>
-                                                </Box>
-                                            </CardContent>
-                                        </Card>
-                                    </Grid>
-                                ))}
-                            </Grid>
+                            <>
+                                <Typography variant="h6" gutterBottom sx={{ mt: 3, mb: 2 }}>
+                                    Matchups for Week {selectedWeek?.week_number}
+                                </Typography>
+
+                                {/* Group matches by date */}
+                                {(() => {
+                                    // Group matches by date
+                                    const matchesByDate = matches.reduce((groups, match) => {
+                                        const date = format(new Date(match.match_date), 'yyyy-MM-dd');
+                                        if (!groups[date]) {
+                                            groups[date] = [];
+                                        }
+                                        groups[date].push(match);
+                                        return groups;
+                                    }, {});
+
+                                    // Sort dates
+                                    const sortedDates = Object.keys(matchesByDate).sort();
+
+                                    return sortedDates.map(date => (
+                                        <Box key={date} sx={{ mb: 4 }}>
+                                            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold', borderBottom: '1px solid', borderColor: 'divider', pb: 1 }}>
+                                                {format(new Date(date), 'EEEE, MMMM d, yyyy')}
+                                            </Typography>
+
+                                            <Grid container spacing={3}>
+                                                {matchesByDate[date].map(match => (
+                                                    <Grid item xs={12} md={6} lg={4} key={match.id}>
+                                                        <Card
+                                                            sx={{
+                                                                position: 'relative',
+                                                                '&:hover': {
+                                                                    boxShadow: 3,
+                                                                    cursor: 'pointer'
+                                                                }
+                                                            }}
+                                                            onClick={() => {
+                                                                // You can add a function here to view/edit match details
+                                                                console.log('View match details', match);
+                                                            }}
+                                                        >
+                                                            {/* Status badge */}
+                                                            <Chip
+                                                                label={match.is_completed ? "Completed" : "Scheduled"}
+                                                                color={match.is_completed ? "success" : "primary"}
+                                                                size="small"
+                                                                sx={{
+                                                                    position: 'absolute',
+                                                                    top: 12,
+                                                                    right: 12,
+                                                                }}
+                                                            />
+
+                                                            <CardContent>
+                                                                {/* Course */}
+                                                                <Box sx={{ mb: 3, display: 'flex', alignItems: 'center' }}>
+                                                                    <CourseIcon sx={{ mr: 1, color: 'text.secondary', fontSize: 20 }} />
+                                                                    <Typography variant="body2" color="text.secondary">
+                                                                        {match.course ? match.course.name : 'TBD'}
+                                                                    </Typography>
+                                                                </Box>
+
+                                                                {/* Teams */}
+                                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                    <Box sx={{ textAlign: 'center', width: '45%' }}>
+                                                                        <Typography sx={{ fontWeight: 'bold', mb: 1 }}>
+                                                                            {match.home_team ? match.home_team.name : 'Home Team'}
+                                                                        </Typography>
+                                                                        {match.is_completed && (
+                                                                            <Chip
+                                                                                label="Winner"
+                                                                                color="success"
+                                                                                size="small"
+                                                                                sx={{ visibility: 'hidden' /* Show based on actual winner */ }}
+                                                                            />
+                                                                        )}
+                                                                    </Box>
+
+                                                                    <Box sx={{ textAlign: 'center', width: '10%' }}>
+                                                                        <Typography>vs</Typography>
+                                                                    </Box>
+
+                                                                    <Box sx={{ textAlign: 'center', width: '45%' }}>
+                                                                        <Typography sx={{ fontWeight: 'bold', mb: 1 }}>
+                                                                            {match.away_team ? match.away_team.name : 'Away Team'}
+                                                                        </Typography>
+                                                                        {match.is_completed && (
+                                                                            <Chip
+                                                                                label="Winner"
+                                                                                color="success"
+                                                                                size="small"
+                                                                                sx={{ visibility: 'hidden' /* Show based on actual winner */ }}
+                                                                            />
+                                                                        )}
+                                                                    </Box>
+                                                                </Box>
+
+                                                                {/* Additional detail indicator */}
+                                                                <Box sx={{ mt: 2, pt: 2, borderTop: '1px dashed', borderColor: 'divider', textAlign: 'center' }}>
+                                                                    <Typography variant="caption" color="text.secondary">
+                                                                        {match.is_completed ? 'Click to view results' : 'Click to update match'}
+                                                                    </Typography>
+                                                                </Box>
+                                                            </CardContent>
+                                                        </Card>
+                                                    </Grid>
+                                                ))}
+                                            </Grid>
+                                        </Box>
+                                    ));
+                                })()}
+                            </>
                         ) : selectedWeekId ? (
                             <Box sx={{ textAlign: 'center', py: 4 }}>
                                 <Typography variant="body1" paragraph>
@@ -936,6 +1134,12 @@ function LeagueManagement() {
                                                 <Typography variant="subtitle1" gutterBottom>
                                                     {generatedMatchups.length} Matchups will be created:
                                                 </Typography>
+
+                                                {matchupWarning && (
+                                                    <Alert severity="warning" sx={{ mb: 2 }}>
+                                                        {matchupWarning}
+                                                    </Alert>
+                                                )}
 
                                                 <TableContainer component={MuiPaper} sx={{ maxHeight: 300 }}>
                                                     <Table stickyHeader size="small">

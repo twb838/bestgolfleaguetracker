@@ -47,16 +47,37 @@ def create_match(match: MatchCreate, db: Session = Depends(get_db)):
     db.refresh(db_match)
     return db_match
 
-@router.get("/weeks/{week_id}/matches", response_model=List[MatchResponse])
+@router.get("/weeks/{week_id}/matches")
 def get_matches_by_week(week_id: int, db: Session = Depends(get_db)):
     # Verify week exists
     week = db.query(Week).filter(Week.id == week_id).first()
     if not week:
         raise HTTPException(status_code=404, detail="Week not found")
     
-    # Get all matches for this week
+    # Get all matches for this week with team and course info
     matches = db.query(Match).filter(Match.week_id == week_id).all()
-    return matches
+    
+    # Convert to response model with detailed info
+    match_responses = []
+    for match in matches:
+        home_team = db.query(Team).filter(Team.id == match.home_team_id).first()
+        away_team = db.query(Team).filter(Team.id == match.away_team_id).first()
+        course = db.query(Course).filter(Course.id == match.course_id).first()
+        
+        match_responses.append({
+            "id": match.id,
+            "match_date": match.match_date,
+            "is_completed": match.is_completed,
+            "week_id": match.week_id,
+            "course_id": match.course_id,
+            "home_team_id": match.home_team_id,
+            "away_team_id": match.away_team_id,
+            "home_team": {"id": home_team.id, "name": home_team.name} if home_team else None,
+            "away_team": {"id": away_team.id, "name": away_team.name} if away_team else None,
+            "course": {"id": course.id, "name": course.name} if course else None
+        })
+    
+    return match_responses
 
 @router.get("/{match_id}", response_model=MatchResponse)
 def get_match(match_id: int, db: Session = Depends(get_db)):
