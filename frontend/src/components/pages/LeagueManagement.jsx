@@ -45,7 +45,8 @@ import {
     Event as EventIcon,
     EmojiEvents as TrophyIcon,
     Add as AddIcon,
-    DateRange as WeekIcon
+    DateRange as WeekIcon,
+    Delete as DeleteIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import env from '../../config/env';
@@ -95,6 +96,10 @@ function LeagueManagement() {
     const [generatedMatchups, setGeneratedMatchups] = useState([]);
     const [matchupWarning, setMatchupWarning] = useState(null);
 
+    // Add new state variables near the top of your component
+    const [deleteWeekDialogOpen, setDeleteWeekDialogOpen] = useState(false);
+    const [weekToDelete, setWeekToDelete] = useState(null);
+
     useEffect(() => {
         // If league data wasn't passed via navigation state, fetch it
         if (!league) {
@@ -138,6 +143,7 @@ function LeagueManagement() {
         }
     };
 
+    // Modify your fetchWeeks function to handle proper selection after deletion
     const fetchWeeks = async () => {
         setLoadingMatches(true);
         try {
@@ -150,16 +156,28 @@ function LeagueManagement() {
             const weeksData = await weeksResponse.json();
             setWeeks(weeksData);
 
-            // If there are weeks, select the one with the highest week_number (latest)
+            // If there are weeks, select one
             if (weeksData && weeksData.length > 0) {
-                const latestWeek = weeksData.reduce((latest, current) =>
-                    (latest.week_number > current.week_number) ? latest : current
-                );
-                setSelectedWeekId(latestWeek.id);
+                // If we had a selected week that still exists, keep it selected
+                const currentWeekExists = selectedWeekId && weeksData.some(w => w.id === selectedWeekId);
 
-                // Load matches for the selected week
-                await fetchMatchesForWeek(latestWeek.id);
+                if (currentWeekExists) {
+                    // Keep current selection
+                    await fetchMatchesForWeek(selectedWeekId);
+                } else {
+                    // Otherwise select the latest week
+                    const latestWeek = weeksData.reduce((latest, current) =>
+                        (latest.week_number > current.week_number) ? latest : current
+                    );
+                    setSelectedWeekId(latestWeek.id);
+
+                    // Load matches for the selected week
+                    await fetchMatchesForWeek(latestWeek.id);
+                }
             } else {
+                // No weeks left
+                setSelectedWeekId(null);
+                setMatches([]);
                 setLoadingMatches(false);
             }
         } catch (error) {
@@ -557,6 +575,38 @@ function LeagueManagement() {
         }
     };
 
+    const handleDeleteWeekClick = (week) => {
+        setWeekToDelete(week);
+        setDeleteWeekDialogOpen(true);
+    };
+
+    const handleDeleteWeekClose = () => {
+        setDeleteWeekDialogOpen(false);
+        setWeekToDelete(null);
+    };
+
+    const handleDeleteWeek = async () => {
+        if (!weekToDelete) return;
+
+        try {
+            // Delete the week
+            const response = await fetch(`${env.API_BASE_URL}/leagues/${leagueId}/weeks/${weekToDelete.id}`, {
+                method: 'DELETE',
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to delete week');
+            }
+
+            // Re-fetch the weeks list
+            await fetchWeeks();
+            handleDeleteWeekClose();
+        } catch (error) {
+            console.error('Error deleting week:', error);
+            alert('Failed to delete week. Please try again.');
+        }
+    };
+
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
@@ -594,14 +644,6 @@ function LeagueManagement() {
                     <Typography variant="h4" component="h1" gutterBottom>
                         {league.name}
                     </Typography>
-
-                    <Button
-                        variant="outlined"
-                        startIcon={<WeekIcon />}
-                        onClick={handleCreateWeekClick}
-                    >
-                        Add Week
-                    </Button>
                 </Box>
 
                 {league.description && (
@@ -609,21 +651,6 @@ function LeagueManagement() {
                         {league.description}
                     </Typography>
                 )}
-
-                <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                    <Chip
-                        icon={<TeamIcon />}
-                        label={`${league.teams?.length || 0} Teams`}
-                    />
-                    <Chip
-                        icon={<CourseIcon />}
-                        label={`${league.courses?.length || 0} Courses`}
-                    />
-                    <Chip
-                        icon={<WeekIcon />}
-                        label={`${weeks?.length || 0} Weeks`}
-                    />
-                </Box>
             </Box>
 
             <Paper sx={{ mb: 3 }}>
@@ -645,7 +672,7 @@ function LeagueManagement() {
             <Paper sx={{ p: 3 }}>
                 {activeTab === 0 && (
                     <Box>
-                        {/* Week selector and add match button */}
+                        {/* Week selector and buttons */}
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1, maxWidth: 400 }}>
                                 <FormControl fullWidth>
@@ -672,23 +699,45 @@ function LeagueManagement() {
                                     </Typography>
                                 )}
                             </Box>
-                            <Button
-                                variant="contained"
-                                startIcon={<AddIcon />}
-                                onClick={handleCreateMatchClick}
-                                disabled={!selectedWeekId}
-                            >
-                                Create Matchup
-                            </Button>
+
+                            {/* Button group with both buttons */}
+                            <Box sx={{ display: 'flex', gap: 2 }}>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<WeekIcon />}
+                                    onClick={handleCreateWeekClick}
+                                >
+                                    Add Week
+                                </Button>
+                                <Button
+                                    variant="contained"
+                                    startIcon={<AddIcon />}
+                                    onClick={handleCreateMatchClick}
+                                    disabled={!selectedWeekId}
+                                >
+                                    Create Matchup
+                                </Button>
+                            </Box>
                         </Box>
 
                         {/* Show selected week details */}
                         {selectedWeek && (
                             <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-                                <Typography variant="h6" gutterBottom>
-                                    Week {selectedWeek.week_number}
-                                </Typography>
-                                <Box sx={{ display: 'flex', gap: 3, color: 'text.secondary' }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <Typography variant="h6">
+                                        Week {selectedWeek.week_number}
+                                    </Typography>
+                                    <Button
+                                        variant="outlined"
+                                        color="error"
+                                        size="small"
+                                        onClick={() => handleDeleteWeekClick(selectedWeek)}
+                                        startIcon={<DeleteIcon />}
+                                    >
+                                        Delete Week
+                                    </Button>
+                                </Box>
+                                <Box sx={{ display: 'flex', gap: 3, color: 'text.secondary', mt: 1 }}>
                                     <Typography variant="body2">
                                         Start: {format(new Date(selectedWeek.start_date), 'MMMM d, yyyy')}
                                     </Typography>
@@ -1183,6 +1232,41 @@ function LeagueManagement() {
                         {generateMatchups
                             ? `Add Week & Create ${generatedMatchups.length} Matchups`
                             : 'Add Week'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Delete Week Dialog */}
+            <Dialog
+                open={deleteWeekDialogOpen}
+                onClose={handleDeleteWeekClose}
+            >
+                <DialogTitle>Delete Week</DialogTitle>
+                <DialogContent>
+                    <Box sx={{ pt: 1 }}>
+                        <Typography variant="body1" gutterBottom>
+                            Are you sure you want to delete Week {weekToDelete?.week_number}?
+                        </Typography>
+                        <Typography variant="body2" color="error">
+                            This will permanently delete this week and all associated matches. This action cannot be undone.
+                        </Typography>
+
+                        {matches && matches.length > 0 && (
+                            <Alert severity="warning" sx={{ mt: 2 }}>
+                                This week has {matches.length} {matches.length === 1 ? 'match' : 'matches'} that will also be deleted.
+                            </Alert>
+                        )}
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleDeleteWeekClose}>Cancel</Button>
+                    <Button
+                        onClick={handleDeleteWeek}
+                        variant="contained"
+                        color="error"
+                        startIcon={<DeleteIcon />}
+                    >
+                        Delete
                     </Button>
                 </DialogActions>
             </Dialog>

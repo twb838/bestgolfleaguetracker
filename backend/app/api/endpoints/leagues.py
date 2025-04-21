@@ -172,3 +172,20 @@ def get_week(week_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Week not found")
     return week
 
+# This would be in your backend API code
+@router.delete("/{league_id}/weeks/{week_id}")
+def delete_week(league_id: int, week_id: int, db: Session = Depends(get_db)):
+    """Delete a week and all associated matches"""
+    # Check if week exists
+    week = db.query(Week).filter(Week.id == week_id, Week.league_id == league_id).first()
+    if not week:
+        raise HTTPException(status_code=404, detail="Week not found")
+    
+    # Delete all matches associated with this week first (cascade doesn't work across tables)
+    db.query(Match).filter(Match.week_id == week_id).delete()
+    
+    # Now delete the week
+    db.delete(week)
+    db.commit()
+    
+    return {"message": "Week and associated matches deleted successfully"}
