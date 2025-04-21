@@ -85,7 +85,7 @@ def create_league_data(db: Session, num_leagues=5):
         
         # Create a current season for this league
         current_year = date.today().year
-        current_season = create_season(db, league.id, current_year)
+        current_season = create_season(db, league.id, current_year) # type: ignore
         
         # Create some matches for the season
         create_matches_for_season(db, current_season, selected_teams, selected_courses)
@@ -121,7 +121,7 @@ def create_season(db: Session, league_id: int, year: int) -> Season:
     db.flush()
     
     # Create weeks for the season
-    create_weeks(db, season.id, start_date, end_date)
+    create_weeks(db, season.id, start_date, end_date) # type: ignore
     
     return season
 

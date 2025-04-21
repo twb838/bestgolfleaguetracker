@@ -8,6 +8,8 @@ import Teams from './pages/Teams';
 import Courses from './pages/Courses';
 import Leagues from './pages/Leagues';
 import Dashboard from './pages/Dashboard';
+import LeagueManagement from './pages/LeagueManagement';
+
 
 function App() {
     return (
@@ -40,6 +42,7 @@ function App() {
                         <Route path="/teams" element={<Teams />} />
                         <Route path="/courses" element={<Courses />} />
                         <Route path="/leagues" element={<Leagues />} />
+                        <Route path="/leagues/:leagueId" element={<LeagueManagement />} />
                     </Routes>
                 </Container>
             </div>

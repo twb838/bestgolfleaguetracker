@@ -31,13 +31,15 @@ import {
     SportsSoccer as TeamIcon,
     GolfCourse as CourseIcon
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import env from '../../config/env';
 
 function Leagues() {
+    const navigate = useNavigate();
     const [leagues, setLeagues] = useState([]);
     const [teams, setTeams] = useState([]);
     const [courses, setCourses] = useState([]);
-    
+
     // Create league state
     const [open, setOpen] = useState(false);
     const [newLeague, setNewLeague] = useState({
@@ -47,7 +49,7 @@ function Leagues() {
         courses: []
     });
     const [formError, setFormError] = useState('');
-    
+
     // Edit league state
     const [editOpen, setEditOpen] = useState(false);
     const [editLeague, setEditLeague] = useState({
@@ -58,7 +60,7 @@ function Leagues() {
         courses: []
     });
     const [editError, setEditError] = useState('');
-    
+
     // Delete league state
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [leagueToDelete, setLeagueToDelete] = useState(null);
@@ -104,25 +106,25 @@ function Leagues() {
     };
 
     // CREATE FUNCTIONALITY
-    
+
     const validateForm = () => {
         setFormError('');
-        
+
         if (!newLeague.name.trim()) {
             setFormError('League name is required');
             return false;
         }
-        
+
         if (newLeague.teams.length === 0) {
             setFormError('At least one team is required');
             return false;
         }
-        
+
         if (newLeague.courses.length === 0) {
             setFormError('At least one course is required');
             return false;
         }
-        
+
         return true;
     };
 
@@ -130,7 +132,7 @@ function Leagues() {
         if (!validateForm()) {
             return;
         }
-        
+
         try {
             // Prepare the league data with team and course IDs
             const leagueToSubmit = {
@@ -139,7 +141,7 @@ function Leagues() {
                 team_ids: newLeague.teams.map(teamId => teamId),
                 course_ids: newLeague.courses.map(courseId => courseId)
             };
-            
+
             const response = await fetch(env.API_ENDPOINTS.LEAGUES, {
                 method: 'POST',
                 headers: {
@@ -147,11 +149,11 @@ function Leagues() {
                 },
                 body: JSON.stringify(leagueToSubmit),
             });
-            
+
             if (response.ok) {
                 setOpen(false);
-                setNewLeague({ 
-                    name: '', 
+                setNewLeague({
+                    name: '',
                     description: '',
                     teams: [],
                     courses: []
@@ -171,7 +173,7 @@ function Leagues() {
     const handleTeamSelection = (teamId) => {
         const currentTeams = [...newLeague.teams];
         const teamIndex = currentTeams.indexOf(teamId);
-        
+
         if (teamIndex === -1) {
             // Add the team
             currentTeams.push(teamId);
@@ -179,7 +181,7 @@ function Leagues() {
             // Remove the team
             currentTeams.splice(teamIndex, 1);
         }
-        
+
         setNewLeague({
             ...newLeague,
             teams: currentTeams
@@ -189,7 +191,7 @@ function Leagues() {
     const handleCourseSelection = (courseId) => {
         const currentCourses = [...newLeague.courses];
         const courseIndex = currentCourses.indexOf(courseId);
-        
+
         if (courseIndex === -1) {
             // Add the course
             currentCourses.push(courseId);
@@ -197,15 +199,15 @@ function Leagues() {
             // Remove the course
             currentCourses.splice(courseIndex, 1);
         }
-        
+
         setNewLeague({
             ...newLeague,
             courses: currentCourses
         });
     };
-    
+
     // EDIT FUNCTIONALITY
-    
+
     const handleEditLeague = (league) => {
         // Transform the league object to the format needed for editing
         setEditLeague({
@@ -218,11 +220,11 @@ function Leagues() {
         setEditOpen(true);
         setEditError('');
     };
-    
+
     const handleEditTeamSelection = (teamId) => {
         const currentTeams = [...editLeague.teams];
         const teamIndex = currentTeams.indexOf(teamId);
-        
+
         if (teamIndex === -1) {
             // Add the team
             currentTeams.push(teamId);
@@ -230,17 +232,17 @@ function Leagues() {
             // Remove the team
             currentTeams.splice(teamIndex, 1);
         }
-        
+
         setEditLeague({
             ...editLeague,
             teams: currentTeams
         });
     };
-    
+
     const handleEditCourseSelection = (courseId) => {
         const currentCourses = [...editLeague.courses];
         const courseIndex = currentCourses.indexOf(courseId);
-        
+
         if (courseIndex === -1) {
             // Add the course
             currentCourses.push(courseId);
@@ -248,39 +250,39 @@ function Leagues() {
             // Remove the course
             currentCourses.splice(courseIndex, 1);
         }
-        
+
         setEditLeague({
             ...editLeague,
             courses: currentCourses
         });
     };
-    
+
     const validateEditForm = () => {
         setEditError('');
-        
+
         if (!editLeague.name.trim()) {
             setEditError('League name is required');
             return false;
         }
-        
+
         if (editLeague.teams.length === 0) {
             setEditError('At least one team is required');
             return false;
         }
-        
+
         if (editLeague.courses.length === 0) {
             setEditError('At least one course is required');
             return false;
         }
-        
+
         return true;
     };
-    
+
     const handleEditSubmit = async () => {
         if (!validateEditForm()) {
             return;
         }
-        
+
         try {
             // Prepare the league data with team and course IDs
             const leagueToSubmit = {
@@ -289,7 +291,7 @@ function Leagues() {
                 team_ids: editLeague.teams,
                 course_ids: editLeague.courses
             };
-            
+
             const response = await fetch(`${env.API_ENDPOINTS.LEAGUES}/${editLeague.id}`, {
                 method: 'PUT',
                 headers: {
@@ -297,12 +299,12 @@ function Leagues() {
                 },
                 body: JSON.stringify(leagueToSubmit),
             });
-            
+
             if (response.ok) {
                 setEditOpen(false);
                 setEditLeague({
                     id: null,
-                    name: '', 
+                    name: '',
                     description: '',
                     teams: [],
                     courses: []
@@ -318,7 +320,7 @@ function Leagues() {
             setEditError('Network error. Please try again.');
         }
     };
-    
+
     // DELETE FUNCTIONALITY
 
     const handleConfirmDeleteClick = (league) => {
@@ -328,12 +330,12 @@ function Leagues() {
 
     const handleDeleteLeague = async () => {
         if (!leagueToDelete) return;
-        
+
         try {
             const response = await fetch(`${env.API_ENDPOINTS.LEAGUES}/${leagueToDelete.id}`, {
                 method: 'DELETE'
             });
-            
+
             if (response.ok) {
                 setDeleteDialogOpen(false);
                 setLeagueToDelete(null);
@@ -344,6 +346,10 @@ function Leagues() {
         } catch (error) {
             console.error('Error deleting league:', error);
         }
+    };
+
+    const handleLeagueClick = (league) => {
+        navigate(`/leagues/${league.id}`, { state: { league } });
     };
 
     return (
@@ -365,39 +371,58 @@ function Leagues() {
                 {leagues.length > 0 ? (
                     <List>
                         {leagues.map((league) => (
-                            <ListItem key={league.id}>
+                            <ListItem
+                                key={league.id}
+                                sx={{
+                                    '&:hover': {
+                                        backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                                    }
+                                }}
+                            >
                                 <ListItemText
-                                    primary={league.name}
+                                    primary={
+                                        <Typography
+                                            variant="h6"
+                                            color="primary"
+                                            sx={{
+                                                cursor: 'pointer',
+                                                '&:hover': { textDecoration: 'underline' }
+                                            }}
+                                            onClick={() => handleLeagueClick(league)}
+                                        >
+                                            {league.name}
+                                        </Typography>
+                                    }
                                     secondary={
                                         <>
                                             {league.description}
                                             <Box sx={{ mt: 1 }}>
-                                                <Chip 
-                                                    icon={<TeamIcon />} 
-                                                    label={`${league.teams?.length || 0} Teams`} 
-                                                    size="small" 
-                                                    sx={{ mr: 1 }} 
+                                                <Chip
+                                                    icon={<TeamIcon />}
+                                                    label={`${league.teams?.length || 0} Teams`}
+                                                    size="small"
+                                                    sx={{ mr: 1 }}
                                                 />
-                                                <Chip 
-                                                    icon={<CourseIcon />} 
-                                                    label={`${league.courses?.length || 0} Courses`} 
-                                                    size="small" 
+                                                <Chip
+                                                    icon={<CourseIcon />}
+                                                    label={`${league.courses?.length || 0} Courses`}
+                                                    size="small"
                                                 />
                                             </Box>
                                         </>
                                     }
                                 />
                                 <ListItemSecondaryAction>
-                                    <IconButton 
-                                        edge="end" 
-                                        aria-label="edit" 
+                                    <IconButton
+                                        edge="end"
+                                        aria-label="edit"
                                         sx={{ mr: 1 }}
                                         onClick={() => handleEditLeague(league)}
                                     >
                                         <EditIcon />
                                     </IconButton>
-                                    <IconButton 
-                                        edge="end" 
+                                    <IconButton
+                                        edge="end"
                                         aria-label="delete"
                                         onClick={() => handleConfirmDeleteClick(league)}
                                     >
@@ -408,11 +433,11 @@ function Leagues() {
                         ))}
                     </List>
                 ) : (
-                    <Box 
-                        display="flex" 
-                        flexDirection="column" 
-                        alignItems="center" 
-                        justifyContent="center" 
+                    <Box
+                        display="flex"
+                        flexDirection="column"
+                        alignItems="center"
+                        justifyContent="center"
                         p={4}
                         textAlign="center"
                     >
@@ -422,10 +447,10 @@ function Leagues() {
                         <Typography variant="body1" color="textSecondary">
                             Create your first league by clicking the "Create League" button above.
                         </Typography>
-                        <Button 
-                            variant="outlined" 
-                            color="primary" 
-                            onClick={() => setOpen(true)} 
+                        <Button
+                            variant="outlined"
+                            color="primary"
+                            onClick={() => setOpen(true)}
                             sx={{ mt: 3 }}
                             startIcon={<AddIcon />}
                         >
@@ -444,7 +469,7 @@ function Leagues() {
                             {formError}
                         </Alert>
                     )}
-                    
+
                     <TextField
                         autoFocus
                         margin="dense"
@@ -455,7 +480,7 @@ function Leagues() {
                         sx={{ mb: 2 }}
                         required
                     />
-                    
+
                     <TextField
                         margin="dense"
                         label="Description"
@@ -466,12 +491,12 @@ function Leagues() {
                         onChange={(e) => setNewLeague({ ...newLeague, description: e.target.value })}
                         sx={{ mb: 3 }}
                     />
-                    
+
                     {/* Teams Selection */}
                     <Typography variant="h6" sx={{ mb: 1 }}>
                         Teams
                     </Typography>
-                    
+
                     {teams.length > 0 ? (
                         <Paper variant="outlined" sx={{ mb: 3, maxHeight: 200, overflow: 'auto' }}>
                             <List dense>
@@ -485,9 +510,9 @@ function Leagues() {
                                                 disableRipple
                                             />
                                         </ListItemIcon>
-                                        <ListItemText 
-                                            primary={team.name} 
-                                            secondary={`${team.players?.length || 0} players`} 
+                                        <ListItemText
+                                            primary={team.name}
+                                            secondary={`${team.players?.length || 0} players`}
                                         />
                                     </ListItem>
                                 ))}
@@ -498,12 +523,12 @@ function Leagues() {
                             No teams available. Please create teams first.
                         </Alert>
                     )}
-                    
+
                     {/* Courses Selection */}
                     <Typography variant="h6" sx={{ mb: 1 }}>
                         Courses
                     </Typography>
-                    
+
                     {courses.length > 0 ? (
                         <Paper variant="outlined" sx={{ mb: 2, maxHeight: 200, overflow: 'auto' }}>
                             <List dense>
@@ -517,9 +542,9 @@ function Leagues() {
                                                 disableRipple
                                             />
                                         </ListItemIcon>
-                                        <ListItemText 
-                                            primary={course.name} 
-                                            secondary={`${course.holes?.length || 0} holes`} 
+                                        <ListItemText
+                                            primary={course.name}
+                                            secondary={`${course.holes?.length || 0} holes`}
                                         />
                                     </ListItem>
                                 ))}
@@ -533,8 +558,8 @@ function Leagues() {
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setOpen(false)}>Cancel</Button>
-                    <Button 
-                        onClick={handleAddLeague} 
+                    <Button
+                        onClick={handleAddLeague}
                         color="primary"
                         variant="contained"
                         disabled={!newLeague.name || newLeague.teams.length === 0 || newLeague.courses.length === 0}
@@ -543,7 +568,7 @@ function Leagues() {
                     </Button>
                 </DialogActions>
             </Dialog>
-            
+
             {/* Edit League Dialog */}
             <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="md" fullWidth>
                 <DialogTitle>Edit League</DialogTitle>
@@ -553,7 +578,7 @@ function Leagues() {
                             {editError}
                         </Alert>
                     )}
-                    
+
                     <TextField
                         autoFocus
                         margin="dense"
@@ -564,7 +589,7 @@ function Leagues() {
                         sx={{ mb: 2 }}
                         required
                     />
-                    
+
                     <TextField
                         margin="dense"
                         label="Description"
@@ -575,12 +600,12 @@ function Leagues() {
                         onChange={(e) => setEditLeague({ ...editLeague, description: e.target.value })}
                         sx={{ mb: 3 }}
                     />
-                    
+
                     {/* Teams Selection */}
                     <Typography variant="h6" sx={{ mb: 1 }}>
                         Teams
                     </Typography>
-                    
+
                     {teams.length > 0 ? (
                         <Paper variant="outlined" sx={{ mb: 3, maxHeight: 200, overflow: 'auto' }}>
                             <List dense>
@@ -594,9 +619,9 @@ function Leagues() {
                                                 disableRipple
                                             />
                                         </ListItemIcon>
-                                        <ListItemText 
-                                            primary={team.name} 
-                                            secondary={`${team.players?.length || 0} players`} 
+                                        <ListItemText
+                                            primary={team.name}
+                                            secondary={`${team.players?.length || 0} players`}
                                         />
                                     </ListItem>
                                 ))}
@@ -607,12 +632,12 @@ function Leagues() {
                             No teams available. Please create teams first.
                         </Alert>
                     )}
-                    
+
                     {/* Courses Selection */}
                     <Typography variant="h6" sx={{ mb: 1 }}>
                         Courses
                     </Typography>
-                    
+
                     {courses.length > 0 ? (
                         <Paper variant="outlined" sx={{ mb: 2, maxHeight: 200, overflow: 'auto' }}>
                             <List dense>
@@ -626,9 +651,9 @@ function Leagues() {
                                                 disableRipple
                                             />
                                         </ListItemIcon>
-                                        <ListItemText 
-                                            primary={course.name} 
-                                            secondary={`${course.holes?.length || 0} holes`} 
+                                        <ListItemText
+                                            primary={course.name}
+                                            secondary={`${course.holes?.length || 0} holes`}
                                         />
                                     </ListItem>
                                 ))}
@@ -642,8 +667,8 @@ function Leagues() {
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setEditOpen(false)}>Cancel</Button>
-                    <Button 
-                        onClick={handleEditSubmit} 
+                    <Button
+                        onClick={handleEditSubmit}
                         color="primary"
                         variant="contained"
                         disabled={!editLeague.name || editLeague.teams.length === 0 || editLeague.courses.length === 0}
@@ -652,7 +677,7 @@ function Leagues() {
                     </Button>
                 </DialogActions>
             </Dialog>
-            
+
             {/* Delete Confirmation Dialog */}
             <Dialog
                 open={deleteDialogOpen}
@@ -669,8 +694,8 @@ function Leagues() {
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-                    <Button 
-                        onClick={handleDeleteLeague} 
+                    <Button
+                        onClick={handleDeleteLeague}
                         color="error"
                         variant="contained"
                     >

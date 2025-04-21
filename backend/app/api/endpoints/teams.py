@@ -93,7 +93,7 @@ def update_team(team_id: int, team_update: TeamUpdate, db: Session = Depends(get
         raise HTTPException(status_code=404, detail="Team not found")
     
     # Update team name
-    db_team.name = team_update.name
+    db_team.name = team_update.name # type: ignore
     
     # Handle players if provided
     if team_update.players is not None:
