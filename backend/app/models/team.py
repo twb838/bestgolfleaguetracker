@@ -10,7 +10,7 @@ class Team(Base):
     name = Column(String(100), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
+    # Use string reference for the relationship to avoid circular imports
     players = relationship("Player", back_populates="team", cascade="all, delete-orphan")
     
     def __repr__(self):

@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker, declarative_base
 from app.core.settings import settings
 
@@ -31,8 +31,33 @@ def reset_database():
     # Import models here to avoid circular imports
     import app.db.init_models
     
-    print("Dropping all tables...")
-    Base.metadata.drop_all(bind=engine)
-    print("Creating new tables...")
-    Base.metadata.create_all(bind=engine)
-    print("Database reset completed successfully!")
+    db = SessionLocal()
+    
+    try:
+        print("Dropping all tables...")
+        # Disable foreign key checks temporarily
+        db.execute(text('SET FOREIGN_KEY_CHECKS = 0;'))
+        
+        # Get list of all tables
+        inspector = inspect(engine)
+        table_names = inspector.get_table_names()
+        
+        # Drop all tables manually using raw SQL
+        for table in table_names:
+            print(f"Dropping table: {table}")
+            db.execute(text(f'DROP TABLE IF EXISTS {table};'))
+        
+        # Re-enable foreign key checks
+        db.execute(text('SET FOREIGN_KEY_CHECKS = 1;'))
+        db.commit()
+        
+        print("Creating new tables...")
+        Base.metadata.create_all(bind=engine)
+        print("Database reset completed successfully!")
+        
+    except Exception as e:
+        print(f"Error during database reset: {str(e)}")
+        db.rollback()
+        raise
+    finally:
+        db.close()

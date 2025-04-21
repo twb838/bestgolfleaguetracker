@@ -12,7 +12,7 @@ class Player(Base):
     handicap = Column(Float, default=0.0)
     team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
     
-    # Relationships
+    # Use string reference for the relationship to avoid circular imports
     team = relationship("Team", back_populates="players")
     
     def __repr__(self):

@@ -1,8 +1,12 @@
 # Import all models to ensure they are registered with SQLAlchemy
+
+# Import base models first
+from app.models.course import Course, Hole
 from app.models.team import Team
 from app.models.player import Player
-from app.models.course import Course, Hole
 from app.models.league import League, league_team_association, league_course_association
+
+# Import models that depend on the base models
 from app.models.season import Season, Week
 from app.models.match import Match
 from app.models.score import PlayerScore
