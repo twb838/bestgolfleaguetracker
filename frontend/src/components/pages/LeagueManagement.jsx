@@ -48,7 +48,7 @@ import {
     DateRange as WeekIcon,
     Delete as DeleteIcon
 } from '@mui/icons-material';
-import { format } from 'date-fns';
+import format from 'date-fns/format';
 import env from '../../config/env';
 
 function LeagueManagement() {
@@ -810,8 +810,14 @@ function LeagueManagement() {
                                                                 }
                                                             }}
                                                             onClick={() => {
-                                                                // You can add a function here to view/edit match details
-                                                                console.log('View match details', match);
+                                                                // Navigate to match details page for score entry
+                                                                navigate(`/matches/${match.id}/scores`, {
+                                                                    state: {
+                                                                        match,
+                                                                        league,
+                                                                        returnTo: `/leagues/${leagueId}`
+                                                                    }
+                                                                });
                                                             }}
                                                         >
                                                             {/* Status badge */}

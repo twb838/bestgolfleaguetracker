@@ -6,7 +6,7 @@ class HoleBase(BaseModel):
     number: int
     par: int
     yards: Optional[int] = None
-    handicap: int
+    handicap: Optional[int] = None  # Now optional
     
     @validator('yards')
     def validate_yards(cls, v):

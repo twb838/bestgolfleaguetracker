@@ -4,7 +4,8 @@ from typing import List, Dict
 from sqlalchemy import func
 
 from app.db.base import get_db
-from app.models.course import Course, Hole
+from app.models.course import Course
+from app.models.hole import Hole
 from app.schemas.course import CourseCreate, CourseUpdate, CourseResponse
 from app.schemas.hole import HoleCreate, HoleResponse, HoleUpdate
 

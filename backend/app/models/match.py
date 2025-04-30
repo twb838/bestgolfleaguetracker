@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Date, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, Date, ForeignKey
 from sqlalchemy.orm import relationship
 from app.db.base import Base
 
@@ -17,11 +17,8 @@ class Match(Base):
     
     # Relationships
     week = relationship("Week", back_populates="matches")
-    course = relationship("Course")
-    home_team = relationship("Team", foreign_keys=[home_team_id])
-    away_team = relationship("Team", foreign_keys=[away_team_id])
-    
-    # Add this relationship which is referenced in PlayerScore model
+    course = relationship("Course", back_populates="matches")
+
     player_scores = relationship("PlayerScore", back_populates="match", cascade="all, delete-orphan")
     
     def __repr__(self):

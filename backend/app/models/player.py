@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from app.db.base import Base
 
@@ -12,8 +12,8 @@ class Player(Base):
     handicap = Column(Float, default=0.0)
     team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
     
-    # Use string reference for the relationship to avoid circular imports
-    team = relationship("Team", back_populates="players")
+    # Update this relationship to point to PlayerScore, not Score
+    player_scores = relationship("PlayerScore", back_populates="player")
     
-    def __repr__(self):
-        return f"<Player(id={self.id}, name={self.first_name} {self.last_name})>"
+    # Your existing relationships
+    team = relationship("Team", back_populates="players")

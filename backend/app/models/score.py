@@ -16,9 +16,9 @@ class PlayerScore(Base):
     hole_id = Column(Integer, ForeignKey("holes.id"), nullable=False)
     
     # Relationships
-    player = relationship("Player")
     match = relationship("Match", back_populates="player_scores")
-    hole = relationship("Hole")
+    player = relationship("Player", back_populates="player_scores")
+    hole = relationship("Hole", back_populates="player_scores")
     
     def __repr__(self):
         return f"<PlayerScore(player_id={self.player_id}, match_id={self.match_id}, hole_id={self.hole_id}, strokes={self.strokes})>"

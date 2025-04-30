@@ -1,5 +1,5 @@
 from app.db.base import get_db
-from app.models.course import Course, Hole
+from app.models.course import Course
 import random
 
 def main():

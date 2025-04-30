@@ -9,7 +9,7 @@ import Courses from './pages/Courses';
 import Leagues from './pages/Leagues';
 import Dashboard from './pages/Dashboard';
 import LeagueManagement from './pages/LeagueManagement';
-
+import MatchScoreEntry from './pages/MatchScoreEntry';
 
 function App() {
     return (
@@ -43,6 +43,7 @@ function App() {
                         <Route path="/courses" element={<Courses />} />
                         <Route path="/leagues" element={<Leagues />} />
                         <Route path="/leagues/:leagueId" element={<LeagueManagement />} />
+                        <Route path="/matches/:matchId/scores" element={<MatchScoreEntry />} />
                     </Routes>
                 </Container>
             </div>
