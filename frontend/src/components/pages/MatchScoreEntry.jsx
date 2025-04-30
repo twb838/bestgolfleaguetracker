@@ -322,6 +322,45 @@ const MatchScoreEntry = () => {
         }
     };
 
+    // Helper function to find the next input field to focus
+    const getNextInputField = (teamType, currentPlayerIndex, currentHoleId) => {
+        // Find the current hole's index in the holes array
+        const currentHoleIndex = holes.findIndex(h => h.id === currentHoleId);
+
+        // Get the appropriate team scores array
+        const teamScores = teamType === 'home' ? homeTeamScores : awayTeamScores;
+
+        // If this is the last hole for the current player
+        if (currentHoleIndex === holes.length - 1) {
+            // Move to the next player's first hole
+            if (currentPlayerIndex < teamScores.length - 1) {
+                // Next player in same team
+                return document.querySelector(
+                    `[data-player-index="${currentPlayerIndex + 1}"][data-team-type="${teamType}"][data-hole-index="0"] input`
+                );
+            } else if (teamType === 'home' && activeTab === 0 && awayTeamScores.length > 0) {
+                // Move to first player in away team (and switch tab)
+                setTimeout(() => {
+                    setActiveTab(1); // Switch to away team tab
+                    setTimeout(() => {
+                        const firstAwayInput = document.querySelector(
+                            `[data-player-index="0"][data-team-type="away"][data-hole-index="0"] input`
+                        );
+                        if (firstAwayInput) firstAwayInput.focus();
+                    }, 100); // Small delay to allow tab switch
+                }, 10);
+                return null;
+            }
+            // If we're at the last player's last hole, don't auto-tab
+            return null;
+        }
+
+        // Otherwise, move to the next hole for the current player
+        return document.querySelector(
+            `[data-player-index="${currentPlayerIndex}"][data-team-type="${teamType}"][data-hole-index="${currentHoleIndex + 1}"] input`
+        );
+    };
+
     const handleTabChange = (event, newValue) => {
         setActiveTab(newValue);
     };
@@ -500,6 +539,10 @@ const MatchScoreEntry = () => {
                                             <TableCell
                                                 key={hole.id}
                                                 align="center"
+                                                data-player-index={playerIndex}
+                                                data-team-type={teamType}
+                                                data-hole-index={holes.findIndex(h => h.id === hole.id)}
+                                                data-hole-id={hole.id}
                                                 sx={{
                                                     color: getScoreColor(score, hole[parProp]),
                                                     backgroundColor: score !== '' ?
@@ -520,6 +563,21 @@ const MatchScoreEntry = () => {
                                                         hole.id,
                                                         e.target.value
                                                     )}
+                                                    onKeyUp={(e) => {
+                                                        // Auto-tab when a digit is entered (0-9)
+                                                        if (/^\d$/.test(e.key) && hole.id) {
+                                                            const nextInput = getNextInputField(teamType, playerIndex, hole.id);
+                                                            if (nextInput) {
+                                                                nextInput.focus();
+                                                            }
+                                                        }
+                                                    }}
+                                                    // Mobile optimization - numeric keyboard
+                                                    inputProps={{
+                                                        inputMode: 'numeric',
+                                                        pattern: '[0-9]*',
+                                                        maxLength: 2,
+                                                    }}
                                                     InputProps={{
                                                         disableUnderline: match.is_completed,
                                                         sx: {
