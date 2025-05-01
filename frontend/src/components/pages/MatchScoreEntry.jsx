@@ -496,128 +496,192 @@ const MatchScoreEntry = () => {
         const holeNumberProp = 'hole_number' in holes[0] ? 'hole_number' : 'number';
         const parProp = 'par' in holes[0] ? 'par' : 'par';
 
+        // Create a vertical layout for mobile-friendly score entry
         return (
-            <TableContainer component={Paper} sx={{ mt: 2, overflowX: 'auto' }}>
-                <Table size="small" stickyHeader>
-                    <TableHead>
-                        <TableRow>
-                            <TableCell sx={{ fontWeight: 'bold', minWidth: 150 }}>Player</TableCell>
-                            {holes.map(hole => (
-                                <TableCell
-                                    key={hole.id}
-                                    align="center"
+            <Box sx={{ mt: 2 }}>
+                {/* Player names in horizontal list at top */}
+                <Paper sx={{ mb: 2, p: 1, bgcolor: 'background.paper' }}>
+                    <Grid container spacing={1} alignItems="center">
+                        <Grid item xs={4} sx={{ fontWeight: 'bold', pl: 2 }}>
+                            Hole
+                        </Grid>
+                        {teamScores.map((player, index) => (
+                            <Grid item xs key={player.player_id} sx={{ textAlign: 'center' }}>
+                                <Typography
+                                    variant="body2"
                                     sx={{
-                                        minWidth: 50,
                                         fontWeight: 'bold',
-                                        bgcolor: hole[parProp] === 3 ? 'info.light' :
-                                            hole[parProp] === 5 ? 'warning.light' : 'inherit'
+                                        fontSize: { xs: '0.75rem', sm: '0.875rem' }
                                     }}
                                 >
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                        <Typography variant="body2">{hole[holeNumberProp]}</Typography>
-                                        <Typography variant="caption" color="text.secondary">
-                                            Par {hole[parProp]}
-                                        </Typography>
+                                    {player.player_name.split(' ')[0]}
+                                </Typography>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </Paper>
+
+                {/* Holes as rows with player scores as columns */}
+                {holes.map((hole) => (
+                    <Paper
+                        key={hole.id}
+                        sx={{
+                            mb: 1,
+                            p: 1,
+                            bgcolor: hole[parProp] === 3 ? 'rgba(33, 150, 243, 0.05)' :
+                                hole[parProp] === 5 ? 'rgba(255, 152, 0, 0.05)' :
+                                    'background.paper'
+                        }}
+                    >
+                        <Grid container spacing={1} alignItems="center">
+                            {/* Hole info */}
+                            <Grid item xs={4}>
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                    <Box
+                                        sx={{
+                                            width: 32,
+                                            height: 32,
+                                            borderRadius: '50%',
+                                            bgcolor: 'primary.main',
+                                            color: 'white',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            mr: 1,
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        {hole[holeNumberProp]}
                                     </Box>
-                                </TableCell>
-                            ))}
-                            <TableCell align="center" sx={{ fontWeight: 'bold', bgcolor: 'grey.200' }}>Total</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {teamScores.map((playerScore, playerIndex) => {
-                            const total = calculatePlayerTotal(playerScore);
-                            return (
-                                <TableRow key={playerScore.player_id}>
-                                    <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
-                                        {playerScore.player_name}
-                                    </TableCell>
-                                    {holes.map(hole => {
-                                        const score = playerScore.scores[hole.id] || '';
-                                        const parProp = 'par' in holes[0] ? 'par' : 'par';
-                                        return (
-                                            <TableCell
-                                                key={hole.id}
-                                                align="center"
-                                                data-player-index={playerIndex}
-                                                data-team-type={teamType}
-                                                data-hole-index={holes.findIndex(h => h.id === hole.id)}
-                                                data-hole-id={hole.id}
-                                                sx={{
-                                                    color: getScoreColor(score, hole[parProp]),
+                                    <Box>
+                                        <Typography variant="body2">Par {hole[parProp]}</Typography>
+                                    </Box>
+                                </Box>
+                            </Grid>
+
+                            {/* Player score inputs */}
+                            {teamScores.map((player, playerIndex) => {
+                                const score = player.scores[hole.id] || '';
+                                return (
+                                    <Grid item xs key={`${player.player_id}-${hole.id}`} sx={{ textAlign: 'center' }}>
+                                        <TextField
+                                            type="number"
+                                            variant="outlined"
+                                            value={score}
+                                            disabled={match.is_completed}
+                                            onChange={(e) => handleScoreChange(
+                                                teamType,
+                                                playerIndex,
+                                                hole.id,
+                                                e.target.value
+                                            )}
+                                            onKeyUp={(e) => {
+                                                // Auto-tab to next input when a digit is entered
+                                                if (/^\d$/.test(e.key) && hole.id) {
+                                                    // Find next hole for this player
+                                                    const currentHoleIndex = holes.findIndex(h => h.id === hole.id);
+                                                    if (currentHoleIndex < holes.length - 1) {
+                                                        // Focus next hole for this player
+                                                        const nextHoleId = holes[currentHoleIndex + 1].id;
+                                                        const nextInput = document.querySelector(
+                                                            `[data-player-index="${playerIndex}"][data-team-type="${teamType}"][data-hole-id="${nextHoleId}"] input`
+                                                        );
+                                                        if (nextInput) {
+                                                            nextInput.focus();
+                                                        }
+                                                    }
+                                                }
+                                            }}
+                                            inputProps={{
+                                                inputMode: 'numeric',
+                                                pattern: '[0-9]*',
+                                                maxLength: 2,
+                                                style: {
+                                                    textAlign: 'center',
+                                                    fontWeight: score !== '' ? 'bold' : 'normal'
+                                                }
+                                            }}
+                                            sx={{
+                                                width: '60px',
+                                                '& .MuiOutlinedInput-root': {
                                                     backgroundColor: score !== '' ?
                                                         (score === hole[parProp] ? 'rgba(33, 150, 243, 0.1)' :
                                                             score < hole[parProp] ? 'rgba(76, 175, 80, 0.1)' :
                                                                 score === hole[parProp] + 1 ? 'rgba(255, 152, 0, 0.1)' :
-                                                                    'rgba(244, 67, 54, 0.1)') : 'inherit'
-                                                }}
-                                            >
-                                                <TextField
-                                                    type="number"
-                                                    variant="standard"
-                                                    value={score}
-                                                    disabled={match.is_completed}
-                                                    onChange={(e) => handleScoreChange(
-                                                        teamType,
-                                                        playerIndex,
-                                                        hole.id,
-                                                        e.target.value
-                                                    )}
-                                                    onKeyUp={(e) => {
-                                                        // Auto-tab when a digit is entered (0-9)
-                                                        if (/^\d$/.test(e.key) && hole.id) {
-                                                            const nextInput = getNextInputField(teamType, playerIndex, hole.id);
-                                                            if (nextInput) {
-                                                                nextInput.focus();
-                                                            }
-                                                        }
-                                                    }}
-                                                    // Mobile optimization - numeric keyboard
-                                                    inputProps={{
-                                                        inputMode: 'numeric',
-                                                        pattern: '[0-9]*',
-                                                        maxLength: 2,
-                                                    }}
-                                                    InputProps={{
-                                                        disableUnderline: match.is_completed,
-                                                        sx: {
-                                                            input: {
-                                                                textAlign: 'center',
-                                                                width: '2rem',
-                                                                fontWeight: score !== '' ? 'bold' : 'normal'
-                                                            }
-                                                        }
-                                                    }}
-                                                />
-                                            </TableCell>
-                                        );
-                                    })}
-                                    <TableCell
-                                        align="center"
-                                        sx={{
-                                            fontWeight: 'bold',
-                                            backgroundColor: 'grey.100'
-                                        }}
-                                    >
-                                        {total || '-'}
-                                    </TableCell>
-                                </TableRow>
+                                                                    'rgba(244, 67, 54, 0.1)') : 'white'
+                                                },
+                                                '& input': {
+                                                    p: 1,
+                                                    color: getScoreColor(score, hole[parProp])
+                                                }
+                                            }}
+                                            size="small"
+                                            data-player-index={playerIndex}
+                                            data-team-type={teamType}
+                                            data-hole-id={hole.id}
+                                        />
+                                    </Grid>
+                                );
+                            })}
+                        </Grid>
+                    </Paper>
+                ))}
+
+                {/* Totals row */}
+                <Paper sx={{ mt: 2, p: 1, bgcolor: 'grey.100', fontWeight: 'bold' }}>
+                    <Grid container spacing={1} alignItems="center">
+                        <Grid item xs={4} sx={{ pl: 2 }}>
+                            Total
+                        </Grid>
+                        {teamScores.map((player) => {
+                            const total = calculatePlayerTotal(player);
+                            const par = calculatePar();
+                            const diff = total - par;
+                            return (
+                                <Grid item xs key={player.player_id} sx={{ textAlign: 'center' }}>
+                                    <Box sx={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center'
+                                    }}>
+                                        <Typography
+                                            sx={{
+                                                fontWeight: 'bold',
+                                                color: diff < 0 ? 'success.main' :
+                                                    diff === 0 ? 'text.primary' : 'error.main'
+                                            }}
+                                        >
+                                            {total || '-'}
+                                        </Typography>
+                                        {total > 0 && (
+                                            <Typography variant="caption" sx={{
+                                                color: diff < 0 ? 'success.main' :
+                                                    diff === 0 ? 'text.secondary' : 'error.main'
+                                            }}>
+                                                {diff < 0 ? diff : diff > 0 ? `+${diff}` : 'E'}
+                                            </Typography>
+                                        )}
+                                    </Box>
+                                </Grid>
                             );
                         })}
-                        <TableRow sx={{ backgroundColor: 'grey.200' }}>
-                            <TableCell sx={{ fontWeight: 'bold' }}>Par</TableCell>
-                            {holes.map(hole => (
-                                <TableCell key={hole.id} align="center" sx={{ fontWeight: 'medium' }}>
-                                    {hole.par}
-                                </TableCell>
-                            ))}
-                            <TableCell align="center" sx={{ fontWeight: 'bold' }}>
-                                {calculatePar()}
-                            </TableCell>
-                        </TableRow>
-                    </TableBody>
-                </Table>
-            </TableContainer>
+                    </Grid>
+                </Paper>
+
+                {/* Par total row */}
+                <Paper sx={{ mt: 1, p: 1, bgcolor: 'grey.200' }}>
+                    <Grid container spacing={1} alignItems="center">
+                        <Grid item xs={4} sx={{ pl: 2 }}>
+                            Par
+                        </Grid>
+                        {teamScores.map((player) => (
+                            <Grid item xs key={`par-${player.player_id}`} sx={{ textAlign: 'center' }}>
+                                <Typography>{calculatePar()}</Typography>
+                            </Grid>
+                        ))}
+                    </Grid>
+                </Paper>
+            </Box>
         );
     };
 

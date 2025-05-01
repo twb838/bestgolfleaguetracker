@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Typography, 
-    Button, 
+import {
+    Typography,
+    Button,
     Dialog,
     DialogTitle,
     DialogContent,
@@ -23,8 +23,8 @@ import {
     TableHead,
     TableRow
 } from '@mui/material';
-import { 
-    Add as AddIcon, 
+import {
+    Add as AddIcon,
     Remove as RemoveIcon,
     Delete as DeleteIcon,
     Edit as EditIcon
@@ -69,11 +69,24 @@ function Courses() {
     const handleHoleChange = (index, field, value) => {
         const updatedHoles = newCourse.holes.map((hole, i) => {
             if (i === index) {
+                // For number fields, ensure proper conversion and handling of empty values
+                if (['number', 'par', 'handicap', 'yards'].includes(field)) {
+                    // Convert to number or use 0 for empty strings (except yards which can be null)
+                    const numValue = value === '' ? (field === 'yards' ? '' : field === 'handicap' ? 1 : 4) : Number(value);
+                    return { ...hole, [field]: numValue };
+                }
                 return { ...hole, [field]: value };
             }
             return hole;
         });
         setNewCourse({ ...newCourse, holes: updatedHoles });
+
+        // Log the change for debugging
+        if (field === 'handicap') {
+            console.log(`New course - Updated handicap for hole ${index + 1} to:`, value,
+                typeof value, '→ Stored as:', updatedHoles[index].handicap,
+                typeof updatedHoles[index].handicap);
+        }
     };
 
     const addHole = () => {
@@ -171,14 +184,14 @@ function Courses() {
                 },
                 body: JSON.stringify(courseToSubmit),
             });
-            
+
             if (!response.ok) {
                 const errorData = await response.json();
                 console.error('Server error:', errorData);
                 setFormError(errorData.detail || 'Error creating course');
                 return;
             }
-            
+
             setOpen(false);
             setNewCourse({
                 name: '',
@@ -202,7 +215,7 @@ function Courses() {
             const response = await fetch(`${env.API_ENDPOINTS.COURSES}/${courseToDelete.id}`, {
                 method: 'DELETE',
             });
-            
+
             if (response.ok) {
                 setDeleteDialogOpen(false);
                 setCourseToDelete(null);
@@ -218,24 +231,62 @@ function Courses() {
     };
 
     const handleEditCourse = (course) => {
-        setEditCourse({
+        // Make a deep copy of the course and fix any invalid data
+        const cleanedCourse = {
             id: course.id,
             name: course.name,
-            holes: course.holes ? [...course.holes] : []
-        });
+            holes: course.holes ? course.holes.map(hole => ({
+                ...hole,
+                // Ensure handicap is a valid number between 1-18
+                handicap: (!hole.handicap || isNaN(hole.handicap)) ? 1 : Number(hole.handicap)
+            })) : []
+        };
+
+        setEditCourse(cleanedCourse);
         setEditOpen(true);
         setEditError('');
         setDeletedHoleIds([]); // Reset the deleted holes array
+
+        // Log for debugging
+        console.log('Editing course:', cleanedCourse);
     };
 
     const handleEditHoleChange = (index, field, value) => {
         const updatedHoles = editCourse.holes.map((hole, i) => {
             if (i === index) {
-                return { ...hole, [field]: value };
+                // Create a new hole object with the updated field
+                let updatedHole = { ...hole };
+
+                // Handle number fields
+                if (['number', 'par', 'handicap', 'yards'].includes(field)) {
+                    // Special handling for handicap to ensure it's never null
+                    if (field === 'handicap') {
+                        // If empty, use 1 as default
+                        updatedHole.handicap = value === '' ? 1 : Number(value);
+                    }
+                    // Handle other numeric fields
+                    else {
+                        updatedHole[field] = value === '' ?
+                            (field === 'yards' ? '' : field === 'par' ? 4 : 1) :
+                            Number(value);
+                    }
+                } else {
+                    updatedHole[field] = value;
+                }
+
+                return updatedHole;
             }
             return hole;
         });
+
         setEditCourse({ ...editCourse, holes: updatedHoles });
+
+        // Debug logging for handicap changes
+        if (field === 'handicap') {
+            console.log(`Updated handicap for hole ${index + 1} to:`, value,
+                typeof value, '→ Stored as:', updatedHoles[index].handicap,
+                typeof updatedHoles[index].handicap);
+        }
     };
 
     const addHoleToEdit = () => {
@@ -276,18 +327,18 @@ function Courses() {
         }
 
         const holeToRemove = editCourse.holes[index];
-        
+
         // If the hole has an ID (exists in database), track it for deletion
         if (holeToRemove.id) {
             setDeletedHoleIds([...deletedHoleIds, holeToRemove.id]);
         }
-        
+
         const updatedHoles = editCourse.holes.filter((_, i) => i !== index);
         setEditCourse({
             ...editCourse,
             holes: updatedHoles
         });
-        
+
         setEditError('');
     };
 
@@ -299,16 +350,23 @@ function Courses() {
 
         for (let i = 0; i < editCourse.holes.length; i++) {
             const hole = editCourse.holes[i];
-            if (!hole.number || hole.number < 1 || hole.number > 18) {
+
+            // For each field, first check if it exists, then validate its value
+            if (!hole.number || isNaN(Number(hole.number)) || Number(hole.number) < 1 || Number(hole.number) > 18) {
                 setEditError(`Hole number must be between 1 and 18`);
                 return false;
             }
-            if (!hole.par || hole.par < 3 || hole.par > 5) {
+
+            if (!hole.par || isNaN(Number(hole.par)) || Number(hole.par) < 3 || Number(hole.par) > 5) {
                 setEditError(`Par must be between 3 and 5 for hole ${hole.number}`);
                 return false;
             }
-            if (!hole.handicap || hole.handicap < 1 || hole.handicap > 18) {
+
+            // For handicap, check if it's a valid number between 1-18
+            const handicap = Number(hole.handicap);
+            if (isNaN(handicap) || handicap < 1 || handicap > 18) {
                 setEditError(`Handicap must be between 1 and 18 for hole ${hole.number}`);
+                console.error(`Invalid handicap ${hole.handicap} for hole ${hole.number}`);
                 return false;
             }
         }
@@ -317,24 +375,61 @@ function Courses() {
         return true;
     };
 
+    // Add this before your handleEditSubmit function
+    const logCourseData = (prefix, course) => {
+        console.log(`${prefix} Course Data:`, {
+            name: course.name,
+            holes: course.holes.map(h => ({
+                id: h.id,
+                number: h.number,
+                par: h.par,
+                handicap: h.handicap,
+                yards: h.yards,
+                typeof_handicap: typeof h.handicap
+            }))
+        });
+    };
+
     const handleEditSubmit = async () => {
         if (!validateEditCourse()) {
             return;
         }
 
+        // Log the data before any processing
+        logCourseData("Before processing", editCourse);
+
         try {
             // First, update the course and its holes
             const courseToSubmit = {
                 name: editCourse.name,
-                holes: editCourse.holes.map(hole => ({
-                    id: hole.id || undefined,
-                    number: Number(hole.number),
-                    par: Number(hole.par),
-                    handicap: Number(hole.handicap),
-                    yards: hole.yards ? Number(hole.yards) : null
-                }))
+                holes: editCourse.holes.map(hole => {
+                    // Make a clean object without any undefined or null handicaps
+                    const cleanHole = {
+                        id: hole.id || undefined,
+                        number: Number(hole.number),
+                        par: Number(hole.par),
+                        // Ensure handicap is explicitly converted to a valid number between 1-18
+                        handicap: hole.handicap === null || hole.handicap === undefined || hole.handicap === ''
+                            ? 1 // Default to 1 if missing
+                            : Number(hole.handicap),
+                        yards: hole.yards === null || hole.yards === undefined || hole.yards === ''
+                            ? null
+                            : Number(hole.yards)
+                    };
+
+                    // Verify the handicap is actually being set correctly
+                    if (cleanHole.handicap === null || isNaN(cleanHole.handicap)) {
+                        console.error(`Invalid handicap detected for hole ${hole.number}:`, hole.handicap);
+                        cleanHole.handicap = 1; // Fallback default
+                    }
+
+                    return cleanHole;
+                })
             };
-            
+
+            // Log what we're actually sending
+            console.log('Submitting course update:', JSON.stringify(courseToSubmit, null, 2));
+
             const response = await fetch(`${env.API_ENDPOINTS.COURSES}/${editCourse.id}`, {
                 method: 'PUT',
                 headers: {
@@ -342,23 +437,24 @@ function Courses() {
                 },
                 body: JSON.stringify(courseToSubmit),
             });
-            
+
             if (!response.ok) {
                 const errorData = await response.json();
+                console.error('Error updating course:', errorData);
                 setEditError(errorData.detail || 'Error updating course');
                 return;
             }
-            
+
             // Then, delete any holes that were removed
             if (deletedHoleIds.length > 0) {
                 // Delete each hole individually
-                await Promise.all(deletedHoleIds.map(holeId => 
+                await Promise.all(deletedHoleIds.map(holeId =>
                     fetch(`${env.API_ENDPOINTS.COURSES}/holes/${holeId}`, {
                         method: 'DELETE',
                     })
                 ));
             }
-            
+
             setEditOpen(false);
             setEditCourse(null);
             setEditError('');
@@ -375,9 +471,9 @@ function Courses() {
             <Typography variant="h4" gutterBottom>
                 Golf Courses
             </Typography>
-            <Button 
-                variant="contained" 
-                color="primary" 
+            <Button
+                variant="contained"
+                color="primary"
                 onClick={() => setOpen(true)}
                 sx={{ mb: 3 }}
             >
@@ -388,13 +484,13 @@ function Courses() {
                 {courses.length > 0 ? (
                     <List>
                         {courses.map((course) => (
-                            <ListItem 
+                            <ListItem
                                 key={course.id}
                                 button
                                 onClick={() => handleEditCourse(course)}
                             >
-                                <ListItemText 
-                                    primary={course.name} 
+                                <ListItemText
+                                    primary={course.name}
                                     secondary={`Holes: ${course.holes?.length || 0}`}
                                 />
                                 <ListItemSecondaryAction>
@@ -409,8 +505,8 @@ function Courses() {
                                     >
                                         <EditIcon />
                                     </IconButton>
-                                    <IconButton 
-                                        edge="end" 
+                                    <IconButton
+                                        edge="end"
                                         color="error"
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -425,11 +521,11 @@ function Courses() {
                         ))}
                     </List>
                 ) : (
-                    <Box 
-                        display="flex" 
-                        flexDirection="column" 
-                        alignItems="center" 
-                        justifyContent="center" 
+                    <Box
+                        display="flex"
+                        flexDirection="column"
+                        alignItems="center"
+                        justifyContent="center"
                         p={4}
                         textAlign="center"
                     >
@@ -439,10 +535,10 @@ function Courses() {
                         <Typography variant="body1" color="textSecondary">
                             Create your first course by clicking the "Add New Course" button above.
                         </Typography>
-                        <Button 
-                            variant="outlined" 
-                            color="primary" 
-                            onClick={() => setOpen(true)} 
+                        <Button
+                            variant="outlined"
+                            color="primary"
+                            onClick={() => setOpen(true)}
                             sx={{ mt: 3 }}
                         >
                             Create Course
@@ -452,8 +548,8 @@ function Courses() {
             </Paper>
 
             {/* Add Course Dialog */}
-            <Dialog 
-                open={open} 
+            <Dialog
+                open={open}
                 onClose={() => setOpen(false)}
                 maxWidth="lg"
                 fullWidth
@@ -465,7 +561,7 @@ function Courses() {
                             {formError}
                         </Alert>
                     )}
-                    
+
                     <TextField
                         autoFocus
                         margin="dense"
@@ -476,7 +572,7 @@ function Courses() {
                         sx={{ mb: 3 }}
                         required
                     />
-                    
+
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                         <Typography variant="h6">Course Holes</Typography>
                         <Button
@@ -547,8 +643,8 @@ function Courses() {
                                             />
                                         </TableCell>
                                         <TableCell>
-                                            <IconButton 
-                                                color="error" 
+                                            <IconButton
+                                                color="error"
                                                 onClick={() => removeHole(index)}
                                                 disabled={newCourse.holes.length <= 1}
                                                 size="small"
@@ -564,8 +660,8 @@ function Courses() {
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setOpen(false)}>Cancel</Button>
-                    <Button 
-                        onClick={handleAddCourse} 
+                    <Button
+                        onClick={handleAddCourse}
                         color="primary"
                         disabled={!newCourse.name}
                     >
@@ -595,8 +691,8 @@ function Courses() {
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-                    <Button 
-                        onClick={handleDeleteCourse} 
+                    <Button
+                        onClick={handleDeleteCourse}
                         color="error"
                     >
                         Delete
@@ -605,8 +701,8 @@ function Courses() {
             </Dialog>
 
             {/* Edit Course Dialog */}
-            <Dialog 
-                open={editOpen} 
+            <Dialog
+                open={editOpen}
                 onClose={() => setEditOpen(false)}
                 maxWidth="lg"
                 fullWidth
@@ -618,7 +714,7 @@ function Courses() {
                             {editError}
                         </Alert>
                     )}
-                    
+
                     <TextField
                         autoFocus
                         margin="dense"
@@ -629,7 +725,7 @@ function Courses() {
                         sx={{ mb: 3 }}
                         required
                     />
-                    
+
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                         <Typography variant="h6">Course Holes</Typography>
                         <Button
@@ -692,16 +788,25 @@ function Courses() {
                                             <TextField
                                                 size="small"
                                                 type="number"
-                                                inputProps={{ min: 1, max: 18 }}
-                                                value={hole.handicap}
-                                                onChange={(e) => handleEditHoleChange(index, 'handicap', parseInt(e.target.value) || '')}
+                                                inputProps={{
+                                                    min: 1,
+                                                    max: 18,
+                                                    // Force a value of 1 if field is cleared
+                                                    onBlur: (e) => {
+                                                        if (e.target.value === '') {
+                                                            handleEditHoleChange(index, 'handicap', 1);
+                                                        }
+                                                    }
+                                                }}
+                                                value={hole.handicap === null || hole.handicap === undefined ? 1 : hole.handicap}
+                                                onChange={(e) => handleEditHoleChange(index, 'handicap', e.target.value === '' ? '' : parseInt(e.target.value))}
                                                 required
                                                 fullWidth
                                             />
                                         </TableCell>
                                         <TableCell>
-                                            <IconButton 
-                                                color="error" 
+                                            <IconButton
+                                                color="error"
                                                 onClick={() => removeHoleFromEdit(index)}
                                                 disabled={editCourse.holes.length <= 1}
                                                 size="small"
@@ -717,8 +822,8 @@ function Courses() {
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={() => setEditOpen(false)}>Cancel</Button>
-                    <Button 
-                        onClick={handleEditSubmit} 
+                    <Button
+                        onClick={handleEditSubmit}
                         color="primary"
                         disabled={!editCourse?.name}
                     >
