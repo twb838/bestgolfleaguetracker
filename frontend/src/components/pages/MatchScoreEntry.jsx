@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import {
     Box, Paper, Typography, Button, CircularProgress, Alert,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    TextField, IconButton, Tabs, Tab, Divider, Chip, Grid
+    TextField, IconButton, Tabs, Tab, Divider, Chip, Grid, TableFooter
 } from '@mui/material';
 import {
     ArrowBack as ArrowBackIcon,
@@ -37,6 +37,9 @@ const MatchScoreEntry = () => {
     // Get course holes for the match
     const [holes, setHoles] = useState([]);
 
+    // Match results state
+    const [matchResults, setMatchResults] = useState(null);
+
     useEffect(() => {
         // If we don't have match data from navigation, fetch it
         if (!match) {
@@ -51,6 +54,12 @@ const MatchScoreEntry = () => {
             }
         }
     }, [matchId, match]);
+
+    useEffect(() => {
+        if (match && homeTeamScores.length > 0 && awayTeamScores.length > 0 && holes.length > 0) {
+            calculateMatchResults();
+        }
+    }, [homeTeamScores, awayTeamScores, holes]);
 
     // Update this function to directly fetch team data with players
     const fetchMatchDetails = async () => {
@@ -394,12 +403,202 @@ const MatchScoreEntry = () => {
         return 'error.main'; // Double bogey or worse
     };
 
+    const calculateMatchResults = () => {
+        // Initialize results structure
+        const results = {
+            match_id: match.id,
+            date: match.match_date,
+            home_team: {
+                id: match.home_team_id,
+                name: match.home_team?.name || 'Home Team',
+                total_points: 0,
+                total_score: 0,
+                total_points_by_hole: [],
+                players: []
+            },
+            away_team: {
+                id: match.away_team_id,
+                name: match.away_team?.name || 'Away Team',
+                total_points: 0,
+                total_score: 0,
+                total_points_by_hole: [],
+                players: []
+            }
+        };
+
+        // Calculate player scores and determine individual points
+        const pairings = Math.min(homeTeamScores.length, awayTeamScores.length);
+
+        // Setup the player structure in the results
+        for (let i = 0; i < pairings; i++) {
+            const homePlayer = homeTeamScores[i];
+            const awayPlayer = awayTeamScores[i];
+
+            results.home_team.players.push({
+                player_id: homePlayer.player_id,
+                player_name: homePlayer.player_name,
+                score: 0,
+                points: 0,
+                points_by_hole: Array(holes.length).fill(null),
+                opponent_id: awayPlayer.player_id,
+                opponent_name: awayPlayer.player_name,
+            });
+
+            results.away_team.players.push({
+                player_id: awayPlayer.player_id,
+                player_name: awayPlayer.player_name,
+                score: 0,
+                points: 0,
+                points_by_hole: Array(holes.length).fill(null),
+                opponent_id: homePlayer.player_id,
+                opponent_name: homePlayer.player_name,
+            });
+        }
+
+        // Calculate points hole by hole
+        holes.forEach((hole, holeIndex) => {
+            // Track all scores for this hole with player info
+            const allPlayersForHole = [];
+
+            // Setup arrays to track team scores for this hole
+            let homeTeamHoleTotal = 0;
+            let awayTeamHoleTotal = 0;
+            let homeTeamPlayersWithScores = 0;
+            let awayTeamPlayersWithScores = 0;
+
+            // Collect all player scores for this hole
+            for (let i = 0; i < pairings; i++) {
+                const homePlayer = homeTeamScores[i];
+                const awayPlayer = awayTeamScores[i];
+
+                const homeScore = homePlayer.scores[hole.id];
+                const awayScore = awayPlayer.scores[hole.id];
+
+                // Add home player score if available
+                if (homeScore !== undefined && homeScore !== '') {
+                    const numHomeScore = Number(homeScore);
+                    allPlayersForHole.push({
+                        team: 'home',
+                        playerIndex: i,
+                        score: numHomeScore
+                    });
+
+                    // Add to player's total score
+                    results.home_team.players[i].score += numHomeScore;
+
+                    // Add to team total for this hole
+                    homeTeamHoleTotal += numHomeScore;
+                    homeTeamPlayersWithScores++;
+                }
+
+                // Add away player score if available
+                if (awayScore !== undefined && awayScore !== '') {
+                    const numAwayScore = Number(awayScore);
+                    allPlayersForHole.push({
+                        team: 'away',
+                        playerIndex: i,
+                        score: numAwayScore
+                    });
+
+                    // Add to player's total score
+                    results.away_team.players[i].score += numAwayScore;
+
+                    // Add to team total for this hole
+                    awayTeamHoleTotal += numAwayScore;
+                    awayTeamPlayersWithScores++;
+                }
+            }
+
+            // Find the lowest score(s) for this hole
+            if (allPlayersForHole.length > 0) {
+                // Sort by score (lowest first)
+                allPlayersForHole.sort((a, b) => a.score - b.score);
+
+                // Get the lowest score
+                const lowestScore = allPlayersForHole[0].score;
+
+                // Check if there are any ties for lowest score
+                const lowestScorePlayers = allPlayersForHole.filter(p => p.score === lowestScore);
+
+                // Award point only if there's a single player with the lowest score (no ties)
+                if (lowestScorePlayers.length === 1) {
+                    const winner = lowestScorePlayers[0];
+
+                    // Award the point to the correct player
+                    if (winner.team === 'home') {
+                        results.home_team.players[winner.playerIndex].points += 1;
+                        results.home_team.players[winner.playerIndex].points_by_hole[holeIndex] = 1;
+                        results.home_team.total_points += 1;
+                    } else {
+                        results.away_team.players[winner.playerIndex].points += 1;
+                        results.away_team.players[winner.playerIndex].points_by_hole[holeIndex] = 1;
+                        results.away_team.total_points += 1;
+                    }
+                }
+
+                // Mark all other players as having 0 points for this hole if they submitted a score
+                for (let i = 0; i < pairings; i++) {
+                    // Only update players who have a score for this hole
+                    const homeHasScore = homeTeamScores[i].scores[hole.id] !== undefined &&
+                        homeTeamScores[i].scores[hole.id] !== '';
+                    const awayHasScore = awayTeamScores[i].scores[hole.id] !== undefined &&
+                        awayTeamScores[i].scores[hole.id] !== '';
+
+                    if (homeHasScore && results.home_team.players[i].points_by_hole[holeIndex] !== 1) {
+                        results.home_team.players[i].points_by_hole[holeIndex] = 0;
+                    }
+
+                    if (awayHasScore && results.away_team.players[i].points_by_hole[holeIndex] !== 1) {
+                        results.away_team.players[i].points_by_hole[holeIndex] = 0;
+                    }
+                }
+            }
+
+            // Calculate and award team point for this hole
+            const allHomePlayersHaveScores = homeTeamPlayersWithScores === homeTeamScores.length && homeTeamPlayersWithScores > 0;
+            const allAwayPlayersHaveScores = awayTeamPlayersWithScores === awayTeamScores.length && awayTeamPlayersWithScores > 0;
+
+            if (allHomePlayersHaveScores && allAwayPlayersHaveScores) {
+                // Add to team total scores
+                results.home_team.total_score += homeTeamHoleTotal;
+                results.away_team.total_score += awayTeamHoleTotal;
+
+                // Determine team point for this hole
+                if (homeTeamHoleTotal < awayTeamHoleTotal) {
+                    // Home team wins hole
+                    results.home_team.total_points += 1;
+                    results.home_team.total_points_by_hole[holeIndex] = 1;
+                    results.away_team.total_points_by_hole[holeIndex] = 0;
+                } else if (awayTeamHoleTotal < homeTeamHoleTotal) {
+                    // Away team wins hole
+                    results.away_team.total_points += 1;
+                    results.away_team.total_points_by_hole[holeIndex] = 1;
+                    results.home_team.total_points_by_hole[holeIndex] = 0;
+                } else {
+                    // Tie - no points
+                    results.home_team.total_points_by_hole[holeIndex] = 0;
+                    results.away_team.total_points_by_hole[holeIndex] = 0;
+                }
+            } else {
+                // Mark hole as not fully played for team points
+                results.home_team.total_points_by_hole[holeIndex] = null;
+                results.away_team.total_points_by_hole[holeIndex] = null;
+            }
+        });
+
+        // Set results in state
+        setMatchResults(results);
+    };
+
     const handleSaveScores = async () => {
         setSaving(true);
         setError(null);
         setSuccessMessage(null);
 
         try {
+            // Make sure match results are calculated before saving
+            calculateMatchResults();
+
             // Combine home and away team scores into a single array
             const allScores = [];
 
@@ -429,7 +628,7 @@ const MatchScoreEntry = () => {
                 });
             });
 
-            // Send scores to the API
+            // Send scores and match results to the API
             const response = await fetch(`${env.API_BASE_URL}/matches/${matchId}/scores`, {
                 method: 'POST',
                 headers: {
@@ -437,6 +636,7 @@ const MatchScoreEntry = () => {
                 },
                 body: JSON.stringify({
                     scores: allScores,
+                    match_results: matchResults, // Include match results
                     is_completed: true // Mark match as completed when scores are saved
                 }),
             });
@@ -459,6 +659,144 @@ const MatchScoreEntry = () => {
         } finally {
             setSaving(false);
         }
+    };
+
+    const MatchResultsSummary = ({ results }) => {
+        if (!results) return null;
+
+        return (
+            <Paper sx={{ p: 3, mt: 3, bgcolor: 'background.paper' }}>
+                <Typography variant="h6" gutterBottom>Match Results</Typography>
+
+                <Grid container spacing={2} sx={{ mb: 2 }}>
+                    <Grid item xs={6}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                            {results.home_team.name}
+                        </Typography>
+                        <Typography variant="h4" color="primary" sx={{ fontWeight: 'bold' }}>
+                            {results.home_team.total_points}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            Team Total: {results.home_team.total_score}
+                            {results.home_team.team_point ? ' (+1 point)' : ''}
+                        </Typography>
+                    </Grid>
+                    <Grid item xs={6} sx={{ textAlign: 'right' }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                            {results.away_team.name}
+                        </Typography>
+                        <Typography variant="h4" color="primary" sx={{ fontWeight: 'bold' }}>
+                            {results.away_team.total_points}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                            Team Total: {results.away_team.total_score}
+                            {results.away_team.team_point ? ' (+1 point)' : ''}
+                        </Typography>
+                    </Grid>
+                </Grid>
+
+                <Divider sx={{ my: 2 }} />
+
+                <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                    Individual Results
+                </Typography>
+
+                <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow sx={{ bgcolor: 'grey.100' }}>
+                                <TableCell sx={{ fontWeight: 'bold' }}>Home Player</TableCell>
+                                <TableCell align="center" sx={{ fontWeight: 'bold' }}>Score</TableCell>
+                                <TableCell align="center" sx={{ fontWeight: 'bold' }}>Points</TableCell>
+                                <TableCell align="center" sx={{ fontWeight: 'bold' }}>Points</TableCell>
+                                <TableCell align="center" sx={{ fontWeight: 'bold' }}>Score</TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>Away Player</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {results.home_team.players.map((homePlayer, index) => {
+                                const awayPlayer = results.away_team.players[index];
+
+                                return (
+                                    <TableRow key={`pairing-${index}`}>
+                                        <TableCell>{homePlayer.player_name}</TableCell>
+                                        <TableCell align="center">{homePlayer.score || '-'}</TableCell>
+                                        <TableCell align="center" sx={{
+                                            fontWeight: 'bold',
+                                            color: homePlayer.points > 0 ? 'success.main' : 'text.secondary'
+                                        }}>
+                                            {homePlayer.points}
+                                        </TableCell>
+                                        <TableCell align="center" sx={{
+                                            fontWeight: 'bold',
+                                            color: awayPlayer.points > 0 ? 'success.main' : 'text.secondary'
+                                        }}>
+                                            {awayPlayer.points}
+                                        </TableCell>
+                                        <TableCell align="center">{awayPlayer.score || '-'}</TableCell>
+                                        <TableCell>{awayPlayer.player_name}</TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                            <TableRow sx={{ bgcolor: 'grey.50' }}>
+                                <TableCell sx={{ fontWeight: 'bold' }}>Team Total</TableCell>
+                                <TableCell align="center" sx={{ fontWeight: 'bold' }}>
+                                    {results.home_team.total_score}
+                                </TableCell>
+                                <TableCell align="center" sx={{
+                                    fontWeight: 'bold',
+                                    color: results.home_team.total_points_by_hole.filter(p => p === 1).length > 0 ? 'success.main' : 'text.secondary'
+                                }}>
+                                    {results.home_team.total_points_by_hole.filter(p => p === 1).length}
+                                </TableCell>
+                                <TableCell align="center" sx={{
+                                    fontWeight: 'bold',
+                                    color: results.away_team.total_points_by_hole.filter(p => p === 1).length > 0 ? 'success.main' : 'text.secondary'
+                                }}>
+                                    {results.away_team.total_points_by_hole.filter(p => p === 1).length}
+                                </TableCell>
+                                <TableCell align="center" sx={{ fontWeight: 'bold' }}>
+                                    {results.away_team.total_score}
+                                </TableCell>
+                                <TableCell sx={{ fontWeight: 'bold' }}>Team Total</TableCell>
+                            </TableRow>
+                        </TableBody>
+                        <TableFooter>
+                            <TableRow>
+                                <TableCell colSpan={2} sx={{ fontWeight: 'bold' }}>Total Points</TableCell>
+                                <TableCell align="center" sx={{
+                                    fontWeight: 'bold',
+                                    color: 'primary.main',
+                                    fontSize: '1.1rem'
+                                }}>
+                                    {results.home_team.total_points}
+                                </TableCell>
+                                <TableCell align="center" sx={{
+                                    fontWeight: 'bold',
+                                    color: 'primary.main',
+                                    fontSize: '1.1rem'
+                                }}>
+                                    {results.away_team.total_points}
+                                </TableCell>
+                                <TableCell colSpan={2} sx={{ textAlign: 'right', fontWeight: 'bold' }}>Total Points</TableCell>
+                            </TableRow>
+                        </TableFooter>
+                    </Table>
+                </TableContainer>
+
+                <Box sx={{ bgcolor: 'grey.100', p: 2, borderRadius: 1 }}>
+                    <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+                        Scoring System
+                    </Typography>
+                    <Typography variant="body2">
+                        • 1 point awarded for each player with the lowest individual score (no points for ties)
+                    </Typography>
+                    <Typography variant="body2">
+                        • 1 additional point awarded to the team with the lowest combined total (no points for ties)
+                    </Typography>
+                </Box>
+            </Paper>
+        );
     };
 
     if (loading) {
@@ -486,8 +824,8 @@ const MatchScoreEntry = () => {
     const renderScoreTable = (teamScores, teamType) => {
         if (!course || !holes.length) {
             return (
-                <Alert severity="warning" sx={{ my: 2 }}>
-                    Course information is not available. Unable to enter scores.
+                <Alert severity="warning" sx={{ my: 1 }}>
+                    Course information is not available.
                 </Alert>
             );
         }
@@ -498,11 +836,11 @@ const MatchScoreEntry = () => {
 
         // Create a vertical layout for mobile-friendly score entry
         return (
-            <Box sx={{ mt: 2 }}>
+            <Box>
                 {/* Player names in horizontal list at top */}
-                <Paper sx={{ mb: 2, p: 1, bgcolor: 'background.paper' }}>
-                    <Grid container spacing={1} alignItems="center">
-                        <Grid item xs={4} sx={{ fontWeight: 'bold', pl: 2 }}>
+                <Paper sx={{ mb: 1, p: 0.5, bgcolor: 'background.paper' }}>
+                    <Grid container spacing={0.5} alignItems="center">
+                        <Grid item xs={3} sx={{ fontWeight: 'bold', pl: 1 }}>
                             Hole
                         </Grid>
                         {teamScores.map((player, index) => (
@@ -511,7 +849,7 @@ const MatchScoreEntry = () => {
                                     variant="body2"
                                     sx={{
                                         fontWeight: 'bold',
-                                        fontSize: { xs: '0.75rem', sm: '0.875rem' }
+                                        fontSize: { xs: '0.7rem', sm: '0.75rem' }
                                     }}
                                 >
                                     {player.player_name.split(' ')[0]}
@@ -526,42 +864,72 @@ const MatchScoreEntry = () => {
                     <Paper
                         key={hole.id}
                         sx={{
-                            mb: 1,
-                            p: 1,
+                            mb: 0.5,
+                            p: 0.5,
                             bgcolor: hole[parProp] === 3 ? 'rgba(33, 150, 243, 0.05)' :
                                 hole[parProp] === 5 ? 'rgba(255, 152, 0, 0.05)' :
                                     'background.paper'
                         }}
                     >
-                        <Grid container spacing={1} alignItems="center">
+                        <Grid container spacing={0.5} alignItems="center">
                             {/* Hole info */}
-                            <Grid item xs={4}>
+                            <Grid item xs={3}>
                                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                     <Box
                                         sx={{
-                                            width: 32,
-                                            height: 32,
+                                            width: 24,
+                                            height: 24,
                                             borderRadius: '50%',
                                             bgcolor: 'primary.main',
                                             color: 'white',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
-                                            mr: 1,
-                                            fontWeight: 'bold'
+                                            mr: 0.5,
+                                            fontWeight: 'bold',
+                                            fontSize: '0.75rem'
                                         }}
                                     >
                                         {hole[holeNumberProp]}
                                     </Box>
-                                    <Box>
-                                        <Typography variant="body2">Par {hole[parProp]}</Typography>
-                                    </Box>
+                                    <Typography variant="caption">Par {hole[parProp]}</Typography>
                                 </Box>
                             </Grid>
 
                             {/* Player score inputs */}
                             {teamScores.map((player, playerIndex) => {
                                 const score = player.scores[hole.id] || '';
+
+                                // Determine if this is the low score across ALL players for this hole
+                                let isLowScore = false;
+                                if (score !== '') {
+                                    // Get all scores for this hole from both teams
+                                    const allScoresForHole = [];
+
+                                    // Get home team scores for this hole
+                                    homeTeamScores.forEach(p => {
+                                        const holeScore = p.scores[hole.id];
+                                        if (holeScore !== undefined && holeScore !== '') {
+                                            allScoresForHole.push(Number(holeScore));
+                                        }
+                                    });
+
+                                    // Get away team scores for this hole
+                                    awayTeamScores.forEach(p => {
+                                        const holeScore = p.scores[hole.id];
+                                        if (holeScore !== undefined && holeScore !== '') {
+                                            allScoresForHole.push(Number(holeScore));
+                                        }
+                                    });
+
+                                    // Only highlight if this is the absolute lowest score
+                                    // and there is more than one score to compare
+                                    const numScore = Number(score);
+                                    isLowScore = allScoresForHole.length > 1 &&
+                                        numScore === Math.min(...allScoresForHole) &&
+                                        allScoresForHole.filter(s => s === numScore).length === 1; // No ties
+                                }
+
                                 return (
                                     <Grid item xs key={`${player.player_id}-${hole.id}`} sx={{ textAlign: 'center' }}>
                                         <TextField
@@ -576,12 +944,32 @@ const MatchScoreEntry = () => {
                                                 e.target.value
                                             )}
                                             onKeyUp={(e) => {
-                                                // Auto-tab to next input when a digit is entered
                                                 if (/^\d$/.test(e.key) && hole.id) {
-                                                    // Find next hole for this player
                                                     const currentHoleIndex = holes.findIndex(h => h.id === hole.id);
-                                                    if (currentHoleIndex < holes.length - 1) {
-                                                        // Focus next hole for this player
+
+                                                    // If this is the last hole for the current player
+                                                    if (currentHoleIndex === holes.length - 1) {
+                                                        // Find the next player to focus
+                                                        if (playerIndex < teamScores.length - 1) {
+                                                            // Move to next player's first hole
+                                                            const nextInput = document.querySelector(
+                                                                `[data-player-index="${playerIndex + 1}"][data-team-type="${teamType}"][data-hole-index="0"] input`
+                                                            );
+                                                            if (nextInput) {
+                                                                nextInput.focus();
+                                                            }
+                                                        } else if (teamType === 'home') {
+                                                            // If we're at the last player in home team, move to first player in away team
+                                                            const firstAwayInput = document.querySelector(
+                                                                `[data-player-index="0"][data-team-type="away"][data-hole-index="0"] input`
+                                                            );
+                                                            if (firstAwayInput) {
+                                                                firstAwayInput.focus();
+                                                            }
+                                                        }
+                                                        // If we're at the last away player's last hole, we're done
+                                                    } else {
+                                                        // Not the last hole, just move to the next hole for this player
                                                         const nextHoleId = holes[currentHoleIndex + 1].id;
                                                         const nextInput = document.querySelector(
                                                             `[data-player-index="${playerIndex}"][data-team-type="${teamType}"][data-hole-id="${nextHoleId}"] input`
@@ -598,40 +986,108 @@ const MatchScoreEntry = () => {
                                                 maxLength: 2,
                                                 style: {
                                                     textAlign: 'center',
-                                                    fontWeight: score !== '' ? 'bold' : 'normal'
+                                                    fontWeight: score !== '' ? 'bold' : 'normal',
+                                                    padding: '2px'
                                                 }
                                             }}
                                             sx={{
-                                                width: '60px',
+                                                width: '45px',
                                                 '& .MuiOutlinedInput-root': {
                                                     backgroundColor: score !== '' ?
-                                                        (score === hole[parProp] ? 'rgba(33, 150, 243, 0.1)' :
-                                                            score < hole[parProp] ? 'rgba(76, 175, 80, 0.1)' :
-                                                                score === hole[parProp] + 1 ? 'rgba(255, 152, 0, 0.1)' :
-                                                                    'rgba(244, 67, 54, 0.1)') : 'white'
+                                                        (isLowScore ? 'rgba(76, 175, 80, 0.2)' :
+                                                            score === hole[parProp] ? 'rgba(33, 150, 243, 0.1)' :
+                                                                score < hole[parProp] ? 'rgba(76, 175, 80, 0.1)' :
+                                                                    score === hole[parProp] + 1 ? 'rgba(255, 152, 0, 0.1)' :
+                                                                        'rgba(244, 67, 54, 0.1)') : 'white',
+                                                    border: isLowScore ? '2px solid #4caf50' : undefined,
                                                 },
                                                 '& input': {
-                                                    p: 1,
+                                                    p: 0.5,
                                                     color: getScoreColor(score, hole[parProp])
+                                                },
+                                                '& .MuiOutlinedInput-notchedOutline': {
+                                                    borderWidth: '1px'
                                                 }
                                             }}
                                             size="small"
                                             data-player-index={playerIndex}
                                             data-team-type={teamType}
                                             data-hole-id={hole.id}
+                                            data-hole-index={holes.findIndex(h => h.id === hole.id)}
                                         />
                                     </Grid>
                                 );
                             })}
                         </Grid>
+
+                        {/* Team total for this hole */}
+                        <Grid container spacing={0.5} alignItems="center" sx={{ mt: 0.5, pt: 0.5, borderTop: '1px dashed rgba(0,0,0,0.1)' }}>
+                            <Grid item xs={3}>
+                                <Typography variant="caption" sx={{ pl: 0.5, fontSize: '0.65rem' }}>Team Total</Typography>
+                            </Grid>
+                            <Grid item xs={9} sx={{ textAlign: 'center' }}>
+                                {(() => {
+                                    // Calculate team total for this hole
+                                    let teamTotal = 0;
+                                    let completedScores = 0;
+
+                                    teamScores.forEach(player => {
+                                        const score = player.scores[hole.id];
+                                        if (score !== undefined && score !== '') {
+                                            teamTotal += Number(score);
+                                            completedScores++;
+                                        }
+                                    });
+
+                                    const hasCompleteScores = completedScores === teamScores.length;
+
+                                    // Check if this is the low team total
+                                    let isLowTeamTotal = false;
+                                    if (hasCompleteScores) {
+                                        const otherTeamScores = teamType === 'home' ? awayTeamScores : homeTeamScores;
+                                        let otherTeamTotal = 0;
+                                        let otherTeamComplete = true;
+
+                                        otherTeamScores.forEach(player => {
+                                            const score = player.scores[hole.id];
+                                            if (score !== undefined && score !== '') {
+                                                otherTeamTotal += Number(score);
+                                            } else {
+                                                otherTeamComplete = false;
+                                            }
+                                        });
+
+                                        isLowTeamTotal = otherTeamComplete && teamTotal < otherTeamTotal;
+                                    }
+
+                                    return (
+                                        <Box
+                                            sx={{
+                                                display: 'inline-block',
+                                                minWidth: '2rem',
+                                                fontWeight: 'bold',
+                                                color: isLowTeamTotal ? 'white' : 'text.secondary',
+                                                backgroundColor: isLowTeamTotal ? 'primary.main' : 'transparent',
+                                                borderRadius: '4px',
+                                                padding: '1px 6px',
+                                                border: isLowTeamTotal ? '1px solid #1976d2' : 'none',
+                                                fontSize: '0.75rem'
+                                            }}
+                                        >
+                                            {hasCompleteScores ? teamTotal : '-'}
+                                        </Box>
+                                    );
+                                })()}
+                            </Grid>
+                        </Grid>
                     </Paper>
                 ))}
 
                 {/* Totals row */}
-                <Paper sx={{ mt: 2, p: 1, bgcolor: 'grey.100', fontWeight: 'bold' }}>
-                    <Grid container spacing={1} alignItems="center">
-                        <Grid item xs={4} sx={{ pl: 2 }}>
-                            Total
+                <Paper sx={{ mt: 1, p: 0.5, bgcolor: 'grey.100', fontWeight: 'bold' }}>
+                    <Grid container spacing={0.5} alignItems="center">
+                        <Grid item xs={3} sx={{ pl: 1 }}>
+                            <Typography variant="caption">Total</Typography>
                         </Grid>
                         {teamScores.map((player) => {
                             const total = calculatePlayerTotal(player);
@@ -645,6 +1101,7 @@ const MatchScoreEntry = () => {
                                         alignItems: 'center'
                                     }}>
                                         <Typography
+                                            variant="body2"
                                             sx={{
                                                 fontWeight: 'bold',
                                                 color: diff < 0 ? 'success.main' :
@@ -655,6 +1112,7 @@ const MatchScoreEntry = () => {
                                         </Typography>
                                         {total > 0 && (
                                             <Typography variant="caption" sx={{
+                                                fontSize: '0.65rem',
                                                 color: diff < 0 ? 'success.main' :
                                                     diff === 0 ? 'text.secondary' : 'error.main'
                                             }}>
@@ -665,20 +1123,6 @@ const MatchScoreEntry = () => {
                                 </Grid>
                             );
                         })}
-                    </Grid>
-                </Paper>
-
-                {/* Par total row */}
-                <Paper sx={{ mt: 1, p: 1, bgcolor: 'grey.200' }}>
-                    <Grid container spacing={1} alignItems="center">
-                        <Grid item xs={4} sx={{ pl: 2 }}>
-                            Par
-                        </Grid>
-                        {teamScores.map((player) => (
-                            <Grid item xs key={`par-${player.player_id}`} sx={{ textAlign: 'center' }}>
-                                <Typography>{calculatePar()}</Typography>
-                            </Grid>
-                        ))}
                     </Grid>
                 </Paper>
             </Box>
@@ -745,46 +1189,47 @@ const MatchScoreEntry = () => {
 
                 <Divider sx={{ my: 2 }} />
 
-                <Tabs
-                    value={activeTab}
-                    onChange={handleTabChange}
-                    variant="fullWidth"
-                    sx={{ mb: 2 }}
-                >
-                    <Tab label={`${match.home_team?.name || 'Home'} Team`} />
-                    <Tab label={`${match.away_team?.name || 'Away'} Team`} />
-                </Tabs>
+                <Box sx={{ mb: 1 }}>
+                    <Typography variant="h6" gutterBottom>
+                        Match Scorecard
+                    </Typography>
 
-                {activeTab === 0 && (
-                    <>
-                        <Typography variant="h6" gutterBottom>
-                            {match.home_team?.name || 'Home'} Team Scores
-                        </Typography>
-                        {homeTeamScores.length > 0 ? (
-                            renderScoreTable(homeTeamScores, 'home')
-                        ) : (
-                            <Alert severity="info">
-                                No players found for this team.
-                            </Alert>
-                        )}
-                    </>
-                )}
+                    {/* Combined score entry for both teams */}
+                    <Grid container spacing={1}>
+                        <Grid item xs={12} md={6}>
+                            <Paper sx={{ p: 1, mb: 1, bgcolor: 'rgba(33, 150, 243, 0.05)' }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                    {match.home_team?.name || 'Home'} Team
+                                </Typography>
+                                {homeTeamScores.length > 0 ? (
+                                    renderScoreTable(homeTeamScores, 'home')
+                                ) : (
+                                    <Alert severity="info" sx={{ mt: 1 }}>
+                                        No players found for home team.
+                                    </Alert>
+                                )}
+                            </Paper>
+                        </Grid>
 
-                {activeTab === 1 && (
-                    <>
-                        <Typography variant="h6" gutterBottom>
-                            {match.away_team?.name || 'Away'} Team Scores
-                        </Typography>
-                        {awayTeamScores.length > 0 ? (
-                            renderScoreTable(awayTeamScores, 'away')
-                        ) : (
-                            <Alert severity="info">
-                                No players found for this team.
-                            </Alert>
-                        )}
-                    </>
-                )}
+                        <Grid item xs={12} md={6}>
+                            <Paper sx={{ p: 1, mb: 1, bgcolor: 'rgba(244, 67, 54, 0.05)' }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                    {match.away_team?.name || 'Away'} Team
+                                </Typography>
+                                {awayTeamScores.length > 0 ? (
+                                    renderScoreTable(awayTeamScores, 'away')
+                                ) : (
+                                    <Alert severity="info" sx={{ mt: 1 }}>
+                                        No players found for away team.
+                                    </Alert>
+                                )}
+                            </Paper>
+                        </Grid>
+                    </Grid>
+                </Box>
             </Paper>
+
+            <MatchResultsSummary results={matchResults} />
 
             {!match.is_completed && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
