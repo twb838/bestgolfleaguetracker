@@ -127,6 +127,7 @@ const MatchScoreEntry = () => {
             const homeScores = homeTeamData.players.map(player => ({
                 player_id: player.id,
                 player_name: formatPlayerName(player),
+                handicap: player.handicap !== undefined ? player.handicap : null,
                 scores: {} // Will be populated with hole scores: { hole_id: score }
             }));
             console.log('Initialized home team scores for', homeScores.length, 'players');
@@ -140,6 +141,7 @@ const MatchScoreEntry = () => {
             const awayScores = awayTeamData.players.map(player => ({
                 player_id: player.id,
                 player_name: formatPlayerName(player),
+                handicap: player.handicap !== undefined ? player.handicap : null,
                 scores: {} // Will be populated with hole scores: { hole_id: score }
             }));
             console.log('Initialized away team scores for', awayScores.length, 'players');
@@ -227,6 +229,8 @@ const MatchScoreEntry = () => {
         return player.name || "Unknown Player";
     };
 
+    // Update the fetchExistingScores function to include handicaps
+
     const fetchExistingScores = async (matchId) => {
         try {
             console.log(`Fetching scores for match ${matchId}`);
@@ -251,6 +255,7 @@ const MatchScoreEntry = () => {
                     const homeScores = homePlayersData.map(player => ({
                         player_id: player.id,
                         player_name: formatPlayerName(player),
+                        handicap: player.handicap !== undefined ? player.handicap : null,
                         scores: {} // Will be populated with hole scores later if they exist
                     }));
                     setHomeTeamScores(homeScores);
@@ -260,6 +265,7 @@ const MatchScoreEntry = () => {
                     const awayScores = awayPlayersData.map(player => ({
                         player_id: player.id,
                         player_name: formatPlayerName(player),
+                        handicap: player.handicap !== undefined ? player.handicap : null,
                         scores: {} // Will be populated with hole scores later if they exist
                     }));
                     setAwayTeamScores(awayScores);
@@ -438,6 +444,7 @@ const MatchScoreEntry = () => {
             results.home_team.players.push({
                 player_id: homePlayer.player_id,
                 player_name: homePlayer.player_name,
+                handicap: homePlayer.handicap,
                 score: 0,
                 points: 0,
                 points_by_hole: Array(holes.length).fill(null),
@@ -448,6 +455,7 @@ const MatchScoreEntry = () => {
             results.away_team.players.push({
                 player_id: awayPlayer.player_id,
                 player_name: awayPlayer.player_name,
+                handicap: awayPlayer.handicap,
                 score: 0,
                 points: 0,
                 points_by_hole: Array(holes.length).fill(null),
@@ -724,12 +732,61 @@ const MatchScoreEntry = () => {
                     <Table size="small">
                         <TableHead>
                             <TableRow sx={{ bgcolor: 'grey.100' }}>
-                                <TableCell sx={{ fontWeight: 'bold' }}>Home Player</TableCell>
-                                <TableCell align="center" sx={{ fontWeight: 'bold' }}>Score</TableCell>
-                                <TableCell align="center" sx={{ fontWeight: 'bold' }}>Points</TableCell>
-                                <TableCell align="center" sx={{ fontWeight: 'bold' }}>Points</TableCell>
-                                <TableCell align="center" sx={{ fontWeight: 'bold' }}>Score</TableCell>
-                                <TableCell sx={{ fontWeight: 'bold' }}>Away Player</TableCell>
+                                <TableCell
+                                    sx={{
+                                        fontWeight: 'bold',
+                                        borderRight: '1px solid rgba(224, 224, 224, 1)',
+                                        bgcolor: 'rgba(33, 150, 243, 0.1)'
+                                    }}
+                                >
+                                    Home Player
+                                </TableCell>
+                                <TableCell
+                                    align="center"
+                                    sx={{
+                                        fontWeight: 'bold',
+                                        borderRight: '1px solid rgba(224, 224, 224, 1)',
+                                        bgcolor: 'rgba(33, 150, 243, 0.1)'
+                                    }}
+                                >
+                                    Score
+                                </TableCell>
+                                <TableCell
+                                    align="center"
+                                    sx={{
+                                        fontWeight: 'bold',
+                                        borderRight: '2px solid rgba(0, 0, 0, 0.2)', // Stronger border here
+                                        bgcolor: 'rgba(33, 150, 243, 0.1)'
+                                    }}
+                                >
+                                    Points
+                                </TableCell>
+                                <TableCell
+                                    align="center"
+                                    sx={{
+                                        fontWeight: 'bold',
+                                        bgcolor: 'rgba(244, 67, 54, 0.1)'
+                                    }}
+                                >
+                                    Points
+                                </TableCell>
+                                <TableCell
+                                    align="center"
+                                    sx={{
+                                        fontWeight: 'bold',
+                                        bgcolor: 'rgba(244, 67, 54, 0.1)'
+                                    }}
+                                >
+                                    Score
+                                </TableCell>
+                                <TableCell
+                                    sx={{
+                                        fontWeight: 'bold',
+                                        bgcolor: 'rgba(244, 67, 54, 0.1)'
+                                    }}
+                                >
+                                    Away Player
+                                </TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -738,7 +795,14 @@ const MatchScoreEntry = () => {
 
                                 return (
                                     <TableRow key={`pairing-${index}`}>
-                                        <TableCell>{homePlayer.player_name}</TableCell>
+                                        <TableCell>
+                                            {homePlayer.player_name}
+                                            {homePlayer.handicap !== undefined && homePlayer.handicap !== null && (
+                                                <Typography variant="caption" display="block" sx={{ color: 'text.secondary' }}>
+                                                    Handicap: {homePlayer.handicap}
+                                                </Typography>
+                                            )}
+                                        </TableCell>
                                         <TableCell align="center">{homePlayer.score || '-'}</TableCell>
                                         <TableCell align="center" sx={{
                                             fontWeight: 'bold',
@@ -753,7 +817,14 @@ const MatchScoreEntry = () => {
                                             {awayPlayer.points}
                                         </TableCell>
                                         <TableCell align="center">{awayPlayer.score || '-'}</TableCell>
-                                        <TableCell>{awayPlayer.player_name}</TableCell>
+                                        <TableCell>
+                                            {awayPlayer.player_name}
+                                            {awayPlayer.handicap !== undefined && awayPlayer.handicap !== null && (
+                                                <Typography variant="caption" display="block" sx={{ color: 'text.secondary' }}>
+                                                    Handicap: {awayPlayer.handicap}
+                                                </Typography>
+                                            )}
+                                        </TableCell>
                                     </TableRow>
                                 );
                             })}
@@ -852,6 +923,8 @@ const MatchScoreEntry = () => {
         // Determine which property to use for hole number and par
         const holeNumberProp = 'hole_number' in holes[0] ? 'hole_number' : 'number';
         const parProp = 'par' in holes[0] ? 'par' : 'par';
+        const yardsProp = 'yards' in holes[0] ? 'yards' : 'yards';
+        const handicapProp = 'handicap' in holes[0] ? 'handicap' : 'handicap';
 
         // Create a vertical layout for mobile-friendly score entry
         return (
@@ -872,6 +945,16 @@ const MatchScoreEntry = () => {
                                     }}
                                 >
                                     {player.player_name.split(' ')[0]}
+                                    {player.handicap !== undefined && player.handicap !== null && (
+                                        <Box component="span" sx={{
+                                            ml: 0.5,
+                                            fontSize: '0.65rem',
+                                            color: 'text.secondary',
+                                            display: 'inline-block'
+                                        }}>
+                                            ({player.handicap})
+                                        </Box>
+                                    )}
                                 </Typography>
                             </Grid>
                         ))}
@@ -893,25 +976,34 @@ const MatchScoreEntry = () => {
                         <Grid container spacing={0.5} alignItems="center">
                             {/* Hole info */}
                             <Grid item xs={3}>
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                    <Box
-                                        sx={{
-                                            width: 24,
-                                            height: 24,
-                                            borderRadius: '50%',
-                                            bgcolor: 'primary.main',
-                                            color: 'white',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            mr: 0.5,
-                                            fontWeight: 'bold',
-                                            fontSize: '0.75rem'
-                                        }}
-                                    >
-                                        {hole[holeNumberProp]}
+                                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                        <Box
+                                            sx={{
+                                                width: 24,
+                                                height: 24,
+                                                borderRadius: '50%',
+                                                bgcolor: 'primary.main',
+                                                color: 'white',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                mr: 0.5,
+                                                fontWeight: 'bold',
+                                                fontSize: '0.75rem'
+                                            }}
+                                        >
+                                            {hole.number || hole.hole_number}
+                                        </Box>
+                                        <Typography variant="caption">
+                                            Par {hole.par} • {hole.yards || '—'} yds
+                                        </Typography>
                                     </Box>
-                                    <Typography variant="caption">Par {hole[parProp]}</Typography>
+                                    {hole.handicap !== undefined && hole.handicap !== null && (
+                                        <Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.secondary', mt: 0.5 }}>
+                                            Hdcp: {hole.handicap || '—'}
+                                        </Typography>
+                                    )}
                                 </Box>
                             </Grid>
 

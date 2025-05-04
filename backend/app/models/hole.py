@@ -8,6 +8,8 @@ class Hole(Base):
     id = Column(Integer, primary_key=True, index=True)
     number = Column(Integer, nullable=False)
     par = Column(Integer, nullable=False)
+    yards = Column(Integer, nullable=True)  # Length of the hole in yards
+    handicap = Column(Integer, nullable=True)  # Optional handicap for the hole
     course_id = Column(Integer, ForeignKey("courses.id"), nullable=False)
     
     # Use string reference to avoid import

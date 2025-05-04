@@ -173,13 +173,15 @@ def get_match_scores(match_id: int, db: Session = Depends(get_db)):
             home_players = db.query(
                 Player.id,
                 Player.first_name,
-                Player.last_name
+                Player.last_name,
+                Player.handicap
             ).filter(Player.team_id == home_team_id).all()
             
             away_players = db.query(
                 Player.id,
                 Player.first_name,
-                Player.last_name
+                Player.last_name,
+                Player.handicap
             ).filter(Player.team_id == away_team_id).all()
             
             # Get all holes for the course
@@ -198,6 +200,7 @@ def get_match_scores(match_id: int, db: Session = Depends(get_db)):
                             "id": player.id,
                             "first_name": player.first_name,
                             "last_name": player.last_name,
+                            "handicap": player.handicap
                         } 
                         for player in home_players
                     ],
@@ -206,6 +209,7 @@ def get_match_scores(match_id: int, db: Session = Depends(get_db)):
                             "id": player.id,
                             "first_name": player.first_name,
                             "last_name": player.last_name,
+                            "handicap": player.handicap
                         } 
                         for player in away_players
                     ]
