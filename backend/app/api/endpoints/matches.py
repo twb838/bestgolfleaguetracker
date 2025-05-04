@@ -123,6 +123,37 @@ def get_match_scores(match_id: int, db: Session = Depends(get_db)):
         if not match:
             raise HTTPException(status_code=404, detail="Match not found")
         
+        # Get teams involved in this match
+        home_team_id = match.home_team_id
+        away_team_id = match.away_team_id
+        
+        # Get course for this match
+        course_id = match.course_id
+        
+        # Get all players from both teams (always needed for edit mode)
+        home_players = db.query(
+            Player.id,
+            Player.first_name,
+            Player.last_name,
+            Player.handicap
+        ).filter(Player.team_id == home_team_id).all()
+        
+        away_players = db.query(
+            Player.id,
+            Player.first_name,
+            Player.last_name,
+            Player.handicap
+        ).filter(Player.team_id == away_team_id).all()
+        
+        # Get all holes for the course (always needed for edit mode)
+        holes = db.query(
+            Hole.id,
+            Hole.number.label("hole_number"),
+            Hole.par,
+            Hole.handicap,
+            Hole.yards
+        ).filter(Hole.course_id == course_id).order_by(Hole.number).all()
+        
         # Get all existing scores with player and hole information
         scores = db.query(
             PlayerScore.id,
@@ -130,105 +161,59 @@ def get_match_scores(match_id: int, db: Session = Depends(get_db)):
             PlayerScore.player_id,
             PlayerScore.hole_id,
             PlayerScore.match_id,
-            PlayerScore.date_recorded,
-            Player.first_name.label("first_name"),
-            Player.last_name.label("last_name"),
-            Hole.number.label("hole_number"),
-            Hole.par.label("hole_par")
-        ).join(
-            Player, PlayerScore.player_id == Player.id
-        ).join(
-            Hole, PlayerScore.hole_id == Hole.id
+            PlayerScore.date_recorded
         ).filter(
             PlayerScore.match_id == match_id
         ).all()
         
         # Convert existing scores to dictionary format
-        result = [
+        score_results = [
             {
                 "id": score.id,
                 "strokes": score.strokes,
                 "player_id": score.player_id,
                 "hole_id": score.hole_id,
                 "match_id": score.match_id,
-                "date_recorded": score.date_recorded,
-                "first_name": score.first_name,
-                "last_name": score.last_name,
-                "hole_number": score.hole_number,
-                "hole_par": score.hole_par
+                "date_recorded": score.date_recorded
             }
             for score in scores
         ]
         
-        # If there are no scores yet, return all players and holes
-        if not result:
-            # Get teams involved in this match
-            home_team_id = match.home_team_id
-            away_team_id = match.away_team_id
-            
-            # Get course for this match
-            course_id = match.course_id
-            
-            # Get all players from both teams
-            home_players = db.query(
-                Player.id,
-                Player.first_name,
-                Player.last_name,
-                Player.handicap
-            ).filter(Player.team_id == home_team_id).all()
-            
-            away_players = db.query(
-                Player.id,
-                Player.first_name,
-                Player.last_name,
-                Player.handicap
-            ).filter(Player.team_id == away_team_id).all()
-            
-            # Get all holes for the course
-            holes = db.query(
-                Hole.id,
-                Hole.number.label("hole_number"),
-                Hole.par
-            ).filter(Hole.course_id == course_id).order_by(Hole.number).all()
-            
-            # Return structured data for the frontend
-            return {
-                "scores": [],  # No actual scores yet
-                "players": {
-                    "home": [
-                        {
-                            "id": player.id,
-                            "first_name": player.first_name,
-                            "last_name": player.last_name,
-                            "handicap": player.handicap
-                        } 
-                        for player in home_players
-                    ],
-                    "away": [
-                        {
-                            "id": player.id,
-                            "first_name": player.first_name,
-                            "last_name": player.last_name,
-                            "handicap": player.handicap
-                        } 
-                        for player in away_players
-                    ]
-                },
-                "holes": [
-                    {
-                        "id": hole.id,
-                        "hole_number": hole.hole_number,
-                        "par": hole.par
-                    } 
-                    for hole in holes
-                ]
-            }
-        
-        # If we have scores, return them directly
+        # Always return structured data for both new matches and editing existing ones
         return {
-            "scores": result,
-            "players": {},  # Empty since player info is included in the scores
-            "holes": {}     # Empty since hole info is included in the scores
+            "scores": score_results,
+            "players": {
+                "home": [
+                    {
+                        "id": player.id,
+                        "first_name": player.first_name,
+                        "last_name": player.last_name,
+                        "handicap": player.handicap,
+                        "name": f"{player.first_name} {player.last_name}"
+                    } 
+                    for player in home_players
+                ],
+                "away": [
+                    {
+                        "id": player.id,
+                        "first_name": player.first_name,
+                        "last_name": player.last_name,
+                        "handicap": player.handicap,
+                        "name": f"{player.first_name} {player.last_name}"
+                    } 
+                    for player in away_players
+                ]
+            },
+            "holes": [
+                {
+                    "id": hole.id,
+                    "number": hole.hole_number,
+                    "par": hole.par,
+                    "handicap": hole.handicap,
+                    "yards": hole.yards
+                } 
+                for hole in holes
+            ]
         }
         
     except Exception as e:

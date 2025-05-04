@@ -229,7 +229,7 @@ const MatchScoreEntry = () => {
         return player.name || "Unknown Player";
     };
 
-    // Update the fetchExistingScores function to include handicaps
+    // Update the fetchExistingScores function
 
     const fetchExistingScores = async (matchId) => {
         try {
@@ -243,9 +243,9 @@ const MatchScoreEntry = () => {
             const data = await response.json();
             console.log('Received score data:', data);
 
-            // Handle the new response format which contains players and holes
+            // Always check and process player data
             if (data.players) {
-                // If we receive players from the API, initialize team scores with them
+                // Initialize team scores with player data from API
                 const homePlayersData = data.players.home || [];
                 const awayPlayersData = data.players.away || [];
 
@@ -255,8 +255,8 @@ const MatchScoreEntry = () => {
                     const homeScores = homePlayersData.map(player => ({
                         player_id: player.id,
                         player_name: formatPlayerName(player),
-                        handicap: player.handicap !== undefined ? player.handicap : null,
-                        scores: {} // Will be populated with hole scores later if they exist
+                        handicap: player.handicap,
+                        scores: {} // Will be populated with hole scores later
                     }));
                     setHomeTeamScores(homeScores);
                 }
@@ -265,50 +265,47 @@ const MatchScoreEntry = () => {
                     const awayScores = awayPlayersData.map(player => ({
                         player_id: player.id,
                         player_name: formatPlayerName(player),
-                        handicap: player.handicap !== undefined ? player.handicap : null,
-                        scores: {} // Will be populated with hole scores later if they exist
+                        handicap: player.handicap,
+                        scores: {} // Will be populated with hole scores later
                     }));
                     setAwayTeamScores(awayScores);
                 }
             }
 
-            // If we have holes from the API and our current holes array is empty, use them
-            if (data.holes && data.holes.length > 0 && holes.length === 0) {
-                console.log(`Got ${data.holes.length} holes from API`);
+            // Process existing scores if any
+            if (data.scores && data.scores.length > 0) {
+                // Group scores by player
+                const scoresByPlayer = data.scores.reduce((acc, score) => {
+                    if (!acc[score.player_id]) {
+                        acc[score.player_id] = {};
+                    }
+                    acc[score.player_id][score.hole_id] = score.strokes;
+                    return acc;
+                }, {});
+
+                console.log('Scores by player:', scoresByPlayer);
+
+                // Update home team scores with existing scores
+                setHomeTeamScores(prev => prev.map(player => ({
+                    ...player,
+                    scores: scoresByPlayer[player.player_id] || {}
+                })));
+
+                // Update away team scores with existing scores
+                setAwayTeamScores(prev => prev.map(player => ({
+                    ...player,
+                    scores: scoresByPlayer[player.player_id] || {}
+                })));
+            }
+
+            // Process hole data if provided
+            if (data.holes && data.holes.length > 0) {
                 setHoles(data.holes);
             }
 
-            // If there are actual scores, process them
-            if (data.scores && data.scores.length > 0) {
-                console.log(`Processing ${data.scores.length} scores from API`);
-
-                // Get the current team scores arrays to update
-                const updatedHomeScores = [...homeTeamScores];
-                const updatedAwayScores = [...awayTeamScores];
-
-                // Process each score
-                data.scores.forEach(score => {
-                    // Determine if this is a home team player
-                    const homePlayerIndex = updatedHomeScores.findIndex(p => p.player_id === score.player_id);
-
-                    if (homePlayerIndex >= 0) {
-                        // Update home player score
-                        updatedHomeScores[homePlayerIndex].scores[score.hole_id] = score.strokes;
-                    } else {
-                        // Try to update away player score
-                        const awayPlayerIndex = updatedAwayScores.findIndex(p => p.player_id === score.player_id);
-                        if (awayPlayerIndex >= 0) {
-                            updatedAwayScores[awayPlayerIndex].scores[score.hole_id] = score.strokes;
-                        }
-                    }
-                });
-
-                // Update the state if there were existing scores
-                if (updatedHomeScores.length > 0) setHomeTeamScores(updatedHomeScores);
-                if (updatedAwayScores.length > 0) setAwayTeamScores(updatedAwayScores);
-            }
         } catch (error) {
             console.error('Error fetching existing scores:', error);
+            setError('Failed to load existing scores. Please try again.');
         }
     };
 
