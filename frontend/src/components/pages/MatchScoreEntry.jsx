@@ -28,6 +28,7 @@ const MatchScoreEntry = () => {
     const [error, setError] = useState(null);
     const [successMessage, setSuccessMessage] = useState(null);
     const [activeTab, setActiveTab] = useState(0); // 0 = Home team, 1 = Away team
+    const [editMode, setEditMode] = useState(false); // New state for edit mode
 
     // Player scores state
     const [homeTeamScores, setHomeTeamScores] = useState([]);
@@ -590,6 +591,16 @@ const MatchScoreEntry = () => {
         setMatchResults(results);
     };
 
+    const toggleEditMode = async () => {
+        if (editMode) {
+            // If leaving edit mode, save changes
+            await handleSaveScores();
+        } else {
+            // Just entering edit mode, no need to save
+            setEditMode(true);
+        }
+    };
+
     const handleSaveScores = async () => {
         setSaving(true);
         setError(null);
@@ -628,6 +639,8 @@ const MatchScoreEntry = () => {
                 });
             });
 
+            const isUpdate = match.is_completed && editMode;
+
             // Send scores and match results to the API
             const response = await fetch(`${env.API_BASE_URL}/matches/${matchId}/scores`, {
                 method: 'POST',
@@ -636,8 +649,9 @@ const MatchScoreEntry = () => {
                 },
                 body: JSON.stringify({
                     scores: allScores,
-                    match_results: matchResults, // Include match results
-                    is_completed: true // Mark match as completed when scores are saved
+                    match_results: matchResults,
+                    is_completed: true,
+                    is_update: isUpdate // Add flag to indicate this is an update to existing scores
                 }),
             });
 
@@ -645,7 +659,12 @@ const MatchScoreEntry = () => {
                 throw new Error('Failed to save scores');
             }
 
-            setSuccessMessage('Scores saved successfully!');
+            setSuccessMessage(isUpdate ? 'Scores updated successfully!' : 'Scores saved successfully!');
+
+            // Exit edit mode if we were in it
+            if (editMode) {
+                setEditMode(false);
+            }
 
             // Update the match object to reflect completion
             setMatch({
@@ -936,7 +955,7 @@ const MatchScoreEntry = () => {
                                             type="number"
                                             variant="outlined"
                                             value={score}
-                                            disabled={match.is_completed}
+                                            disabled={match.is_completed && !editMode} // Only disable if completed AND not in edit mode
                                             onChange={(e) => handleScoreChange(
                                                 teamType,
                                                 playerIndex,
@@ -1145,6 +1164,16 @@ const MatchScoreEntry = () => {
                         disabled={saving}
                     >
                         {saving ? 'Saving...' : 'Save Scores'}
+                    </Button>
+                )}
+
+                {match.is_completed && (
+                    <Button
+                        variant="contained"
+                        color="secondary"
+                        onClick={toggleEditMode}
+                    >
+                        {editMode ? 'Exit Edit Mode' : 'Edit Scores'}
                     </Button>
                 )}
             </Box>
