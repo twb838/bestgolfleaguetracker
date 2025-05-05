@@ -10,6 +10,7 @@ import Leagues from './pages/Leagues';
 import Dashboard from './pages/Dashboard';
 import LeagueManagement from './pages/LeagueManagement';
 import MatchScoreEntry from './pages/MatchScoreEntry';
+import Players from './pages/Players'; // Add this import
 
 function App() {
     return (
@@ -23,6 +24,9 @@ function App() {
                         <Box sx={{ flexGrow: 1, display: 'flex', gap: 2 }}>
                             <Button color="inherit" component={Link} to="/">
                                 Dashboard
+                            </Button>
+                            <Button color="inherit" component={Link} to="/players">
+                                Players
                             </Button>
                             <Button color="inherit" component={Link} to="/teams">
                                 Teams
@@ -39,6 +43,7 @@ function App() {
                 <Container sx={{ mt: 4 }}>
                     <Routes>
                         <Route path="/" element={<Dashboard />} />
+                        <Route path="/players" element={<Players />} />
                         <Route path="/teams" element={<Teams />} />
                         <Route path="/courses" element={<Courses />} />
                         <Route path="/leagues" element={<Leagues />} />

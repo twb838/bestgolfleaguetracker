@@ -10,7 +10,7 @@ class Player(Base):
     last_name = Column(String(100), nullable=False)
     email = Column(String(100), unique=True, nullable=False)
     handicap = Column(Float, default=0.0)
-    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)  # Change to nullable=True
     
     # Update this relationship to point to PlayerScore, not Score
     player_scores = relationship("PlayerScore", back_populates="player")

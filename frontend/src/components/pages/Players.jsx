@@ -1,0 +1,363 @@
+import React, { useState, useEffect } from 'react';
+import {
+    Box,
+    Typography,
+    Button,
+    Paper,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    TextField,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
+    IconButton,
+    Alert,
+    CircularProgress
+} from '@mui/material';
+import {
+    Add as AddIcon,
+    Edit as EditIcon,
+    Delete as DeleteIcon,
+    Refresh as RefreshIcon
+} from '@mui/icons-material';
+import env from '../../config/env';
+
+const Players = () => {
+    const [players, setPlayers] = useState([]);
+    const [teams, setTeams] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [openDialog, setOpenDialog] = useState(false);
+    const [currentPlayer, setCurrentPlayer] = useState({
+        first_name: '',
+        last_name: '',
+        email: '',
+        handicap: 0,
+        team_id: ''
+    });
+    const [isEditing, setIsEditing] = useState(false);
+    const [successMessage, setSuccessMessage] = useState(null);
+
+    // Fetch players and teams
+    const fetchData = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            // Fetch players
+            const playersResponse = await fetch(`${env.API_BASE_URL}/players`);
+            if (!playersResponse.ok) {
+                throw new Error(`Failed to fetch players: ${playersResponse.status}`);
+            }
+            const playersData = await playersResponse.json();
+            setPlayers(playersData);
+
+            // Fetch teams
+            const teamsResponse = await fetch(`${env.API_BASE_URL}/teams`);
+            if (!teamsResponse.ok) {
+                throw new Error(`Failed to fetch teams: ${teamsResponse.status}`);
+            }
+            const teamsData = await teamsResponse.json();
+            setTeams(teamsData);
+        } catch (err) {
+            console.error('Error fetching data:', err);
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    // Clear success message after 3 seconds
+    useEffect(() => {
+        if (successMessage) {
+            const timer = setTimeout(() => {
+                setSuccessMessage(null);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [successMessage]);
+
+    const handleOpenDialog = (player = null) => {
+        if (player) {
+            setCurrentPlayer({
+                id: player.id,
+                first_name: player.first_name,
+                last_name: player.last_name,
+                email: player.email,
+                handicap: player.handicap || 0,
+                team_id: player.team_id || ''
+            });
+            setIsEditing(true);
+        } else {
+            setCurrentPlayer({
+                first_name: '',
+                last_name: '',
+                email: '',
+                handicap: 0,
+                team_id: ''
+            });
+            setIsEditing(false);
+        }
+        setOpenDialog(true);
+    };
+
+    const handleCloseDialog = () => {
+        setOpenDialog(false);
+        setCurrentPlayer({
+            first_name: '',
+            last_name: '',
+            email: '',
+            handicap: 0,
+            team_id: ''
+        });
+    };
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setCurrentPlayer({
+            ...currentPlayer,
+            [name]: value
+        });
+    };
+
+    const handleSavePlayer = async () => {
+        try {
+            const method = isEditing ? 'PUT' : 'POST';
+            const url = isEditing
+                ? `${env.API_BASE_URL}/players/${currentPlayer.id}`
+                : `${env.API_BASE_URL}/players`;
+
+            // Handle empty team_id
+            const playerData = { ...currentPlayer };
+            if (playerData.team_id === '') {
+                playerData.team_id = null;
+            }
+
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(playerData)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || `Failed to ${isEditing ? 'update' : 'create'} player`);
+            }
+
+            setSuccessMessage(`Player ${isEditing ? 'updated' : 'created'} successfully!`);
+            handleCloseDialog();
+            fetchData();
+        } catch (err) {
+            console.error('Error saving player:', err);
+            setError(err.message);
+        }
+    };
+
+    const handleDeletePlayer = async (playerId) => {
+        if (!window.confirm('Are you sure you want to delete this player?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${env.API_BASE_URL}/players/${playerId}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to delete player: ${response.status}`);
+            }
+
+            setSuccessMessage('Player deleted successfully!');
+            fetchData();
+        } catch (err) {
+            console.error('Error deleting player:', err);
+            setError(err.message);
+        }
+    };
+
+    const getTeamName = (teamId) => {
+        if (!teamId) return 'None';
+        const team = teams.find(t => t.id === teamId);
+        return team ? team.name : 'Unknown';
+    };
+
+    return (
+        <Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Typography variant="h4" component="h1">
+                    Players
+                </Typography>
+                <Box>
+                    <Button
+                        variant="outlined"
+                        startIcon={<RefreshIcon />}
+                        onClick={fetchData}
+                        sx={{ mr: 1 }}
+                    >
+                        Refresh
+                    </Button>
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<AddIcon />}
+                        onClick={() => handleOpenDialog()}
+                    >
+                        Add Player
+                    </Button>
+                </Box>
+            </Box>
+
+            {error && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                    {error}
+                </Alert>
+            )}
+
+            {successMessage && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                    {successMessage}
+                </Alert>
+            )}
+
+            {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                    <CircularProgress />
+                </Box>
+            ) : (
+                <TableContainer component={Paper}>
+                    <Table>
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Name</TableCell>
+                                <TableCell>Email</TableCell>
+                                <TableCell>Handicap</TableCell>
+                                <TableCell>Team</TableCell>
+                                <TableCell align="right">Actions</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {players.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={5} align="center">No players found</TableCell>
+                                </TableRow>
+                            ) : (
+                                players.map((player) => (
+                                    <TableRow key={player.id}>
+                                        <TableCell>{`${player.first_name} ${player.last_name}`}</TableCell>
+                                        <TableCell>{player.email}</TableCell>
+                                        <TableCell>{player.handicap || 0}</TableCell>
+                                        <TableCell>{getTeamName(player.team_id)}</TableCell>
+                                        <TableCell align="right">
+                                            <IconButton
+                                                color="primary"
+                                                onClick={() => handleOpenDialog(player)}
+                                                size="small"
+                                            >
+                                                <EditIcon />
+                                            </IconButton>
+                                            <IconButton
+                                                color="error"
+                                                onClick={() => handleDeletePlayer(player.id)}
+                                                size="small"
+                                            >
+                                                <DeleteIcon />
+                                            </IconButton>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            )}
+
+            {/* Add/Edit Player Dialog */}
+            <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+                <DialogTitle>{isEditing ? 'Edit Player' : 'Add New Player'}</DialogTitle>
+                <DialogContent>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+                        <TextField
+                            label="First Name"
+                            name="first_name"
+                            value={currentPlayer.first_name}
+                            onChange={handleInputChange}
+                            fullWidth
+                            required
+                        />
+                        <TextField
+                            label="Last Name"
+                            name="last_name"
+                            value={currentPlayer.last_name}
+                            onChange={handleInputChange}
+                            fullWidth
+                            required
+                        />
+                        <TextField
+                            label="Email"
+                            name="email"
+                            type="email"
+                            value={currentPlayer.email}
+                            onChange={handleInputChange}
+                            fullWidth
+                            required
+                        />
+                        <TextField
+                            label="Handicap"
+                            name="handicap"
+                            type="number"
+                            value={currentPlayer.handicap}
+                            onChange={handleInputChange}
+                            fullWidth
+                            InputProps={{ inputProps: { min: 0, step: 0.1 } }}
+                        />
+                        <FormControl fullWidth>
+                            <InputLabel>Team (Optional)</InputLabel>
+                            <Select
+                                name="team_id"
+                                value={currentPlayer.team_id}
+                                onChange={handleInputChange}
+                                label="Team (Optional)"
+                            >
+                                <MenuItem value="">
+                                    <em>None</em>
+                                </MenuItem>
+                                {teams.map((team) => (
+                                    <MenuItem key={team.id} value={team.id}>
+                                        {team.name}
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseDialog}>Cancel</Button>
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={handleSavePlayer}
+                        disabled={!currentPlayer.first_name || !currentPlayer.last_name || !currentPlayer.email}
+                    >
+                        Save
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </Box>
+    );
+};
+
+export default Players;
