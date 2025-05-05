@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import {
     Box, Paper, Typography, Button, CircularProgress, Alert,
@@ -62,34 +62,6 @@ const MatchScoreEntry = () => {
 
     // Match results state
     const [matchResults, setMatchResults] = useState(null);
-
-    // Add these state variables and refs inside the MatchScoreEntry component
-    const homeScoreContainerRef = useRef(null);
-    const awayScoreContainerRef = useRef(null);
-
-    // Add this effect to synchronize scrolling between the two team sections
-    useEffect(() => {
-        const homeContainer = homeScoreContainerRef.current;
-        const awayContainer = awayScoreContainerRef.current;
-
-        if (!homeContainer || !awayContainer) return;
-
-        const syncScroll = (source, target) => {
-            const handleScroll = () => {
-                target.scrollTop = source.scrollTop;
-            };
-            source.addEventListener('scroll', handleScroll);
-            return () => source.removeEventListener('scroll', handleScroll);
-        };
-
-        const homeCleanup = syncScroll(homeContainer, awayContainer);
-        const awayCleanup = syncScroll(awayContainer, homeContainer);
-
-        return () => {
-            homeCleanup();
-            awayCleanup();
-        };
-    }, [homeScoreContainerRef.current, awayScoreContainerRef.current]);
 
     useEffect(() => {
         // If we don't have match data from navigation, fetch it
@@ -566,7 +538,7 @@ const MatchScoreEntry = () => {
 
                     // Add to player's total score
                     results.home_team.players[i].score += numHomeScore;
-                    results.home_team.players[i].score_net += netHomeScore;
+                    results.home_team.players[i].score_net = results.home_team.players[i].score - homePlayer.handicap;
 
                     // Add to team total for this hole
                     homeTeamHoleTotal += numHomeScore;
@@ -588,7 +560,7 @@ const MatchScoreEntry = () => {
 
                     // Add to player's total score
                     results.away_team.players[i].score += numAwayScore;
-                    results.away_team.players[i].score_net += netAwayScore;
+                    results.away_team.players[i].score_net = results.away_team.players[i].score - awayPlayer.handicap;
 
                     // Add to team total for this hole
                     awayTeamHoleTotal += numAwayScore;
@@ -826,8 +798,22 @@ const MatchScoreEntry = () => {
         return Number(score) - strokesGiven;
     };
 
+    const calculateTeamNetTotal = (players) => {
+        return players.reduce((total, player) => {
+            return total + (player.score_net || 0);
+        }, 0);
+    };
+
     const MatchResultsSummary = ({ results }) => {
         if (!results) return null;
+
+        // Add this helper function inside the MatchResultsSummary component
+        const calculateTeamNetTotal = (players) => {
+            return players.reduce((sum, player) => {
+                const playerNetScore = player.score - (player.handicap || 0);
+                return sum + playerNetScore;
+            }, 0);
+        };
 
         return (
             <Paper sx={{ p: 3, mt: 3, bgcolor: 'background.paper' }}>
@@ -845,6 +831,10 @@ const MatchScoreEntry = () => {
                             Team Total: {results.home_team.total_score}
                             {results.home_team.team_point ? ' (+1 point)' : ''}
                         </Typography>
+                        {/* Add net team total display */}
+                        <Typography variant="body2" color="primary.main" sx={{ fontWeight: 'medium' }}>
+                            Net Total: {calculateTeamNetTotal(results.home_team.players)}
+                        </Typography>
                     </Grid>
                     <Grid item xs={6} sx={{ textAlign: 'right' }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
@@ -856,6 +846,10 @@ const MatchScoreEntry = () => {
                         <Typography variant="body2" color="text.secondary">
                             Team Total: {results.away_team.total_score}
                             {results.away_team.team_point ? ' (+1 point)' : ''}
+                        </Typography>
+                        {/* Add net team total display */}
+                        <Typography variant="body2" color="primary.main" sx={{ fontWeight: 'medium' }}>
+                            Net Total: {calculateTeamNetTotal(results.away_team.players)}
                         </Typography>
                     </Grid>
                 </Grid>
@@ -944,9 +938,9 @@ const MatchScoreEntry = () => {
                                         </TableCell>
                                         <TableCell align="center">
                                             {homePlayer.score || '-'}
-                                            {homePlayer.pops > 0 && homePlayer.score > 0 && (
+                                            {homePlayer.handicap > 0 && homePlayer.score > 0 && (
                                                 <Typography variant="caption" display="block" sx={{ color: 'text.secondary' }}>
-                                                    Net: {homePlayer.score - homePlayer.pops}
+                                                    Net: {homePlayer.score - homePlayer.handicap}
                                                 </Typography>
                                             )}
                                         </TableCell>
@@ -962,7 +956,14 @@ const MatchScoreEntry = () => {
                                         }}>
                                             {awayPlayer.points}
                                         </TableCell>
-                                        <TableCell align="center">{awayPlayer.score || '-'}</TableCell>
+                                        <TableCell align="center">
+                                            {awayPlayer.score || '-'}
+                                            {awayPlayer.handicap > 0 && awayPlayer.score > 0 && (
+                                                <Typography variant="caption" display="block" sx={{ color: 'text.secondary' }}>
+                                                    Net: {awayPlayer.score - awayPlayer.handicap}
+                                                </Typography>
+                                            )}
+                                        </TableCell>
                                         <TableCell>
                                             {awayPlayer.player_name}
                                             {awayPlayer.handicap !== undefined && awayPlayer.handicap !== null && (
@@ -978,6 +979,9 @@ const MatchScoreEntry = () => {
                                 <TableCell sx={{ fontWeight: 'bold' }}>Team Total</TableCell>
                                 <TableCell align="center" sx={{ fontWeight: 'bold' }}>
                                     {results.home_team.total_score}
+                                    <Typography variant="caption" display="block" sx={{ color: 'primary.main', fontWeight: 'medium' }}>
+                                        Net: {calculateTeamNetTotal(results.home_team.players)}
+                                    </Typography>
                                 </TableCell>
                                 <TableCell align="center" sx={{
                                     fontWeight: 'bold',
@@ -993,6 +997,9 @@ const MatchScoreEntry = () => {
                                 </TableCell>
                                 <TableCell align="center" sx={{ fontWeight: 'bold' }}>
                                     {results.away_team.total_score}
+                                    <Typography variant="caption" display="block" sx={{ color: 'primary.main', fontWeight: 'medium' }}>
+                                        Net: {calculateTeamNetTotal(results.away_team.players)}
+                                    </Typography>
                                 </TableCell>
                                 <TableCell sx={{ fontWeight: 'bold' }}>Team Total</TableCell>
                             </TableRow>
@@ -1120,13 +1127,13 @@ const MatchScoreEntry = () => {
                         sx={{
                             mb: 0.5,
                             p: 0.5,
-                            height: '100px', // Fixed height for each hole
-                            bgcolor: hole[parProp] === 3 ? 'rgba(33, 150, 243, 0.05)' :
-                                hole[parProp] === 5 ? 'rgba(255, 152, 0, 0.05)' :
-                                    'background.paper'
+                            height: '120px', // Fixed height for consistent alignment
+                            display: 'flex',
+                            flexDirection: 'column',
+                            bgcolor: 'background.paper' // Use consistent background color for all holes
                         }}
                     >
-                        <Grid container spacing={0.5} alignItems="center">
+                        <Grid container spacing={0.5} alignItems="flex-start" sx={{ flex: 1 }}>
                             {/* Hole info */}
                             <Grid item xs={3}>
                                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -1210,43 +1217,6 @@ const MatchScoreEntry = () => {
                                                     hole.id,
                                                     e.target.value
                                                 )}
-                                                onKeyUp={(e) => {
-                                                    if (/^\d$/.test(e.key) && hole.id) {
-                                                        const currentHoleIndex = holes.findIndex(h => h.id === hole.id);
-
-                                                        // If this is the last hole for the current player
-                                                        if (currentHoleIndex === holes.length - 1) {
-                                                            // Find the next player to focus
-                                                            if (playerIndex < teamScores.length - 1) {
-                                                                // Move to next player's first hole
-                                                                const nextInput = document.querySelector(
-                                                                    `[data-player-index="${playerIndex + 1}"][data-team-type="${teamType}"][data-hole-index="0"] input`
-                                                                );
-                                                                if (nextInput) {
-                                                                    nextInput.focus();
-                                                                }
-                                                            } else if (teamType === 'home') {
-                                                                // If we're at the last player in home team, move to first player in away team
-                                                                const firstAwayInput = document.querySelector(
-                                                                    `[data-player-index="0"][data-team-type="away"][data-hole-index="0"] input`
-                                                                );
-                                                                if (firstAwayInput) {
-                                                                    firstAwayInput.focus();
-                                                                }
-                                                            }
-                                                            // If we're at the last away player's last hole, we're done
-                                                        } else {
-                                                            // Not the last hole, just move to the next hole for this player
-                                                            const nextHoleId = holes[currentHoleIndex + 1].id;
-                                                            const nextInput = document.querySelector(
-                                                                `[data-player-index="${playerIndex}"][data-team-type="${teamType}"][data-hole-id="${nextHoleId}"] input`
-                                                            );
-                                                            if (nextInput) {
-                                                                nextInput.focus();
-                                                            }
-                                                        }
-                                                    }
-                                                }}
                                                 inputProps={{
                                                     inputMode: 'numeric',
                                                     pattern: '[0-9]*',
@@ -1260,17 +1230,14 @@ const MatchScoreEntry = () => {
                                                 sx={{
                                                     width: '45px',
                                                     '& .MuiOutlinedInput-root': {
-                                                        backgroundColor: score !== '' ?
-                                                            (isLowScore ? 'rgba(76, 175, 80, 0.2)' :
-                                                                score === hole[parProp] ? 'rgba(33, 150, 243, 0.1)' :
-                                                                    score < hole[parProp] ? 'rgba(76, 175, 80, 0.1)' :
-                                                                        score === hole[parProp] + 1 ? 'rgba(255, 152, 0, 0.1)' :
-                                                                            'rgba(244, 67, 54, 0.1)') : 'white',
+                                                        backgroundColor: score !== ''
+                                                            ? (isLowScore ? 'rgba(76, 175, 80, 0.2)' : 'white') // Only highlight low score
+                                                            : undefined,
                                                         border: isLowScore ? '2px solid #4caf50' : undefined,
                                                     },
                                                     '& input': {
                                                         p: 0.5,
-                                                        color: getScoreColor(score, hole[parProp])
+                                                        color: 'text.primary' // Use consistent text color instead of par-based colors
                                                     },
                                                     '& .MuiOutlinedInput-notchedOutline': {
                                                         borderWidth: '1px'
@@ -1310,8 +1277,14 @@ const MatchScoreEntry = () => {
                             })}
                         </Grid>
 
-                        {/* Team total for this hole */}
-                        <Grid container spacing={0.5} alignItems="center" sx={{ mt: 0.5, pt: 0.5, borderTop: '1px dashed rgba(0,0,0,0.1)' }}>
+                        {/* Team totals */}
+                        <Grid container spacing={0.5} alignItems="center"
+                            sx={{
+                                mt: 'auto',
+                                pt: 0.5,
+                                borderTop: '1px dashed rgba(0,0,0,0.1)'
+                            }}
+                        >
                             <Grid item xs={3}>
                                 <Typography variant="caption" sx={{ pl: 0.5, fontSize: '0.65rem' }}>Team Total</Typography>
                             </Grid>
@@ -1360,27 +1333,28 @@ const MatchScoreEntry = () => {
                                     }
 
                                     return (
-                                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                            <Box
-                                                sx={{
-                                                    display: 'inline-block',
-                                                    minWidth: '2rem',
-                                                    fontWeight: 'bold',
-                                                    color: isLowTeamTotal ? 'white' : 'text.secondary',
-                                                    backgroundColor: isLowTeamTotal ? 'primary.main' : 'transparent',
-                                                    borderRadius: '4px',
-                                                    padding: '1px 6px',
-                                                    border: isLowTeamTotal ? '1px solid #1976d2' : 'none',
-                                                    fontSize: '0.75rem'
-                                                }}
-                                            >
-                                                {hasCompleteScores ? teamGrossTotal : '-'}
-                                            </Box>
-                                            {hasCompleteScores && teamGrossTotal !== teamNetTotal && (
-                                                <Typography variant="caption" sx={{ fontSize: '0.65rem', fontWeight: 'bold', color: 'text.secondary' }}>
-                                                    Net: {teamNetTotal}
-                                                </Typography>
-                                            )}
+                                        <Box
+                                            sx={{
+                                                display: 'inline-block',
+                                                minWidth: '2rem',
+                                                fontWeight: 'bold',
+                                                color: isLowTeamTotal ? 'white' : 'text.secondary',
+                                                backgroundColor: isLowTeamTotal ? 'primary.main' : 'transparent',
+                                                borderRadius: '4px',
+                                                padding: '1px 6px',
+                                                border: isLowTeamTotal ? '1px solid #1976d2' : 'none'
+                                            }}
+                                        >
+                                            {hasCompleteScores ? (
+                                                <>
+                                                    {teamGrossTotal}
+                                                    {teamGrossTotal !== teamNetTotal && (
+                                                        <Typography variant="caption" sx={{ display: 'block', fontSize: '0.65rem' }}>
+                                                            Net: {teamNetTotal}
+                                                        </Typography>
+                                                    )}
+                                                </>
+                                            ) : '-'}
                                         </Box>
                                     );
                                 })()}
@@ -1426,15 +1400,15 @@ const MatchScoreEntry = () => {
                                             </Typography>
                                         )}
 
-                                        {/* Net total */}
-                                        {total > 0 && player.pops > 0 && (
+                                        {/* Net total - based on handicap, not pops */}
+                                        {total > 0 && player.handicap > 0 && (
                                             <Typography variant="caption" sx={{
                                                 fontSize: '0.7rem',
                                                 fontWeight: 'bold',
                                                 color: 'primary.main',
                                                 mt: 0.5
                                             }}>
-                                                Net: {total - player.pops}
+                                                Net: {total - player.handicap}
                                             </Typography>
                                         )}
                                     </Box>
@@ -1529,20 +1503,7 @@ const MatchScoreEntry = () => {
                                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
                                     {match.home_team?.name || 'Home'} Team
                                 </Typography>
-                                <Box
-                                    ref={homeScoreContainerRef}
-                                    sx={{
-                                        height: '60vh',
-                                        overflowY: 'auto',
-                                        pr: 1,
-                                        // Hide scrollbar but allow scrolling
-                                        '&::-webkit-scrollbar': { width: '8px' },
-                                        '&::-webkit-scrollbar-thumb': {
-                                            backgroundColor: 'rgba(0,0,0,0.1)',
-                                            borderRadius: '4px'
-                                        }
-                                    }}
-                                >
+                                <Box>
                                     {homeTeamScores.length > 0 ? (
                                         renderScoreTable(homeTeamScores, 'home')
                                     ) : (
@@ -1559,20 +1520,7 @@ const MatchScoreEntry = () => {
                                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
                                     {match.away_team?.name || 'Away'} Team
                                 </Typography>
-                                <Box
-                                    ref={awayScoreContainerRef}
-                                    sx={{
-                                        height: '60vh',
-                                        overflowY: 'auto',
-                                        pr: 1,
-                                        // Hide scrollbar but allow scrolling
-                                        '&::-webkit-scrollbar': { width: '8px' },
-                                        '&::-webkit-scrollbar-thumb': {
-                                            backgroundColor: 'rgba(0,0,0,0.1)',
-                                            borderRadius: '4px'
-                                        }
-                                    }}
-                                >
+                                <Box>
                                     {awayTeamScores.length > 0 ? (
                                         renderScoreTable(awayTeamScores, 'away')
                                     ) : (
