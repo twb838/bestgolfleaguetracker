@@ -3,14 +3,16 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import {
     Box, Paper, Typography, Button, CircularProgress, Alert,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    TextField, IconButton, Tabs, Tab, Divider, Chip, Grid, TableFooter
+    TextField, IconButton, Tabs, Tab, Divider, Chip, Grid, TableFooter,
+    Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemText
 } from '@mui/material';
 import {
     ArrowBack as ArrowBackIcon,
     Save as SaveIcon,
     GolfCourse as CourseIcon,
     Edit as EditIcon,
-    Check as CheckIcon
+    Check as CheckIcon,
+    PersonAdd as SubstituteIcon
 } from '@mui/icons-material';
 import format from 'date-fns/format';
 import env from '../../config/env';
@@ -62,6 +64,38 @@ const MatchScoreEntry = () => {
 
     // Match results state
     const [matchResults, setMatchResults] = useState(null);
+
+    // Add these state variables inside the MatchScoreEntry component
+    const [substituteDialogOpen, setSubstituteDialogOpen] = useState(false);
+    const [currentSubstitute, setCurrentSubstitute] = useState({
+        teamType: null,
+        playerIndex: null,
+        originalPlayer: null,
+        substitute: {
+            player_name: '',
+            first_name: '',
+            last_name: '',
+            email: '',
+            handicap: 0,
+            is_substitute: true
+        }
+    });
+    const [availablePlayers, setAvailablePlayers] = useState([]);
+
+    // Add this function inside the MatchScoreEntry component
+    const fetchAvailablePlayers = async () => {
+        try {
+            const response = await fetch(`${env.API_BASE_URL}/players`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch players');
+            }
+            const players = await response.json();
+            setAvailablePlayers(players);
+        } catch (error) {
+            console.error('Error fetching available players:', error);
+            setError('Failed to load available players');
+        }
+    };
 
     useEffect(() => {
         // If we don't have match data from navigation, fetch it
@@ -368,6 +402,17 @@ const MatchScoreEntry = () => {
                 [holeId]: score
             };
             setAwayTeamScores(newScores);
+        }
+
+        // Auto-tab to next field if a single digit was entered
+        if (score !== '' && score < 10) {
+            // Use setTimeout to ensure state has updated before we try to focus next field
+            setTimeout(() => {
+                const nextInput = getNextInputField(teamType, playerIndex, holeId);
+                if (nextInput) {
+                    nextInput.focus();
+                }
+            }, 50);
         }
     };
 
@@ -1048,6 +1093,161 @@ const MatchScoreEntry = () => {
         );
     };
 
+    // Update the handleOpenSubstituteDialog function to fetch available players
+
+    const handleOpenSubstituteDialog = (teamType, playerIndex) => {
+        // Get the current player
+        const teamScores = teamType === 'home' ? homeTeamScores : awayTeamScores;
+        const currentPlayer = teamScores[playerIndex];
+
+        setCurrentSubstitute({
+            teamType,
+            playerIndex,
+            originalPlayer: currentPlayer,
+            substitute: {
+                player_name: '',
+                first_name: '',
+                last_name: '',
+                email: '',
+                handicap: 0,
+                is_substitute: true
+            }
+        });
+
+        // Fetch available players when opening the dialog
+        fetchAvailablePlayers();
+
+        setSubstituteDialogOpen(true);
+    };
+
+    const handleCloseSubstituteDialog = () => {
+        setSubstituteDialogOpen(false);
+    };
+
+    const handleSubstituteChange = (e) => {
+        const { name, value } = e.target;
+        setCurrentSubstitute({
+            ...currentSubstitute,
+            substitute: {
+                ...currentSubstitute.substitute,
+                [name]: value
+            }
+        });
+    };
+
+    const handleSelectExistingPlayer = (playerId) => {
+        const selectedPlayer = availablePlayers.find(p => p.id === playerId);
+        if (selectedPlayer) {
+            setCurrentSubstitute({
+                ...currentSubstitute,
+                substitute: {
+                    player_id: selectedPlayer.id,
+                    player_name: `${selectedPlayer.first_name} ${selectedPlayer.last_name}`,
+                    handicap: selectedPlayer.handicap || 0,
+                    is_substitute: true
+                }
+            });
+        }
+    };
+
+    // Update the handleApplySubstitute function to properly recalculate pops for both teams
+
+    const handleApplySubstitute = async () => {
+        const { teamType, playerIndex, substitute } = currentSubstitute;
+        let substituteFinal = { ...substitute };
+
+        // If this is a new player (no player_id), save to database first
+        if (!substitute.player_id && substitute.first_name) {
+            try {
+                // Use the provided email or generate one if empty
+                const email = substitute.email || `temp_${Date.now()}@golftracker.example.com`;
+
+                // Create the new player in the database
+                const response = await fetch(`${env.API_BASE_URL}/players`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        first_name: substitute.first_name,
+                        last_name: substitute.last_name || '',
+                        email: email,
+                        handicap: parseFloat(substitute.handicap) || 0,
+                        team_id: null // Don't associate with any team
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to save substitute player');
+                }
+
+                // Get the saved player data with ID
+                const savedPlayer = await response.json();
+
+                // Update our substitute with the saved player data
+                substituteFinal = {
+                    player_id: savedPlayer.id,
+                    player_name: `${savedPlayer.first_name} ${savedPlayer.last_name || ''}`.trim(),
+                    handicap: savedPlayer.handicap,
+                    is_substitute: true
+                };
+
+                console.log('Created new player in database:', savedPlayer);
+                setSuccessMessage("New player created and applied as substitute");
+
+            } catch (error) {
+                console.error('Error saving substitute player:', error);
+                setError('Failed to save substitute player. Using temporary substitute instead.');
+                // Continue with the temporary substitute even if saving failed
+            }
+        }
+
+        // Copy current team scores
+        let newHomeTeamScores = [...homeTeamScores];
+        let newAwayTeamScores = [...awayTeamScores];
+
+        // Apply the substitute to the appropriate team
+        if (teamType === 'home') {
+            // Preserve existing scores when substituting
+            const existingScores = newHomeTeamScores[playerIndex].scores;
+
+            // Replace player but keep the scores
+            newHomeTeamScores[playerIndex] = {
+                ...substituteFinal,
+                scores: existingScores
+            };
+        } else {
+            // Preserve existing scores when substituting
+            const existingScores = newAwayTeamScores[playerIndex].scores;
+
+            // Replace player but keep the scores
+            newAwayTeamScores[playerIndex] = {
+                ...substituteFinal,
+                scores: existingScores
+            };
+        }
+
+        // Recalculate pops for BOTH teams at once to ensure proper calculation
+        // This is critical since pops depend on the lowest handicap across ALL players
+        newHomeTeamScores = calculatePlayerPops(newHomeTeamScores, newAwayTeamScores);
+        newAwayTeamScores = calculatePlayerPops(newAwayTeamScores, newHomeTeamScores);
+
+        // Update state with new scores and pops
+        setHomeTeamScores(newHomeTeamScores);
+        setAwayTeamScores(newAwayTeamScores);
+
+        setSubstituteDialogOpen(false);
+
+        // Force recalculation of match results
+        setTimeout(() => {
+            calculateMatchResults();
+        }, 50);
+
+        if (!successMessage) {
+            setSuccessMessage("Substitute player applied successfully!");
+        }
+    };
+
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
@@ -1096,14 +1296,25 @@ const MatchScoreEntry = () => {
                         </Grid>
                         {teamScores.map((player, index) => (
                             <Grid item xs key={player.player_id} sx={{ textAlign: 'center' }}>
-                                <Typography
-                                    variant="body2"
-                                    sx={{
-                                        fontWeight: 'bold',
-                                        fontSize: { xs: '0.7rem', sm: '0.75rem' }
-                                    }}
-                                >
-                                    {player.player_name.split(' ')[0]}
+                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                    <Typography
+                                        variant="body2"
+                                        sx={{
+                                            fontWeight: 'bold',
+                                            fontSize: { xs: '0.7rem', sm: '0.75rem' }
+                                        }}
+                                    >
+                                        {player.player_name.split(' ')[0]}
+                                        {player.is_substitute &&
+                                            <Chip
+                                                size="small"
+                                                label="Sub"
+                                                color="secondary"
+                                                sx={{ ml: 0.5, height: 16, fontSize: '0.6rem' }}
+                                            />
+                                        }
+                                    </Typography>
+
                                     {player.handicap !== undefined && player.handicap !== null && (
                                         <Box component="span" sx={{
                                             display: 'block',
@@ -1114,7 +1325,18 @@ const MatchScoreEntry = () => {
                                             {player.pops > 0 && ` (Pops: ${player.pops})`}
                                         </Box>
                                     )}
-                                </Typography>
+
+                                    {/* Add substitute button */}
+                                    {!match.is_completed || editMode ? (
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => handleOpenSubstituteDialog(teamType, index)}
+                                            sx={{ padding: '2px', mt: 0.5 }}
+                                        >
+                                            <SubstituteIcon fontSize="small" sx={{ fontSize: '1rem' }} />
+                                        </IconButton>
+                                    ) : null}
+                                </Box>
                             </Grid>
                         ))}
                     </Grid>
@@ -1217,6 +1439,26 @@ const MatchScoreEntry = () => {
                                                     hole.id,
                                                     e.target.value
                                                 )}
+                                                onKeyUp={(e) => {
+                                                    // Auto-tab to next input on Enter or Tab key
+                                                    if (e.key === 'Enter' || e.key === 'Tab') {
+                                                        const nextInput = getNextInputField(teamType, playerIndex, hole.id);
+                                                        if (nextInput) {
+                                                            // Only prevent default if we have a next input to focus
+                                                            e.preventDefault();
+                                                            nextInput.focus();
+                                                        }
+                                                    }
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Tab') {
+                                                        const nextInput = getNextInputField(teamType, playerIndex, hole.id);
+                                                        if (nextInput) {
+                                                            e.preventDefault();
+                                                            nextInput.focus();
+                                                        }
+                                                    }
+                                                }}
                                                 inputProps={{
                                                     inputMode: 'numeric',
                                                     pattern: '[0-9]*',
@@ -1551,6 +1793,121 @@ const MatchScoreEntry = () => {
                     </Button>
                 </Box>
             )}
+
+            {/* Add the Substitute Player Dialog at the end of your return statement */}
+            <Dialog open={substituteDialogOpen} onClose={handleCloseSubstituteDialog} maxWidth="sm" fullWidth>
+                <DialogTitle>
+                    Substitute Player
+                    {currentSubstitute.originalPlayer && (
+                        <Typography variant="subtitle2" color="text.secondary">
+                            Replacing: {currentSubstitute.originalPlayer.player_name}
+                        </Typography>
+                    )}
+                </DialogTitle>
+                <DialogContent dividers>
+                    <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" gutterBottom>
+                            Select an existing player:
+                        </Typography>
+                        <Box sx={{ maxHeight: '200px', overflowY: 'auto', mb: 2 }}>
+                            {availablePlayers.length > 0 ? (
+                                <List dense>
+                                    {availablePlayers.map(player => (
+                                        <ListItem
+                                            key={player.id}
+                                            button
+                                            onClick={() => handleSelectExistingPlayer(player.id)}
+                                            selected={currentSubstitute.substitute.player_id === player.id}
+                                        >
+                                            <ListItemText
+                                                primary={`${player.first_name} ${player.last_name}`}
+                                                secondary={`Handicap: ${player.handicap || 0}`}
+                                            />
+                                        </ListItem>
+                                    ))}
+                                </List>
+                            ) : (
+                                <Box sx={{ textAlign: 'center', py: 2 }}>
+                                    <CircularProgress size={24} sx={{ mb: 1 }} />
+                                    <Typography variant="body2" color="text.secondary">
+                                        Loading players...
+                                    </Typography>
+                                </Box>
+                            )}
+                        </Box>
+
+                        <Divider sx={{ my: 2 }}>OR</Divider>
+
+                        <Typography variant="subtitle2" gutterBottom>
+                            Create a temporary substitute:
+                        </Typography>
+                        <Grid container spacing={2}>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    label="First Name"
+                                    name="first_name"
+                                    value={currentSubstitute.substitute.first_name || ''}
+                                    onChange={handleSubstituteChange}
+                                    fullWidth
+                                    margin="normal"
+                                    size="small"
+                                    required
+                                />
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    label="Last Name"
+                                    name="last_name"
+                                    value={currentSubstitute.substitute.last_name || ''}
+                                    onChange={handleSubstituteChange}
+                                    fullWidth
+                                    margin="normal"
+                                    size="small"
+                                />
+                            </Grid>
+                        </Grid>
+                        <TextField
+                            label="Email"
+                            name="email"
+                            type="email"
+                            value={currentSubstitute.substitute.email || ''}
+                            onChange={handleSubstituteChange}
+                            fullWidth
+                            margin="normal"
+                            size="small"
+                            helperText="Required for new player"
+                            required
+                        />
+                        <TextField
+                            label="Handicap"
+                            name="handicap"
+                            type="number"
+                            value={currentSubstitute.substitute.handicap}
+                            onChange={handleSubstituteChange}
+                            fullWidth
+                            margin="normal"
+                            size="small"
+                            InputProps={{ inputProps: { min: 0, step: 0.1 } }}
+                        />
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseSubstituteDialog}>
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={handleApplySubstitute}
+                        disabled={
+                            !currentSubstitute.substitute.player_id && // If not selecting existing player
+                            (!currentSubstitute.substitute.first_name || !currentSubstitute.substitute.email) // Require first name and email
+                        }
+                    >
+                        Apply Substitute
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };
