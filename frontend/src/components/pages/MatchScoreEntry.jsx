@@ -12,7 +12,8 @@ import {
     GolfCourse as CourseIcon,
     Edit as EditIcon,
     Check as CheckIcon,
-    PersonAdd as SubstituteIcon
+    PersonAdd as SubstituteIcon,
+    Refresh as RefreshIcon
 } from '@mui/icons-material';
 import format from 'date-fns/format';
 import env from '../../config/env';
@@ -293,7 +294,7 @@ const MatchScoreEntry = () => {
         return player.name || "Unknown Player";
     };
 
-    // Update the fetchExistingScores function
+    // Update the fetchExistingScores function to force match results calculation
 
     const fetchExistingScores = async (matchId) => {
         try {
@@ -307,7 +308,26 @@ const MatchScoreEntry = () => {
             const data = await response.json();
             console.log('Received score data:', data);
 
-            // Always check and process player data
+            // Create a map of player scores for easy lookup
+            const playerScores = {};
+
+            // Process existing scores if any
+            if (data.scores && data.scores.length > 0) {
+                // Group scores by player
+                data.scores.forEach(score => {
+                    if (!playerScores[score.player_id]) {
+                        playerScores[score.player_id] = {};
+                    }
+                    playerScores[score.player_id][score.hole_id] = score.strokes;
+                });
+
+                console.log('Organized player scores:', playerScores);
+            }
+
+            // Process player data
+            let updatedHomeScores = [];
+            let updatedAwayScores = [];
+
             if (data.players) {
                 // Initialize team scores with player data from API
                 const homePlayersData = data.players.home || [];
@@ -316,61 +336,116 @@ const MatchScoreEntry = () => {
                 console.log(`Got ${homePlayersData.length} home players and ${awayPlayersData.length} away players from API`);
 
                 if (homePlayersData.length > 0) {
-                    const homeScores = homePlayersData.map(player => ({
-                        player_id: player.id,
-                        player_name: formatPlayerName(player),
-                        handicap: player.handicap,
-                        scores: {} // Will be populated with hole scores later
-                    }));
+                    const homeScores = homePlayersData.map(player => {
+                        // Check if this player is a substitute
+                        const isSubstitute = player.is_substitute ||
+                            (match.substitute_players &&
+                                match.substitute_players.some(sub =>
+                                    sub.player_id === player.id && sub.team_type === 'home'));
+
+                        // Add the player's scores from our lookup map
+                        const scores = playerScores[player.id] || {};
+
+                        return {
+                            player_id: player.id,
+                            player_name: formatPlayerName(player),
+                            handicap: player.handicap,
+                            scores: scores, // Assign the scores directly here
+                            is_substitute: isSubstitute
+                        };
+                    });
 
                     // Apply pops based on lowest handicap
-                    const homeScoresWithPops = calculatePlayerPops(homeScores, awayPlayersData);
-                    setHomeTeamScores(homeScoresWithPops);
+                    updatedHomeScores = calculatePlayerPops(homeScores, awayPlayersData);
+                    setHomeTeamScores(updatedHomeScores);
                 }
 
                 if (awayPlayersData.length > 0) {
-                    const awayScores = awayPlayersData.map(player => ({
-                        player_id: player.id,
-                        player_name: formatPlayerName(player),
-                        handicap: player.handicap,
-                        scores: {} // Will be populated with hole scores later
-                    }));
+                    const awayScores = awayPlayersData.map(player => {
+                        // Check if this player is a substitute
+                        const isSubstitute = player.is_substitute ||
+                            (match.substitute_players &&
+                                match.substitute_players.some(sub =>
+                                    sub.player_id === player.id && sub.team_type === 'away'));
+
+                        // Add the player's scores from our lookup map
+                        const scores = playerScores[player.id] || {};
+
+                        return {
+                            player_id: player.id,
+                            player_name: formatPlayerName(player),
+                            handicap: player.handicap,
+                            scores: scores, // Assign the scores directly here
+                            is_substitute: isSubstitute
+                        };
+                    });
 
                     // Apply pops based on lowest handicap
-                    const awayScoresWithPops = calculatePlayerPops(awayScores, homePlayersData);
-                    setAwayTeamScores(awayScoresWithPops);
+                    updatedAwayScores = calculatePlayerPops(awayScores, homePlayersData);
+                    setAwayTeamScores(updatedAwayScores);
                 }
             }
 
-            // Process existing scores if any
-            if (data.scores && data.scores.length > 0) {
-                // Group scores by player
-                const scoresByPlayer = data.scores.reduce((acc, score) => {
-                    if (!acc[score.player_id]) {
-                        acc[score.player_id] = {};
-                    }
-                    acc[score.player_id][score.hole_id] = score.strokes;
-                    return acc;
-                }, {});
+            // Force a recalculation of match results
+            if (updatedHomeScores.length > 0 && updatedAwayScores.length > 0) {
+                // Use a separate function to force calculation with the new scores
+                const forceCalculation = () => {
+                    console.log('Forcing match results calculation with loaded scores');
+                    const tempResults = {
+                        match_id: match.id,
+                        date: match.match_date,
+                        home_team: {
+                            id: match.home_team_id,
+                            name: match.home_team?.name || 'Home Team',
+                            total_points: 0,
+                            total_score: 0,
+                            total_points_by_hole: [],
+                            players: []
+                        },
+                        away_team: {
+                            id: match.away_team_id,
+                            name: match.away_team?.name || 'Away Team',
+                            total_points: 0,
+                            total_score: 0,
+                            total_points_by_hole: [],
+                            players: []
+                        }
+                    };
 
-                console.log('Scores by player:', scoresByPlayer);
+                    calculateMatchResults();
+                };
 
-                // Update home team scores with existing scores (preserve pops)
-                setHomeTeamScores(prev => prev.map(player => ({
-                    ...player,
-                    scores: scoresByPlayer[player.player_id] || {}
-                })));
-
-                // Update away team scores with existing scores (preserve pops)
-                setAwayTeamScores(prev => prev.map(player => ({
-                    ...player,
-                    scores: scoresByPlayer[player.player_id] || {}
-                })));
+                // Give the state time to update before calculating
+                setTimeout(forceCalculation, 500);
             }
 
-            // Process hole data if provided
-            if (data.holes && data.holes.length > 0) {
-                setHoles(data.holes);
+            // If the match has stored points, show them immediately
+            if (match.home_team_points !== undefined && match.away_team_points !== undefined) {
+                console.log(`Using stored match points: Home ${match.home_team_points} - Away ${match.away_team_points}`);
+
+                // Create a temporary results object until the full calculation completes
+                const tempResults = {
+                    match_id: match.id,
+                    date: match.match_date,
+                    home_team: {
+                        id: match.home_team_id,
+                        name: match.home_team?.name || 'Home Team',
+                        total_points: match.home_team_points,
+                        total_score: 0,
+                        total_points_by_hole: [],
+                        players: []
+                    },
+                    away_team: {
+                        id: match.away_team_id,
+                        name: match.away_team?.name || 'Away Team',
+                        total_points: match.away_team_points,
+                        total_score: 0,
+                        total_points_by_hole: [],
+                        players: []
+                    }
+                };
+
+                setMatchResults(tempResults);
             }
 
         } catch (error) {
@@ -477,15 +552,6 @@ const MatchScoreEntry = () => {
     const calculatePar = () => {
         const parProp = 'par' in holes[0] ? 'par' : 'par';
         return holes.reduce((total, hole) => total + hole[parProp], 0);
-    };
-
-    const getScoreColor = (score, par) => {
-        if (!score) return 'text.secondary'; // No score entered
-        const diff = score - par;
-        if (diff < 0) return 'success.main'; // Under par
-        if (diff === 0) return 'info.main'; // Par
-        if (diff === 1) return 'warning.main'; // Bogey
-        return 'error.main'; // Double bogey or worse
     };
 
     // Update the calculateMatchResults function to use net scores
@@ -705,6 +771,7 @@ const MatchScoreEntry = () => {
         }
     };
 
+    // Update handleSaveScores to include team points
     const handleSaveScores = async () => {
         setSaving(true);
         setError(null);
@@ -717,8 +784,19 @@ const MatchScoreEntry = () => {
             // Combine home and away team scores into a single array
             const allScores = [];
 
+            // Track substitutes used in this match
+            const substitutes = [];
+
             // Process home team scores
             homeTeamScores.forEach(player => {
+                // Add this player to substitutes list if marked as substitute
+                if (player.is_substitute) {
+                    substitutes.push({
+                        player_id: player.player_id,
+                        team_type: 'home'
+                    });
+                }
+
                 Object.entries(player.scores).forEach(([holeId, strokes]) => {
                     if (strokes !== '') { // Only send valid scores
                         allScores.push({
@@ -732,6 +810,14 @@ const MatchScoreEntry = () => {
 
             // Process away team scores
             awayTeamScores.forEach(player => {
+                // Add this player to substitutes list if marked as substitute
+                if (player.is_substitute) {
+                    substitutes.push({
+                        player_id: player.player_id,
+                        team_type: 'away'
+                    });
+                }
+
                 Object.entries(player.scores).forEach(([holeId, strokes]) => {
                     if (strokes !== '') { // Only send valid scores
                         allScores.push({
@@ -755,7 +841,10 @@ const MatchScoreEntry = () => {
                     scores: allScores,
                     match_results: matchResults,
                     is_completed: true,
-                    is_update: isUpdate // Add flag to indicate this is an update to existing scores
+                    is_update: isUpdate,
+                    substitute_players: substitutes,
+                    home_team_points: matchResults.home_team.total_points,
+                    away_team_points: matchResults.away_team.total_points
                 }),
             });
 
@@ -770,10 +859,13 @@ const MatchScoreEntry = () => {
                 setEditMode(false);
             }
 
-            // Update the match object to reflect completion
+            // Update the match object to reflect completion and team points
             setMatch({
                 ...match,
-                is_completed: true
+                is_completed: true,
+                home_team_points: matchResults.home_team.total_points,
+                away_team_points: matchResults.away_team.total_points,
+                substitute_players: substitutes
             });
 
         } catch (error) {
@@ -862,7 +954,20 @@ const MatchScoreEntry = () => {
 
         return (
             <Paper sx={{ p: 3, mt: 3, bgcolor: 'background.paper' }}>
-                <Typography variant="h6" gutterBottom>Match Results</Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="h6">Match Results</Typography>
+
+                    {/* Add Recalculate button */}
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => calculateMatchResults()}
+                        startIcon={<RefreshIcon />}
+                        sx={{ fontSize: '0.8rem' }}
+                    >
+                        Recalculate
+                    </Button>
+                </Box>
 
                 <Grid container spacing={2} sx={{ mb: 2 }}>
                     <Grid item xs={6}>
@@ -1281,9 +1386,6 @@ const MatchScoreEntry = () => {
 
         // Determine which property to use for hole number and par
         const holeNumberProp = 'hole_number' in holes[0] ? 'hole_number' : 'number';
-        const parProp = 'par' in holes[0] ? 'par' : 'par';
-        const yardsProp = 'yards' in holes[0] ? 'yards' : 'yards';
-        const handicapProp = 'handicap' in holes[0] ? 'handicap' : 'handicap';
 
         // Create a vertical layout for mobile-friendly score entry
         return (
@@ -1777,7 +1879,10 @@ const MatchScoreEntry = () => {
                 </Box>
             </Paper>
 
-            <MatchResultsSummary results={matchResults} />
+            <MatchResultsSummary
+                results={matchResults}
+                calculateMatchResults={calculateMatchResults}
+            />
 
             {!match.is_completed && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
