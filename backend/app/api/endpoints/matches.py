@@ -10,6 +10,7 @@ from app.models.course import Course
 from app.models.score import PlayerScore
 from app.models.player import Player
 from app.models.hole import Hole
+from app.models.match_player import MatchPlayer
 from app.schemas.match import MatchCreate, MatchResponse, MatchUpdate
 from app import schemas
 
@@ -49,6 +50,33 @@ def create_match(match: MatchCreate, db: Session = Depends(get_db)):
     db.add(db_match)
     db.commit()
     db.refresh(db_match)
+    
+    # Get all players from both teams
+    home_players = db.query(Player).filter(Player.team_id == match.home_team_id).all()
+    away_players = db.query(Player).filter(Player.team_id == match.away_team_id).all()
+    
+    # Add all players to match_players table
+    for player in home_players:
+        match_player = MatchPlayer(
+            match_id=db_match.id,
+            team_id=match.home_team_id,
+            player_id=player.id,
+            is_substitute=False,
+            is_active=True
+        )
+        db.add(match_player)
+    
+    for player in away_players:
+        match_player = MatchPlayer(
+            match_id=db_match.id,
+            team_id=match.away_team_id,
+            player_id=player.id,
+            is_substitute=False,
+            is_active=True
+        )
+        db.add(match_player)
+    
+    db.commit()
     return db_match
 
 @router.get("/weeks/{week_id}/matches")

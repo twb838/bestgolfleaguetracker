@@ -18,8 +18,9 @@ class Match(Base):
     # Relationships
     week = relationship("Week", back_populates="matches")
     course = relationship("Course", back_populates="matches")
-
     player_scores = relationship("PlayerScore", back_populates="match", cascade="all, delete-orphan")
+    match_players = relationship("MatchPlayer", back_populates="match", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Match(id={self.id}, date={self.match_date}, home={self.home_team_id}, away={self.away_team_id})>"
+
