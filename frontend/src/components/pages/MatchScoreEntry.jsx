@@ -441,105 +441,51 @@ const MatchScoreEntry = () => {
                 // Initialize team scores with active player data from API
                 const homePlayersData = activeMatchPlayers
                     .filter(mp => mp.team_id === match.home_team_id)
-                    .map(mp => mp.player);
+                    .map(mp => {
+                        // Include the is_substitute flag from the match_players table
+                        return {
+                            player_id: mp.player_id,
+                            player_name: formatPlayerName(mp.player),
+                            first_name: mp.player.first_name,
+                            last_name: mp.player.last_name,
+                            email: mp.player.email,
+                            handicap: mp.player.handicap || 0,
+                            scores: playerScores[mp.player_id] || {},
+                            is_substitute: mp.is_substitute || false  // Make sure this flag is properly set
+                        };
+                    });
 
                 const awayPlayersData = activeMatchPlayers
                     .filter(mp => mp.team_id === match.away_team_id)
-                    .map(mp => mp.player);
+                    .map(mp => {
+                        // Include the is_substitute flag from the match_players table
+                        return {
+                            player_id: mp.player_id,
+                            player_name: formatPlayerName(mp.player),
+                            first_name: mp.player.first_name,
+                            last_name: mp.player.last_name,
+                            email: mp.player.email,
+                            handicap: mp.player.handicap || 0,
+                            scores: playerScores[mp.player_id] || {},
+                            is_substitute: mp.is_substitute || false  // Make sure this flag is properly set
+                        };
+                    });
 
-                // Continue with your existing code...
                 console.log(`Got ${homePlayersData.length} home players and ${awayPlayersData.length} away players from API`);
+                console.log('Home players data with substitute flags:', homePlayersData);
+                console.log('Away players data with substitute flags:', awayPlayersData);
 
-                if (homePlayersData.length > 0) {
-                    const homeScores = homePlayersData.map(player => {
-                        // Check if this player is a substitute
-                        const isSubstitute = player.is_substitute ||
-                            (match.substitute_players &&
-                                match.substitute_players.some(sub =>
-                                    sub.player_id === player.id && sub.team_type === 'home'));
-
-                        // Add the player's scores from our lookup map
-                        const scores = playerScores[player.id] || {};
-
-                        return {
-                            player_id: player.id,
-                            player_name: formatPlayerName(player),
-                            handicap: player.handicap,
-                            scores: scores, // Assign the scores directly here
-                            is_substitute: isSubstitute
-                        };
-                    });
-
-                    // Apply pops based on lowest handicap
-                    const updatedHomeScores = calculatePlayerPops(homeScores, awayPlayersData);
-                    setHomeTeamScores(updatedHomeScores);
-                }
-
-                if (awayPlayersData.length > 0) {
-                    const awayScores = awayPlayersData.map(player => {
-                        // Check if this player is a substitute
-                        const isSubstitute = player.is_substitute ||
-                            (match.substitute_players &&
-                                match.substitute_players.some(sub =>
-                                    sub.player_id === player.id && sub.team_type === 'away'));
-
-                        // Add the player's scores from our lookup map
-                        const scores = playerScores[player.id] || {};
-
-                        return {
-                            player_id: player.id,
-                            player_name: formatPlayerName(player),
-                            handicap: player.handicap,
-                            scores: scores, // Assign the scores directly here
-                            is_substitute: isSubstitute
-                        };
-                    });
-
-                    // Apply pops based on lowest handicap
-                    const updatedAwayScores = calculatePlayerPops(awayScores, homePlayersData);
-                    setAwayTeamScores(updatedAwayScores);
-                }
+                // Apply pops based on lowest handicap
+                setHomeTeamScores(calculatePlayerPops(homePlayersData, awayPlayersData));
+                setAwayTeamScores(calculatePlayerPops(awayPlayersData, homePlayersData));
             }
 
             // Force a recalculation of match results
             if (homeTeamScores.length > 0 && awayTeamScores.length > 0) {
-                // Use a separate function to force calculation with the new scores
-                const forceCalculation = () => {
+                setTimeout(() => {
                     console.log('Forcing match results calculation with loaded scores');
                     calculateMatchResults();
-                };
-
-                // Give the state time to update before calculating
-                setTimeout(forceCalculation, 500);
-            }
-
-            // If the match has stored points, show them immediately
-            if (match.home_team_points !== undefined && match.away_team_points !== undefined) {
-                console.log(`Using stored match points: Home ${match.home_team_points} - Away ${match.away_team_points}`);
-
-                // Create a temporary results object until the full calculation completes
-                const tempResults = {
-                    match_id: match.id,
-                    date: match.match_date,
-                    home_team: {
-                        id: match.home_team_id,
-                        name: match.home_team?.name || 'Home Team',
-                        total_points: match.home_team_points,
-                        total_score: 0,
-                        total_points_by_hole: [],
-                        players: []
-                    },
-                    away_team: {
-                        id: match.away_team_id,
-                        name: match.away_team?.name || 'Away Team',
-                        total_points: match.away_team_points,
-                        total_score: 0,
-                        total_points_by_hole: [],
-                        players: []
-                    }
-                };
-
-                setMatchResults(tempResults);
+                }, 500);
             }
 
         } catch (error) {
