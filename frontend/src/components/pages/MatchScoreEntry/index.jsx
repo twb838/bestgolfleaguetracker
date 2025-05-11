@@ -135,15 +135,163 @@ const MatchScoreEntry = () => {
     };
 
     // Initialize player scores
-    const initializePlayerScores = (matchData = match, leagueData = league) => {
-        // Implementation remains the same as in the original file
-        // ...
+    const initializePlayerScores = async (matchData = match, leagueData = league) => {
+        try {
+            // Fetch match players data to get proper player lineup
+            const response = await fetch(`${env.API_BASE_URL}/matches/${matchData.id}/players`);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('API Error Response:', errorText);
+                throw new Error(`Failed to fetch match players: ${response.status} ${response.statusText}`);
+            }
+
+            const matchPlayersData = await response.json();
+            console.log('Match players data:', matchPlayersData); // Debug logging
+
+            // Group players by team
+            const homeTeamPlayers = matchPlayersData.filter(mp => mp.team_id === matchData.home_team_id)
+                .map(mp => mp.player);
+            console.log('Home team players:', homeTeamPlayers);  // Debug logging
+
+            const awayTeamPlayers = matchPlayersData.filter(mp => mp.team_id === matchData.away_team_id)
+                .map(mp => mp.player);
+
+            // Create player score objects for home team
+            const homeScores = homeTeamPlayers.map(player => {
+                // Calculate player's pops based on handicap
+                const handicap = player.handicap || 0;
+                const pops = calculatePlayerPops(handicap, sortedHolesByHandicap, leagueData?.handicap_allowance || 0.8);
+
+                return {
+                    player_id: player.id,
+                    player_name: formatPlayerName(player),
+                    first_name: player.first_name,
+                    last_name: player.last_name,
+                    email: player.email,
+                    handicap: handicap,
+                    pops: pops,
+                    is_substitute: matchPlayersData.find(mp => mp.player_id === player.id)?.is_substitute || false,
+                    scores: holes.map(hole => ({
+                        hole_id: hole.id,
+                        value: null
+                    }))
+                };
+            });
+
+            // Create player score objects for away team
+            const awayScores = awayTeamPlayers.map(player => {
+                // Calculate player's pops based on handicap
+                const handicap = player.handicap || 0;
+                const pops = calculatePlayerPops(handicap, sortedHolesByHandicap, leagueData?.handicap_allowance || 0.8);
+
+                return {
+                    player_id: player.id,
+                    player_name: formatPlayerName(player),
+                    first_name: player.first_name,
+                    last_name: player.last_name,
+                    email: player.email,
+                    handicap: handicap,
+                    pops: pops,
+                    is_substitute: matchPlayersData.find(mp => mp.player_id === player.id)?.is_substitute || false,
+                    scores: holes.map(hole => ({
+                        hole_id: hole.id,
+                        value: null
+                    }))
+                };
+            });
+
+            setHomeTeamScores(homeScores);
+            setAwayTeamScores(awayScores);
+
+        } catch (error) {
+            console.error('Error initializing player scores:', error);
+            setError('Failed to initialize player scores. ' + error.message);
+        }
     };
 
     // Fetch existing scores
     const fetchExistingScores = async (matchId) => {
-        // Implementation remains the same as in the original file
-        // ...
+        try {
+            setLoading(true);
+            const response = await fetch(`${env.API_BASE_URL}/matches/${matchId}/scores`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch match scores');
+            }
+
+            const data = await response.json();
+
+            // Find home and away players from match_players table
+            const homeTeamPlayers = data.match_players.filter(mp => mp.team_id === match.home_team_id);
+            const awayTeamPlayers = data.match_players.filter(mp => mp.team_id === match.away_team_id);
+
+            // Create player score objects for home team
+            const homeScores = homeTeamPlayers.map(matchPlayer => {
+                const player = matchPlayer.player;
+                const playerScores = data.scores.filter(score => score.player_id === player.id);
+
+                // Calculate player's pops based on handicap
+                const handicap = player.handicap || 0;
+                const pops = calculatePlayerPops(handicap, sortedHolesByHandicap, league?.handicap_allowance || 0.8);
+
+                return {
+                    player_id: player.id,
+                    player_name: formatPlayerName(player),
+                    first_name: player.first_name,
+                    last_name: player.last_name,
+                    email: player.email,
+                    handicap: handicap,
+                    pops: pops,
+                    is_substitute: matchPlayer.is_substitute,
+                    scores: data.holes.map(hole => {
+                        const existingScore = playerScores.find(s => s.hole_id === hole.id);
+                        return {
+                            hole_id: hole.id,
+                            value: existingScore ? existingScore.strokes : null
+                        };
+                    })
+                };
+            });
+
+            // Create player score objects for away team (similar to home team)
+            const awayScores = awayTeamPlayers.map(matchPlayer => {
+                // Same logic as above for home team
+                const player = matchPlayer.player;
+                const playerScores = data.scores.filter(score => score.player_id === player.id);
+
+                const handicap = player.handicap || 0;
+                const pops = calculatePlayerPops(handicap, sortedHolesByHandicap, league?.handicap_allowance || 0.8);
+
+                return {
+                    player_id: player.id,
+                    player_name: formatPlayerName(player),
+                    first_name: player.first_name,
+                    last_name: player.last_name,
+                    email: player.email,
+                    handicap: handicap,
+                    pops: pops,
+                    is_substitute: matchPlayer.is_substitute,
+                    scores: data.holes.map(hole => {
+                        const existingScore = playerScores.find(s => s.hole_id === hole.id);
+                        return {
+                            hole_id: hole.id,
+                            value: existingScore ? existingScore.strokes : null
+                        };
+                    })
+                };
+            });
+
+            setHomeTeamScores(homeScores);
+            setAwayTeamScores(awayScores);
+            setCourse(data.course);
+            setHoles(data.holes);
+
+        } catch (error) {
+            console.error('Error fetching scores:', error);
+            setError('Failed to load match scores. ' + error.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     // Handle score changes
@@ -202,14 +350,154 @@ const MatchScoreEntry = () => {
     };
 
     const handleApplySubstitute = async () => {
-        // Implementation remains the same as in the original file
-        // ...
+        const { teamType, playerIndex, originalPlayer, substitute } = currentSubstitute;
+
+        if (!substitute.player_name) {
+            setError("Substitute player name is required");
+            return;
+        }
+
+        // Add team_id to the substitute player
+        const teamId = teamType === 'home' ? match.home_team_id : match.away_team_id;
+
+        // Create a player object with proper team info for the substitute
+        const substitutePlayer = {
+            ...substitute,
+            player_id: substitute.player_id || null,  // If using existing player, use their ID
+            scores: originalPlayer.scores,  // Copy the original player's score structure
+            pops: originalPlayer.pops,      // Copy the original player's pops
+            team_id: teamId                 // Add team ID
+        };
+
+        // Update the appropriate team's scores
+        if (teamType === 'home') {
+            const newHomeTeamScores = [...homeTeamScores];
+            newHomeTeamScores[playerIndex] = substitutePlayer;
+            setHomeTeamScores(newHomeTeamScores);
+        } else {
+            const newAwayTeamScores = [...awayTeamScores];
+            newAwayTeamScores[playerIndex] = substitutePlayer;
+            setAwayTeamScores(newAwayTeamScores);
+        }
+
+        // Close the dialog
+        setSubstituteDialogOpen(false);
+
+        // Show confirmation
+        setSuccessMessage(`Substituted ${substitutePlayer.player_name} for ${originalPlayer.player_name}`);
+    };
+
+    const handleSelectExistingPlayer = (selectedPlayer) => {
+        if (!selectedPlayer) return;
+
+        setCurrentSubstitute(prev => ({
+            ...prev,
+            substitute: {
+                ...prev.substitute,
+                player_id: selectedPlayer.id,
+                player_name: selectedPlayer.first_name && selectedPlayer.last_name
+                    ? `${selectedPlayer.first_name} ${selectedPlayer.last_name}`
+                    : selectedPlayer.name || "Unknown Player",
+                first_name: selectedPlayer.first_name || '',
+                last_name: selectedPlayer.last_name || '',
+                email: selectedPlayer.email || '',
+                handicap: selectedPlayer.handicap || 0,
+                is_substitute: true
+            }
+        }));
     };
 
     // Save scores
     const handleSaveScores = async () => {
-        // Implementation remains the same as in the original file
-        // ...
+        try {
+            setSaving(true);
+            setError(null);
+
+            // Prepare all scores for API
+            const allScores = [];
+
+            // Collect all player data with team information
+            const allPlayers = [];
+
+            // Process home team scores
+            homeTeamScores.forEach(player => {
+                // Add player data with team information
+                allPlayers.push({
+                    player_id: player.player_id,
+                    team_id: match.home_team_id,
+                    is_substitute: player.is_substitute || false,
+                    is_active: true
+                });
+
+                // Add scores for this player
+                player.scores.forEach(score => {
+                    if (score.value !== null) {
+                        allScores.push({
+                            player_id: player.player_id,
+                            hole_id: score.hole_id,
+                            strokes: score.value
+                        });
+                    }
+                });
+            });
+
+            // Process away team scores
+            awayTeamScores.forEach(player => {
+                // Add player data with team information
+                allPlayers.push({
+                    player_id: player.player_id,
+                    team_id: match.away_team_id,
+                    is_substitute: player.is_substitute || false,
+                    is_active: true
+                });
+
+                // Add scores for this player
+                player.scores.forEach(score => {
+                    if (score.value !== null) {
+                        allScores.push({
+                            player_id: player.player_id,
+                            hole_id: score.hole_id,
+                            strokes: score.value
+                        });
+                    }
+                });
+            });
+
+            // Prepare the data to send to the API
+            const dataToSave = {
+                scores: allScores,
+                players: allPlayers,
+                is_completed: match.is_completed
+            };
+
+            // Call API to save scores
+            const response = await fetch(`${env.API_BASE_URL}/matches/${match.id}/scores`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(dataToSave),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to save scores');
+            }
+
+            setSuccessMessage('Scores saved successfully');
+            setEditMode(false);
+
+            // If we've marked the match as completed, refresh the data
+            if (match.is_completed) {
+                await fetchMatchDetails();
+            }
+
+        } catch (error) {
+            console.error('Error saving scores:', error);
+            setError('Failed to save scores: ' + error.message);
+        } finally {
+            setSaving(false);
+        }
     };
 
     if (loading) {

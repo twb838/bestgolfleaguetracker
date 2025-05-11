@@ -151,107 +151,42 @@ def get_match_scores(match_id: int, db: Session = Depends(get_db)):
         if not match:
             raise HTTPException(status_code=404, detail="Match not found")
         
-        # Get teams involved in this match
-        home_team_id = match.home_team_id
-        away_team_id = match.away_team_id
-        
-        # Get course for this match
-        course_id = match.course_id
-        
-        # Get all players from both teams (always needed for edit mode)
-        home_players = db.query(
-            Player.id,
-            Player.first_name,
-            Player.last_name,
-            Player.handicap
-        ).filter(Player.team_id == home_team_id).all()
-        
-        away_players = db.query(
-            Player.id,
-            Player.first_name,
-            Player.last_name,
-            Player.handicap
-        ).filter(Player.team_id == away_team_id).all()
-        
-        # Get all holes for the course (always needed for edit mode)
-        holes = db.query(
-            Hole.id,
-            Hole.number.label("hole_number"),
-            Hole.par,
-            Hole.handicap,
-            Hole.yards
-        ).filter(Hole.course_id == course_id).order_by(Hole.number).all()
-        
-        # Get all existing scores with player and hole information
-        scores = db.query(
-            PlayerScore.id,
-            PlayerScore.strokes,
-            PlayerScore.player_id,
-            PlayerScore.hole_id,
-            PlayerScore.match_id,
-            PlayerScore.date_recorded
-        ).filter(
-            PlayerScore.match_id == match_id
+        # Get match players (including substitutes)
+        match_players = db.query(MatchPlayer).filter(
+            MatchPlayer.match_id == match_id
         ).all()
         
-        # Convert existing scores to dictionary format
-        score_results = [
-            {
-                "id": score.id,
-                "strokes": score.strokes,
-                "player_id": score.player_id,
-                "hole_id": score.hole_id,
-                "match_id": score.match_id,
-                "date_recorded": score.date_recorded
-            }
-            for score in scores
-        ]
+        # Get player details for all match players
+        player_ids = [mp.player_id for mp in match_players]
+        players = db.query(Player).filter(Player.id.in_(player_ids)).all()
         
-        # Always return structured data for both new matches and editing existing ones
+        # Map players to their match_player entries
+        for mp in match_players:
+            mp.player = next((p for p in players if getattr(p, "id", None) == getattr(mp, "player_id", None)), None)
+        
+        # Get course for this match
+        course = db.query(Course).filter(Course.id == match.course_id).first()
+        
+        # Get all holes for the course
+        holes = db.query(Hole).filter(Hole.course_id == match.course_id).order_by(Hole.number).all()
+        
+        # Get all scores for this match
+        scores = db.query(PlayerScore).filter(PlayerScore.match_id == match_id).all()
+        
         return {
-            "scores": score_results,
-            "players": {
-                "home": [
-                    {
-                        "id": player.id,
-                        "first_name": player.first_name,
-                        "last_name": player.last_name,
-                        "handicap": player.handicap,
-                        "name": f"{player.first_name} {player.last_name}"
-                    } 
-                    for player in home_players
-                ],
-                "away": [
-                    {
-                        "id": player.id,
-                        "first_name": player.first_name,
-                        "last_name": player.last_name,
-                        "handicap": player.handicap,
-                        "name": f"{player.first_name} {player.last_name}"
-                    } 
-                    for player in away_players
-                ]
-            },
-            "holes": [
-                {
-                    "id": hole.id,
-                    "number": hole.hole_number,
-                    "par": hole.par,
-                    "handicap": hole.handicap,
-                    "yards": hole.yards
-                } 
-                for hole in holes
-            ]
+            "match": match,
+            "match_players": match_players,
+            "course": course,
+            "holes": holes,
+            "scores": scores
         }
         
     except Exception as e:
-        # Log the error
-        print(f"Error retrieving scores for match {match_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error retrieving scores: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{match_id}/scores")
 def save_match_scores(match_id: int, data: dict, db: Session = Depends(get_db)):
-    """Save or update scores for a match"""
+    """Save or update scores for a match with proper player tracking"""
     try:
         # Verify match exists
         match = db.query(Match).filter(Match.id == match_id).first()
@@ -261,15 +196,61 @@ def save_match_scores(match_id: int, data: dict, db: Session = Depends(get_db)):
         # Remove existing scores for this match if any
         db.query(PlayerScore).filter(PlayerScore.match_id == match_id).delete()
         
+        # Track unique players who are submitting scores
+        all_players = set()
+        
         # Add new scores
         for score_data in data.get("scores", []):
+            player_id = score_data.get("player_id")
+            if not player_id:
+                continue
+                
+            # Track this player
+            all_players.add(player_id)
+            
+            # Add the score
             new_score = PlayerScore(
                 match_id=match_id,
-                player_id=score_data["player_id"],
+                player_id=player_id,
                 hole_id=score_data["hole_id"],
                 strokes=score_data["strokes"]
             )
             db.add(new_score)
+        
+        # Process substitutes and player data if provided
+        if "players" in data:
+            # Get existing match players
+            existing_match_players = db.query(MatchPlayer).filter(
+                MatchPlayer.match_id == match_id
+            ).all()
+            
+            existing_player_map = {mp.player_id: mp for mp in existing_match_players}
+            
+            for player_data in data.get("players", []):
+                player_id = player_data.get("player_id")
+                team_id = player_data.get("team_id")
+                is_substitute = player_data.get("is_substitute", False)
+                
+                # Skip if missing crucial data
+                if not player_id or not team_id:
+                    continue
+                
+                # If player is already in match_players table
+                if player_id in existing_player_map:
+                    # Update existing record
+                    mp = existing_player_map[player_id]
+                    mp.is_substitute = is_substitute
+                    mp.is_active = player_data.get("is_active", True)
+                else:
+                    # Add new player to match_players
+                    new_match_player = MatchPlayer(
+                        match_id=match_id,
+                        team_id=team_id,
+                        player_id=player_id,
+                        is_substitute=is_substitute,
+                        is_active=player_data.get("is_active", True)
+                    )
+                    db.add(new_match_player)
         
         # Update match completion status if provided
         if "is_completed" in data:
@@ -282,5 +263,110 @@ def save_match_scores(match_id: int, data: dict, db: Session = Depends(get_db)):
         db.rollback()
         print(f"Error saving scores for match {match_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error saving scores: {str(e)}")
+
+@router.get("/{match_id}/players")
+def get_match_players(match_id: int, db: Session = Depends(get_db)):
+    """Get all players for a specific match from the match_players table"""
+    try:
+        # Verify match exists
+        match = db.query(Match).filter(Match.id == match_id).first()
+        if not match:
+            raise HTTPException(status_code=404, detail="Match not found")
+        
+        # Get match players (including substitutes)
+        match_players = db.query(MatchPlayer).filter(
+            MatchPlayer.match_id == match_id
+        ).all()
+        
+        # Get player details for all match players
+        player_ids = [mp.player_id for mp in match_players]
+        players = db.query(Player).filter(Player.id.in_(player_ids)).all()
+        
+        # Create a player lookup map
+        player_map = {p.id: p for p in players}
+        
+        # Construct response with player details embedded
+        response = []
+        for mp in match_players:
+            if mp.player_id in player_map:
+                player_data = player_map[mp.player_id]
+                response.append({
+                    "id": mp.id,
+                    "match_id": mp.match_id,
+                    "team_id": mp.team_id,
+                    "player_id": mp.player_id,
+                    "is_substitute": mp.is_substitute,
+                    "is_active": mp.is_active,
+                    "player": player_data
+                })
+        
+        return response
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{match_id}/players/substitute")
+def substitute_match_player(
+    match_id: int, 
+    data: dict, 
+    db: Session = Depends(get_db)
+):
+    """Record a player substitution in the match_players table"""
+    try:
+        # Verify match exists
+        match = db.query(Match).filter(Match.id == match_id).first()
+        if not match:
+            raise HTTPException(status_code=404, detail="Match not found")
+        
+        # Extract data from request
+        original_player_id = data.get("original_player_id")
+        substitute_player_id = data.get("substitute_player_id")
+        team_id = data.get("team_id")
+        
+        if not all([original_player_id, substitute_player_id, team_id]):
+            raise HTTPException(
+                status_code=400, 
+                detail="Missing required fields: original_player_id, substitute_player_id, or team_id"
+            )
+        
+        # Mark the original player as inactive
+        original_player = db.query(MatchPlayer).filter(
+            MatchPlayer.match_id == match_id,
+            MatchPlayer.player_id == original_player_id,
+            MatchPlayer.team_id == team_id
+        ).first()
+        
+        if original_player:
+            setattr(original_player, "is_active", False)
+            
+        # Check if substitute is already in match_players (could be substituting back in)
+        existing_substitute = db.query(MatchPlayer).filter(
+            MatchPlayer.match_id == match_id,
+            MatchPlayer.player_id == substitute_player_id,
+            MatchPlayer.team_id == team_id
+        ).first()
+        
+        if existing_substitute:
+            # Reactivate an existing player
+            setattr(existing_substitute, "is_active", True)
+            setattr(existing_substitute, "is_substitute", True)
+        else:
+            # Add new substitute player
+            new_substitute = MatchPlayer(
+                match_id=match_id,
+                team_id=team_id,
+                player_id=substitute_player_id,
+                is_substitute=True,
+                is_active=True
+            )
+            db.add(new_substitute)
+        
+        db.commit()
+        return {"message": "Substitution recorded successfully"}
+        
+    except Exception as e:
+        db.rollback()
+        print(f"Error recording substitution: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error recording substitution: {str(e)}")
 
 

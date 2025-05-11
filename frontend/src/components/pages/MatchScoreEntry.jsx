@@ -253,35 +253,143 @@ const MatchScoreEntry = () => {
         }
     };
 
-    const initializePlayerScores = (matchData = match, leagueData = league) => {
+    const initializePlayerScores = async (matchData = match, leagueData = league) => {
         if (!matchData || !leagueData) return;
 
-        // Find the teams in the league
-        const homeTeam = leagueData.teams.find(t => t.id === matchData.home_team_id);
-        const awayTeam = leagueData.teams.find(t => t.id === matchData.away_team_id);
+        try {
+            // Fetch match players from the match_players table
+            const response = await fetch(`${env.API_BASE_URL}/matches/${matchData.id}/players`);
 
-        if (homeTeam && homeTeam.players) {
-            const homeScores = homeTeam.players.map(player => ({
-                player_id: player.id,
-                // Format full name from first and last name if available
-                player_name: formatPlayerName(player),
-                scores: {} // Will be populated with hole scores: { hole_id: score }
-            }));
-            setHomeTeamScores(homeScores);
+            if (!response.ok) {
+                console.error('Failed to fetch match players:', response.status);
+                throw new Error(`Failed to fetch match players: ${response.status}`);
+            }
+
+            const matchPlayersData = await response.json();
+            console.log('Match players data:', matchPlayersData);
+
+            // Group players by team and filter for active players only
+            const homeTeamPlayers = matchPlayersData
+                .filter(mp => mp.team_id === matchData.home_team_id && mp.is_active)
+                .map(mp => mp.player);
+
+            const awayTeamPlayers = matchPlayersData
+                .filter(mp => mp.team_id === matchData.away_team_id && mp.is_active)
+                .map(mp => mp.player);
+
+            console.log('Home team players from match_players:', homeTeamPlayers);
+            console.log('Away team players from match_players:', awayTeamPlayers);
+
+            // If we have no players from match_players, fall back to initializing from league teams
+            if (homeTeamPlayers.length === 0 || awayTeamPlayers.length === 0) {
+                console.warn('No match players found, initializing from league teams');
+
+                // Find the teams in the league
+                const homeTeam = leagueData.teams.find(t => t.id === matchData.home_team_id);
+                const awayTeam = leagueData.teams.find(t => t.id === matchData.away_team_id);
+
+                // Create a new endpoint request to initialize match_players
+                try {
+                    const initPlayersResponse = await fetch(`${env.API_BASE_URL}/matches/${matchData.id}/initialize-players`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            home_team_id: matchData.home_team_id,
+                            away_team_id: matchData.away_team_id
+                        }),
+                    });
+
+                    if (initPlayersResponse.ok) {
+                        console.log('Successfully initialized match players from teams');
+                        // Refresh the data after initialization
+                        return await initializePlayerScores(matchData, leagueData);
+                    }
+                } catch (initError) {
+                    console.error('Error initializing match players:', initError);
+                }
+
+                // If we couldn't initialize match_players, use the league team data directly
+                if (homeTeam && homeTeam.players) {
+                    const homeScores = homeTeam.players.map(player => ({
+                        player_id: player.id,
+                        player_name: formatPlayerName(player),
+                        first_name: player.first_name,
+                        last_name: player.last_name,
+                        email: player.email,
+                        handicap: player.handicap || 0,
+                        scores: {},
+                        is_substitute: false
+                    }));
+                    setHomeTeamScores(calculatePlayerPops(homeScores, awayTeam?.players || []));
+                }
+
+                if (awayTeam && awayTeam.players) {
+                    const awayScores = awayTeam.players.map(player => ({
+                        player_id: player.id,
+                        player_name: formatPlayerName(player),
+                        first_name: player.first_name,
+                        last_name: player.last_name,
+                        email: player.email,
+                        handicap: player.handicap || 0,
+                        scores: {},
+                        is_substitute: false
+                    }));
+                    setAwayTeamScores(calculatePlayerPops(awayScores, homeTeam?.players || []));
+                }
+            } else {
+                // Create player score objects for home team from match_players data
+                const homeScores = homeTeamPlayers.map(player => {
+                    // Get the match_player record to check if this is a substitute
+                    const matchPlayer = matchPlayersData.find(mp =>
+                        mp.team_id === matchData.home_team_id && mp.player_id === player.id
+                    );
+
+                    return {
+                        player_id: player.id,
+                        player_name: formatPlayerName(player),
+                        first_name: player.first_name,
+                        last_name: player.last_name,
+                        email: player.email,
+                        handicap: player.handicap || 0,
+                        scores: {},
+                        is_substitute: matchPlayer?.is_substitute || false
+                    };
+                });
+
+                // Create player score objects for away team from match_players data
+                const awayScores = awayTeamPlayers.map(player => {
+                    // Get the match_player record to check if this is a substitute
+                    const matchPlayer = matchPlayersData.find(mp =>
+                        mp.team_id === matchData.away_team_id && mp.player_id === player.id
+                    );
+
+                    return {
+                        player_id: player.id,
+                        player_name: formatPlayerName(player),
+                        first_name: player.first_name,
+                        last_name: player.last_name,
+                        email: player.email,
+                        handicap: player.handicap || 0,
+                        scores: {},
+                        is_substitute: matchPlayer?.is_substitute || false
+                    };
+                });
+
+                // Apply handicap calculations for both teams
+                setHomeTeamScores(calculatePlayerPops(homeScores, awayScores));
+                setAwayTeamScores(calculatePlayerPops(awayScores, homeScores));
+            }
+
+            // Fetch existing scores if any
+            if (matchData.id) {
+                fetchExistingScores(matchData.id);
+            }
+        } catch (error) {
+            console.error('Error initializing player scores:', error);
+            setError('Failed to initialize player scores: ' + error.message);
         }
-
-        if (awayTeam && awayTeam.players) {
-            const awayScores = awayTeam.players.map(player => ({
-                player_id: player.id,
-                // Format full name from first and last name if available
-                player_name: formatPlayerName(player),
-                scores: {} // Will be populated with hole scores: { hole_id: score }
-            }));
-            setAwayTeamScores(awayScores);
-        }
-
-        // TODO: If there are existing scores, fetch and populate them
-        fetchExistingScores(matchData.id);
     };
 
     // Helper function to format player name
@@ -324,15 +432,21 @@ const MatchScoreEntry = () => {
                 console.log('Organized player scores:', playerScores);
             }
 
-            // Process player data
-            let updatedHomeScores = [];
-            let updatedAwayScores = [];
+            // Process player data with active players only
+            if (data.match_players) {
+                // Get only active players
+                const activeMatchPlayers = data.match_players.filter(mp => mp.is_active);
 
-            if (data.players) {
-                // Initialize team scores with player data from API
-                const homePlayersData = data.players.home || [];
-                const awayPlayersData = data.players.away || [];
+                // Initialize team scores with active player data from API
+                const homePlayersData = activeMatchPlayers
+                    .filter(mp => mp.team_id === match.home_team_id)
+                    .map(mp => mp.player);
 
+                const awayPlayersData = activeMatchPlayers
+                    .filter(mp => mp.team_id === match.away_team_id)
+                    .map(mp => mp.player);
+
+                // Continue with your existing code...
                 console.log(`Got ${homePlayersData.length} home players and ${awayPlayersData.length} away players from API`);
 
                 if (homePlayersData.length > 0) {
@@ -356,7 +470,7 @@ const MatchScoreEntry = () => {
                     });
 
                     // Apply pops based on lowest handicap
-                    updatedHomeScores = calculatePlayerPops(homeScores, awayPlayersData);
+                    const updatedHomeScores = calculatePlayerPops(homeScores, awayPlayersData);
                     setHomeTeamScores(updatedHomeScores);
                 }
 
@@ -381,37 +495,16 @@ const MatchScoreEntry = () => {
                     });
 
                     // Apply pops based on lowest handicap
-                    updatedAwayScores = calculatePlayerPops(awayScores, homePlayersData);
+                    const updatedAwayScores = calculatePlayerPops(awayScores, homePlayersData);
                     setAwayTeamScores(updatedAwayScores);
                 }
             }
 
             // Force a recalculation of match results
-            if (updatedHomeScores.length > 0 && updatedAwayScores.length > 0) {
+            if (homeTeamScores.length > 0 && awayTeamScores.length > 0) {
                 // Use a separate function to force calculation with the new scores
                 const forceCalculation = () => {
                     console.log('Forcing match results calculation with loaded scores');
-                    const tempResults = {
-                        match_id: match.id,
-                        date: match.match_date,
-                        home_team: {
-                            id: match.home_team_id,
-                            name: match.home_team?.name || 'Home Team',
-                            total_points: 0,
-                            total_score: 0,
-                            total_points_by_hole: [],
-                            players: []
-                        },
-                        away_team: {
-                            id: match.away_team_id,
-                            name: match.away_team?.name || 'Away Team',
-                            total_points: 0,
-                            total_score: 0,
-                            total_points_by_hole: [],
-                            players: []
-                        }
-                    };
-
                     calculateMatchResults();
                 };
 
@@ -1258,98 +1351,122 @@ const MatchScoreEntry = () => {
     // Update the handleApplySubstitute function to properly recalculate pops for both teams
 
     const handleApplySubstitute = async () => {
-        const { teamType, playerIndex, substitute } = currentSubstitute;
+        const { teamType, playerIndex, originalPlayer, substitute } = currentSubstitute;
         let substituteFinal = { ...substitute };
 
-        // If this is a new player (no player_id), save to database first
-        if (!substitute.player_id && substitute.first_name) {
-            try {
-                // Use the provided email or generate one if empty
-                const email = substitute.email || `temp_${Date.now()}@golftracker.example.com`;
+        try {
+            // If this is a new player (no player_id), save to database first
+            if (!substitute.player_id && substitute.first_name) {
+                try {
+                    // Use the provided email or generate one if empty
+                    const email = substitute.email || `temp_${Date.now()}@golftracker.example.com`;
 
-                // Create the new player in the database
-                const response = await fetch(`${env.API_BASE_URL}/players`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        first_name: substitute.first_name,
-                        last_name: substitute.last_name || '',
-                        email: email,
-                        handicap: parseFloat(substitute.handicap) || 0,
-                        team_id: null // Don't associate with any team
-                    })
-                });
+                    // Create the new player in the database
+                    const response = await fetch(`${env.API_BASE_URL}/players`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            first_name: substitute.first_name,
+                            last_name: substitute.last_name || '',
+                            email: email,
+                            handicap: parseFloat(substitute.handicap) || 0,
+                            team_id: null // Don't associate with any team
+                        })
+                    });
 
-                if (!response.ok) {
-                    throw new Error('Failed to save substitute player');
+                    if (!response.ok) {
+                        throw new Error('Failed to save substitute player');
+                    }
+
+                    // Get the saved player data with ID
+                    const savedPlayer = await response.json();
+
+                    // Update our substitute with the saved player data
+                    substituteFinal = {
+                        player_id: savedPlayer.id,
+                        player_name: `${savedPlayer.first_name} ${savedPlayer.last_name || ''}`.trim(),
+                        handicap: savedPlayer.handicap,
+                        is_substitute: true
+                    };
+
+                    console.log('Created new player in database:', savedPlayer);
+                } catch (error) {
+                    console.error('Error saving substitute player:', error);
+                    setError('Failed to save substitute player. Using temporary substitute instead.');
+                    // Continue with the temporary substitute even if saving failed
+                    return;
                 }
-
-                // Get the saved player data with ID
-                const savedPlayer = await response.json();
-
-                // Update our substitute with the saved player data
-                substituteFinal = {
-                    player_id: savedPlayer.id,
-                    player_name: `${savedPlayer.first_name} ${savedPlayer.last_name || ''}`.trim(),
-                    handicap: savedPlayer.handicap,
-                    is_substitute: true
-                };
-
-                console.log('Created new player in database:', savedPlayer);
-                setSuccessMessage("New player created and applied as substitute");
-
-            } catch (error) {
-                console.error('Error saving substitute player:', error);
-                setError('Failed to save substitute player. Using temporary substitute instead.');
-                // Continue with the temporary substitute even if saving failed
             }
-        }
 
-        // Copy current team scores
-        let newHomeTeamScores = [...homeTeamScores];
-        let newAwayTeamScores = [...awayTeamScores];
+            // Determine team ID
+            const teamId = teamType === 'home' ? match.home_team_id : match.away_team_id;
 
-        // Apply the substitute to the appropriate team
-        if (teamType === 'home') {
-            // Preserve existing scores when substituting
-            const existingScores = newHomeTeamScores[playerIndex].scores;
+            // 1. Update match_players table - add the substitute
+            // Mark the original player as inactive and the substitute as active
+            const updateMatchPlayersResponse = await fetch(`${env.API_BASE_URL}/matches/${match.id}/players/substitute`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    original_player_id: originalPlayer.player_id,
+                    substitute_player_id: substituteFinal.player_id,
+                    team_id: teamId,
+                    is_substitute: true
+                })
+            });
 
-            // Replace player but keep the scores
-            newHomeTeamScores[playerIndex] = {
-                ...substituteFinal,
-                scores: existingScores
-            };
-        } else {
-            // Preserve existing scores when substituting
-            const existingScores = newAwayTeamScores[playerIndex].scores;
+            if (!updateMatchPlayersResponse.ok) {
+                throw new Error('Failed to update match players record');
+            }
 
-            // Replace player but keep the scores
-            newAwayTeamScores[playerIndex] = {
-                ...substituteFinal,
-                scores: existingScores
-            };
-        }
+            // 2. Update the UI with the substitution
+            // Copy current team scores
+            let newHomeTeamScores = [...homeTeamScores];
+            let newAwayTeamScores = [...awayTeamScores];
 
-        // Recalculate pops for BOTH teams at once to ensure proper calculation
-        // This is critical since pops depend on the lowest handicap across ALL players
-        newHomeTeamScores = calculatePlayerPops(newHomeTeamScores, newAwayTeamScores);
-        newAwayTeamScores = calculatePlayerPops(newAwayTeamScores, newHomeTeamScores);
+            // Apply the substitute to the appropriate team
+            if (teamType === 'home') {
+                // Preserve existing scores when substituting
+                const existingScores = newHomeTeamScores[playerIndex].scores;
 
-        // Update state with new scores and pops
-        setHomeTeamScores(newHomeTeamScores);
-        setAwayTeamScores(newAwayTeamScores);
+                // Replace player but keep the scores
+                newHomeTeamScores[playerIndex] = {
+                    ...substituteFinal,
+                    scores: existingScores
+                };
+            } else {
+                // Preserve existing scores when substituting
+                const existingScores = newAwayTeamScores[playerIndex].scores;
 
-        setSubstituteDialogOpen(false);
+                // Replace player but keep the scores
+                newAwayTeamScores[playerIndex] = {
+                    ...substituteFinal,
+                    scores: existingScores
+                };
+            }
 
-        // Force recalculation of match results
-        setTimeout(() => {
-            calculateMatchResults();
-        }, 50);
+            // Recalculate pops for BOTH teams at once to ensure proper calculation
+            newHomeTeamScores = calculatePlayerPops(newHomeTeamScores, newAwayTeamScores);
+            newAwayTeamScores = calculatePlayerPops(newAwayTeamScores, newHomeTeamScores);
 
-        if (!successMessage) {
-            setSuccessMessage("Substitute player applied successfully!");
+            // Update state with new scores and pops
+            setHomeTeamScores(newHomeTeamScores);
+            setAwayTeamScores(newAwayTeamScores);
+
+            setSubstituteDialogOpen(false);
+            setSuccessMessage("Substitute player applied and recorded successfully!");
+
+            // Force recalculation of match results
+            setTimeout(() => {
+                calculateMatchResults();
+            }, 50);
+
+        } catch (error) {
+            console.error('Error applying substitute:', error);
+            setError(`Failed to apply substitute: ${error.message}`);
         }
     };
 
