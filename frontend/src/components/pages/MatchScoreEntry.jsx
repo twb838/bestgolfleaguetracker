@@ -94,7 +94,39 @@ const MatchScoreEntry = () => {
     };
 
     const handleScoreChange = (teamType, playerIndex, holeId, value) => {
-        // Your existing implementation
+        // Clone the appropriate team scores array
+        const newScores = teamType === 'home'
+            ? [...homeTeamScores]
+            : [...awayTeamScores];
+
+        // Update the score for the specified hole
+        const player = newScores[playerIndex];
+
+        // Validate input: either empty string or number between 1-20
+        const numValue = value === '' ? '' : parseInt(value, 10);
+        if (numValue !== '' && (isNaN(numValue) || numValue < 1 || numValue > 20)) {
+            return; // Invalid input
+        }
+
+        // Update the score
+        player.scores[holeId] = value;
+
+        // Update state
+        if (teamType === 'home') {
+            setHomeTeamScores(newScores);
+        } else {
+            setAwayTeamScores(newScores);
+        }
+
+        // Only recalculate automatically if not in edit mode
+        if (!editMode) {
+            calculateMatchResults();
+        }
+
+        // Try to find the next input field and focus it
+        setTimeout(() => {
+            getNextInputField(teamType, playerIndex, holeId);
+        }, 0);
     };
 
     const getNextInputField = (teamType, currentPlayerIndex, currentHoleId) => {
@@ -235,6 +267,7 @@ const MatchScoreEntry = () => {
                 calculateNetScore={calculateNetScore}
                 calculatePlayerTotal={calculatePlayerTotal}
                 calculatePar={calculatePar}
+                onRecalculateScores={calculateMatchResults}  // Add this prop
             />
 
             <MatchResults

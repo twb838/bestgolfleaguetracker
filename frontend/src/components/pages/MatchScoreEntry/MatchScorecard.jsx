@@ -1,8 +1,8 @@
 import React from 'react';
 import {
-    Box, Paper, Typography, TextField, Grid, IconButton, Chip, Alert
+    Box, Paper, Typography, TextField, Grid, IconButton, Chip, Alert, Button
 } from '@mui/material';
-import { PersonAdd as SubstituteIcon } from '@mui/icons-material';
+import { PersonAdd as SubstituteIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 
 const MatchScorecard = ({
     match,
@@ -14,7 +14,8 @@ const MatchScorecard = ({
     handleOpenSubstituteDialog,
     calculateNetScore,
     calculatePlayerTotal,
-    calculatePar
+    calculatePar,
+    onRecalculateScores  // Add this new prop
 }) => {
     // Function to render the score table for a team
     const renderScoreTable = (teamScores, teamType) => {
@@ -419,6 +420,20 @@ const MatchScorecard = ({
                         </Paper>
                     </Grid>
                 </Grid>
+
+                {editMode && (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                        <Button
+                            variant="outlined"
+                            color="primary"
+                            onClick={onRecalculateScores}
+                            startIcon={<RefreshIcon />}
+                            size="small"
+                        >
+                            Recalculate Scores
+                        </Button>
+                    </Box>
+                )}
             </Box>
         </Paper>
     );
