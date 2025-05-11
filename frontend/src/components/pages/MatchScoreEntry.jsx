@@ -17,6 +17,7 @@ import {
 } from '@mui/icons-material';
 import format from 'date-fns/format';
 import env from '../../config/env';
+import MatchHeader from './MatchScoreEntry/MatchHeader';
 
 // Add this function to sort holes by handicap for pop application
 
@@ -1884,33 +1885,16 @@ const MatchScoreEntry = () => {
 
     return (
         <Box sx={{ pb: 4 }}>
-            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Button startIcon={<ArrowBackIcon />} onClick={handleBack}>
-                    Back
-                </Button>
-
-                {!match.is_completed && (
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<SaveIcon />}
-                        onClick={handleSaveScores}
-                        disabled={saving}
-                    >
-                        {saving ? 'Saving...' : 'Save Scores'}
-                    </Button>
-                )}
-
-                {match.is_completed && (
-                    <Button
-                        variant="contained"
-                        color="secondary"
-                        onClick={toggleEditMode}
-                    >
-                        {editMode ? 'Exit Edit Mode' : 'Edit Scores'}
-                    </Button>
-                )}
-            </Box>
+            <MatchHeader
+                match={match}
+                error={error}
+                successMessage={successMessage}
+                saving={saving}
+                editMode={editMode}
+                handleBack={handleBack}
+                handleSaveScores={handleSaveScores}
+                toggleEditMode={toggleEditMode}
+            />
 
             {error && (
                 <Alert severity="error" sx={{ mb: 2 }}>

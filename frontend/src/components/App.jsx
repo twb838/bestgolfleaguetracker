@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard';
 import LeagueManagement from './pages/LeagueManagement';
 import MatchScoreEntry from './pages/MatchScoreEntry';
 import Players from './pages/Players'; // Add this import
+import TeamScoreEntry from './pages/TeamScoreEntry';
 
 function App() {
     return (
@@ -49,7 +50,7 @@ function App() {
                         <Route path="/leagues" element={<Leagues />} />
                         <Route path="/leagues/:leagueId" element={<LeagueManagement />} />
                         <Route path="/matches/:matchId/scores" element={<MatchScoreEntry />} />
-                    </Routes>
+                        <Route path="/score-entry/:matchId/team/:token" element={<TeamScoreEntry />} />                    </Routes>
                 </Container>
             </div>
         </Router>

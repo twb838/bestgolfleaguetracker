@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Dict, Any
+import secrets
+from datetime import datetime, timedelta
 
 from app.db.base import get_db
-from app.models.match import Match
+from app.models.match import Match, MatchAccessToken
 from app.models.week import Week
 from app.models.team import Team
 from app.models.course import Course
@@ -368,5 +370,197 @@ def substitute_match_player(
         db.rollback()
         print(f"Error recording substitution: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error recording substitution: {str(e)}")
+
+@router.post("/{match_id}/access-tokens")
+def generate_match_access_tokens(
+    match_id: int, 
+    db: Session = Depends(get_db)
+):
+    """Generate unique access tokens for both teams in a match"""
+    try:
+        # Verify match exists
+        match = db.query(Match).filter(Match.id == match_id).first()
+        if not match:
+            raise HTTPException(status_code=404, detail="Match not found")
+        
+        # Delete any existing tokens for this match
+        db.query(MatchAccessToken).filter(MatchAccessToken.match_id == match_id).delete()
+        
+        # Generate tokens for both teams
+        tokens = []
+        for team_id in [match.home_team_id, match.away_team_id]:
+            # Generate a random token
+            token = secrets.token_urlsafe(16)
+            
+            # Calculate expiration date (14 days after match date)
+            match_date = match.match_date
+            
+            # Convert to Python date object if needed
+            if isinstance(match_date, datetime):
+                match_date = match_date.date()
+                
+            # Create datetime at midnight on match date and add 14 days
+            expires_at = datetime.now() + timedelta(days=14)
+            
+            # Create token record
+            token_record = MatchAccessToken(
+                match_id=match_id,
+                team_id=team_id,
+                token=token,
+                expires_at=expires_at
+            )
+            db.add(token_record)
+            
+            # Add to response
+            team = db.query(Team).filter(Team.id == team_id).first()
+            tokens.append({
+                "team_id": team_id,
+                "team_name": team.name if team else None,
+                "token": token,
+                "expires_at": expires_at
+            })
+        
+        db.commit()
+        return tokens
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{match_id}/access-tokens")
+def get_match_access_tokens(
+    match_id: int, 
+    db: Session = Depends(get_db)
+):
+    """Get existing access tokens for a match"""
+    try:
+        # Verify match exists
+        match = db.query(Match).filter(Match.id == match_id).first()
+        if not match:
+            raise HTTPException(status_code=404, detail="Match not found")
+        
+        # Get existing tokens
+        token_records = db.query(MatchAccessToken).filter(
+            MatchAccessToken.match_id == match_id
+        ).all()
+        
+        if not token_records:
+            raise HTTPException(status_code=404, detail="No access tokens found for this match")
+        
+        # Format response
+        tokens = []
+        for token_record in token_records:
+            team = db.query(Team).filter(Team.id == token_record.team_id).first()
+            tokens.append({
+                "team_id": token_record.team_id,
+                "team_name": team.name if team else None,
+                "token": token_record.token,
+                "expires_at": token_record.expires_at
+            })
+        
+        return tokens
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/validate-token/{token}")
+def validate_access_token(token: str, db: Session = Depends(get_db)):
+    """Validate a team access token and return match and team info"""
+    try:
+        # Find the token
+        token_record = db.query(MatchAccessToken).filter(MatchAccessToken.token == token).first()
+        
+        if not token_record:
+            raise HTTPException(status_code=404, detail="Invalid access token")
+        
+        # Check if token is expired
+        expires_at = token_record.expires_at
+        if expires_at is not None and datetime.now() > expires_at.replace(tzinfo=None):
+            raise HTTPException(status_code=403, detail="Access token has expired")
+        
+        # Get match and team details
+        match = db.query(Match).filter(Match.id == token_record.match_id).first()
+        team = db.query(Team).filter(Team.id == token_record.team_id).first()
+        
+        return {
+            "match_id": match.id if match else None,
+            "match_date": match.match_date if match else None,
+            "team_id": team.id if team else None,
+            "team_name": team.name if team else None
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{match_id}/team-scores")
+def save_team_scores(
+    match_id: int, 
+    token: str = Query(...), 
+    data: dict = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Save scores for a specific team using their access token"""
+    try:
+        # Validate token
+        token_record = db.query(MatchAccessToken).filter(
+            MatchAccessToken.match_id == match_id,
+            MatchAccessToken.token == token
+        ).first()
+        
+        if not token_record:
+            raise HTTPException(status_code=403, detail="Invalid access token")
+        expires_at = token_record.expires_at
+        if expires_at is not None and expires_at.replace(tzinfo=None) < datetime.now():
+            raise HTTPException(status_code=403, detail="Access token has expired")
+        
+        # Only allow updates for the team that owns this token
+        team_id = token_record.team_id
+        
+        # Process scores for only this team's players
+        scores_to_update = []
+        for score_data in data.get("scores", []):
+            player_id = score_data.get("player_id")
+            
+            # Verify this player belongs to the correct team
+            player = db.query(MatchPlayer).filter(
+                MatchPlayer.match_id == match_id,
+                MatchPlayer.player_id == player_id,
+                MatchPlayer.team_id == team_id
+            ).first()
+            
+            if not player:
+                continue  # Skip players that don't belong to this team
+            
+            # Add score for update
+            scores_to_update.append({
+                "match_id": match_id,
+                "player_id": player_id,
+                "hole_id": score_data["hole_id"],
+                "strokes": score_data["strokes"]
+            })
+        
+        # Remove existing scores for these players
+        for score in scores_to_update:
+            db.query(PlayerScore).filter(
+                PlayerScore.match_id == match_id,
+                PlayerScore.player_id == score["player_id"],
+                PlayerScore.hole_id == score["hole_id"]
+            ).delete()
+        
+        # Add new scores
+        for score in scores_to_update:
+            new_score = PlayerScore(**score)
+            db.add(new_score)
+        
+        db.commit()
+        return {"message": "Team scores saved successfully"}
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
