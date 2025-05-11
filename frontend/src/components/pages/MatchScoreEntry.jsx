@@ -1885,6 +1885,16 @@ const MatchScoreEntry = () => {
 
     return (
         <Box sx={{ pb: 4 }}>
+            <MatchHeader
+                match={match}
+                error={error}
+                successMessage={successMessage}
+                saving={saving}
+                editMode={editMode}
+                handleBack={handleBack}
+                handleSaveScores={handleSaveScores}
+                toggleEditMode={toggleEditMode}
+            />
 
             {error && (
                 <Alert severity="error" sx={{ mb: 2 }}>
@@ -1899,32 +1909,6 @@ const MatchScoreEntry = () => {
             )}
 
             <Paper sx={{ p: 3, mb: 3 }}>
-                <Grid container spacing={2} sx={{ mb: 2 }}>
-                    <Grid item xs={12} md={8}>
-                        <Typography variant="h5" component="h1" gutterBottom>
-                            {match.home_team?.name} vs {match.away_team?.name}
-                        </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                            <CourseIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                            <Typography variant="body1" color="text.secondary">
-                                {match.course?.name || 'Course not specified'}
-                            </Typography>
-                        </Box>
-                        <Typography variant="body2" color="text.secondary">
-                            {format(new Date(match.match_date), 'EEEE, MMMM d, yyyy')}
-                        </Typography>
-                    </Grid>
-                    <Grid item xs={12} md={4} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' }, alignItems: 'center' }}>
-                        <Chip
-                            label={match.is_completed ? "Completed" : "In Progress"}
-                            color={match.is_completed ? "success" : "primary"}
-                            icon={match.is_completed ? <CheckIcon /> : <EditIcon />}
-                            sx={{ mr: 1 }}
-                        />
-                    </Grid>
-                </Grid>
-
-                <Divider sx={{ my: 2 }} />
 
                 <Box sx={{ mb: 1 }}>
                     <Typography variant="h6" gutterBottom>
