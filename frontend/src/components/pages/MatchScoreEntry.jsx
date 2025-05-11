@@ -1885,16 +1885,6 @@ const MatchScoreEntry = () => {
 
     return (
         <Box sx={{ pb: 4 }}>
-            <MatchHeader
-                match={match}
-                error={error}
-                successMessage={successMessage}
-                saving={saving}
-                editMode={editMode}
-                handleBack={handleBack}
-                handleSaveScores={handleSaveScores}
-                toggleEditMode={toggleEditMode}
-            />
 
             {error && (
                 <Alert severity="error" sx={{ mb: 2 }}>
