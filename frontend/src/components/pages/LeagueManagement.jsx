@@ -232,6 +232,20 @@ function LeagueManagement() {
 
     // Match creation handlers
     const handleCreateMatchClick = () => {
+        // Initialize with default values
+        let initialMatchState = {
+            match_date: format(new Date(), 'yyyy-MM-dd'),
+            home_team_id: '',
+            away_team_id: '',
+            course_id: ''
+        };
+
+        // If there's only one course, default to it
+        if (league.courses && league.courses.length === 1) {
+            initialMatchState.course_id = league.courses[0].id;
+        }
+
+        setNewMatch(initialMatchState);
         setCreateMatchDialogOpen(true);
     };
 
