@@ -38,43 +38,11 @@ def update_week(db: Session, week_id: int, week_data: WeekUpdate) -> Week:
     return db_week
 
 def delete_week(db: Session, week_id: int) -> bool:
-    try:
-        # Use raw SQL to handle the deletion in the correct order
-        # 1. Delete player scores for all matches in this week
-        db.execute(
-            text("""
-                DELETE ps FROM player_scores ps
-                JOIN matches m ON ps.match_id = m.id
-                WHERE m.week_id = :week_id
-            """),
-            {"week_id": week_id}
-        )
-        
-        # 2. Delete match players records if you have them
-        db.execute(
-            text("""
-                DELETE mp FROM match_players mp
-                JOIN matches m ON mp.match_id = m.id
-                WHERE m.week_id = :week_id
-            """),
-            {"week_id": week_id}
-        )
-        
-        # 3. Delete the matches
-        db.execute(
-            text("DELETE FROM matches WHERE week_id = :week_id"),
-            {"week_id": week_id}
-        )
-        
-        # 4. Delete the week
-        db.execute(
-            text("DELETE FROM weeks WHERE id = :week_id"),
-            {"week_id": week_id}
-        )
-        
-        db.commit()
-        return True
-    except Exception as e:
-        db.rollback()
-        print(f"Error deleting week: {e}")
-        raise
+    db_week = get_week(db, week_id)
+    
+    if not db_week:
+        return False
+    
+    db.delete(db_week)
+    db.commit()
+    return True
