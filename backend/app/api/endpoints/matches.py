@@ -188,7 +188,7 @@ def get_match_scores(match_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{match_id}/scores")
 def save_match_scores(match_id: int, data: dict, db: Session = Depends(get_db)):
-    """Save or update scores for a match with proper player tracking"""
+    """Save or update scores for a match with proper player tracking and statistics"""
     try:
         # Verify match exists
         match = db.query(Match).filter(Match.id == match_id).first()
@@ -219,44 +219,94 @@ def save_match_scores(match_id: int, data: dict, db: Session = Depends(get_db)):
             )
             db.add(new_score)
         
-        # Process substitutes and player data if provided
-        if "players" in data:
-            # Get existing match players
-            existing_match_players = db.query(MatchPlayer).filter(
-                MatchPlayer.match_id == match_id
-            ).all()
-            
-            existing_player_map = {mp.player_id: mp for mp in existing_match_players}
-            
-            for player_data in data.get("players", []):
-                player_id = player_data.get("player_id")
-                team_id = player_data.get("team_id")
-                is_substitute = player_data.get("is_substitute", False)
+        # Update player summary data if provided
+        if "player_summaries" in data:
+            for player_summary in data["player_summaries"]:
+                player_id = player_summary.get("player_id")
+                team_id = player_summary.get("team_id")
                 
-                # Skip if missing crucial data
                 if not player_id or not team_id:
                     continue
                 
-                # If player is already in match_players table
-                if player_id in existing_player_map:
-                    # Update existing record
-                    mp = existing_player_map[player_id]
-                    mp.is_substitute = is_substitute
-                    mp.is_active = player_data.get("is_active", True)
+                # Find the match_player record
+                match_player = db.query(MatchPlayer).filter(
+                    MatchPlayer.match_id == match_id,
+                    MatchPlayer.player_id == player_id,
+                    MatchPlayer.team_id == team_id
+                ).first()
+                
+                if match_player:
+                    # Update with player statistics
+                    match_player.handicap = player_summary.get("handicap")
+                    match_player.pops = player_summary.get("pops", 0)
+                    match_player.gross_score = player_summary.get("gross_score")
+                    match_player.net_score = player_summary.get("net_score")
+                    match_player.points = player_summary.get("points", 0)
+                    match_player.is_substitute = player_summary.get("is_substitute", False)
                 else:
-                    # Add new player to match_players
+                    # Create a new match player record if it doesn't exist
                     new_match_player = MatchPlayer(
                         match_id=match_id,
                         team_id=team_id,
                         player_id=player_id,
-                        is_substitute=is_substitute,
-                        is_active=player_data.get("is_active", True)
+                        handicap=player_summary.get("handicap"),
+                        pops=player_summary.get("pops", 0),
+                        gross_score=player_summary.get("gross_score"),
+                        net_score=player_summary.get("net_score"),
+                        points=player_summary.get("points", 0),
+                        is_substitute=player_summary.get("is_substitute", False),
+                        is_active=True
                     )
                     db.add(new_match_player)
         
-        # Update match completion status if provided
+        # Process substitutes if provided (legacy support)
+        if "substitute_players" in data:
+            for sub_data in data["substitute_players"]:
+                player_id = sub_data.get("player_id")
+                team_type = sub_data.get("team_type")
+                
+                if not player_id or not team_type:
+                    continue
+                
+                # Determine team_id from team_type
+                team_id = match.home_team_id if team_type == "home" else match.away_team_id
+                
+                # Find or create match_player record
+                match_player = db.query(MatchPlayer).filter(
+                    MatchPlayer.match_id == match_id,
+                    MatchPlayer.player_id == player_id,
+                    MatchPlayer.team_id == team_id
+                ).first()
+                
+                if match_player:
+                    setattr(match_player, "is_substitute", True)
+                else:
+                    new_match_player = MatchPlayer(
+                        match_id=match_id,
+                        team_id=team_id,
+                        player_id=player_id,
+                        is_substitute=True,
+                        is_active=True
+                    )
+                    db.add(new_match_player)
+        
+        # Update match completion status and team scores if provided
         if "is_completed" in data:
             match.is_completed = data["is_completed"]
+            
+        # Save team summary data if provided
+        if "home_team_gross_score" in data:
+            match.home_team_gross_score = data["home_team_gross_score"]
+        if "home_team_net_score" in data:
+            match.home_team_net_score = data["home_team_net_score"]
+        if "home_team_points" in data:
+            match.home_team_points = data["home_team_points"]
+        if "away_team_gross_score" in data:
+            match.away_team_gross_score = data["away_team_gross_score"]
+        if "away_team_net_score" in data:
+            match.away_team_net_score = data["away_team_net_score"]
+        if "away_team_points" in data:
+            match.away_team_points = data["away_team_points"]
         
         db.commit()
         return {"message": "Scores saved successfully"}

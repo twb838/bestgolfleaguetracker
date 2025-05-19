@@ -1,6 +1,7 @@
 from datetime import date
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
+from app.schemas.score import PlayerScoreCreate
 
 class MatchBase(BaseModel):
     match_date: date
@@ -42,3 +43,28 @@ class MatchRead(MatchBase):
     class Config:
         orm_mode = True
         from_attributes = True
+
+# In app/schemas/match.py or wherever your match schemas are defined
+class PlayerSummary(BaseModel):
+    player_id: int
+    team_id: int
+    handicap: Optional[float] = None
+    match_pops: Optional[int] = None
+    gross_score: Optional[int] = None
+    net_score: Optional[int] = None
+    points: Optional[float] = None
+    is_substitute: bool = False
+
+class MatchScoreSubmission(BaseModel):
+    scores: List[PlayerScoreCreate]
+    match_results: dict
+    is_completed: bool = True
+    is_update: bool = False
+    substitute_players: Optional[List[Dict[str, Any]]] = None
+    player_summaries: Optional[List[PlayerSummary]] = None
+    home_team_gross_score: Optional[int] = None
+    home_team_net_score: Optional[int] = None
+    home_team_points: Optional[float] = None
+    away_team_gross_score: Optional[int] = None
+    away_team_net_score: Optional[int] = None
+    away_team_points: Optional[float] = None

@@ -842,7 +842,7 @@ const MatchScoreEntry = () => {
         }
     };
 
-    // Update handleSaveScores to include team points
+    // Update the handleSaveScores function to save player data
     const handleSaveScores = async () => {
         setSaving(true);
         setError(null);
@@ -858,8 +858,11 @@ const MatchScoreEntry = () => {
             // Track substitutes used in this match
             const substitutes = [];
 
+            // Track player summary data
+            const playerSummaries = [];
+
             // Process home team scores
-            homeTeamScores.forEach(player => {
+            homeTeamScores.forEach((player, index) => {
                 // Add this player to substitutes list if marked as substitute
                 if (player.is_substitute) {
                     substitutes.push({
@@ -868,19 +871,41 @@ const MatchScoreEntry = () => {
                     });
                 }
 
+                // Calculate gross score for this player
+                const grossScore = calculatePlayerTotal(player);
+
+                // Calculate net score (gross - handicap)
+                const netScore = grossScore - (player.pops || 0);
+
+                // Get player results from matchResults
+                const playerResults = matchResults?.home_team?.players[index];
+
+                // Add player summary data for match_players
+                playerSummaries.push({
+                    player_id: player.player_id,
+                    team_id: match.home_team_id,
+                    handicap: player.handicap || 0,
+                    pops: player.pops || 0,
+                    gross_score: grossScore,
+                    net_score: netScore,
+                    points: playerResults?.points || 0,
+                    is_substitute: player.is_substitute || false
+                });
+
+                // Add individual hole scores
                 Object.entries(player.scores).forEach(([holeId, strokes]) => {
                     if (strokes !== '') { // Only send valid scores
                         allScores.push({
                             player_id: player.player_id,
                             hole_id: parseInt(holeId, 10),
-                            strokes: strokes
+                            strokes: parseInt(strokes, 10)
                         });
                     }
                 });
             });
 
             // Process away team scores
-            awayTeamScores.forEach(player => {
+            awayTeamScores.forEach((player, index) => {
                 // Add this player to substitutes list if marked as substitute
                 if (player.is_substitute) {
                     substitutes.push({
@@ -889,18 +914,50 @@ const MatchScoreEntry = () => {
                     });
                 }
 
+                // Calculate gross score for this player
+                const grossScore = calculatePlayerTotal(player);
+
+                // Calculate net score (gross - handicap)
+                const netScore = grossScore - (player.pops || 0);
+
+                // Get player results from matchResults
+                const playerResults = matchResults?.away_team?.players[index];
+
+                // Add player summary data for match_players
+                playerSummaries.push({
+                    player_id: player.player_id,
+                    team_id: match.away_team_id,
+                    handicap: player.handicap || 0,
+                    pops: player.pops || 0,
+                    gross_score: grossScore,
+                    net_score: netScore,
+                    points: playerResults?.points || 0,
+                    is_substitute: player.is_substitute || false
+                });
+
+                // Add individual hole scores
                 Object.entries(player.scores).forEach(([holeId, strokes]) => {
                     if (strokes !== '') { // Only send valid scores
                         allScores.push({
                             player_id: player.player_id,
                             hole_id: parseInt(holeId, 10),
-                            strokes: strokes
+                            strokes: parseInt(strokes, 10)
                         });
                     }
                 });
             });
 
             const isUpdate = match.is_completed && editMode;
+
+            // Create team summary data
+            const teamSummary = {
+                home_team_gross_score: matchResults?.home_team?.total_score || 0,
+                home_team_net_score: calculateTeamNetTotal(matchResults?.home_team?.players || []),
+                home_team_points: matchResults?.home_team?.total_points || 0,
+                away_team_gross_score: matchResults?.away_team?.total_score || 0,
+                away_team_net_score: calculateTeamNetTotal(matchResults?.away_team?.players || []),
+                away_team_points: matchResults?.away_team?.total_points || 0
+            };
 
             // Send scores and match results to the API
             const response = await fetch(`${env.API_BASE_URL}/matches/${matchId}/scores`, {
@@ -914,8 +971,8 @@ const MatchScoreEntry = () => {
                     is_completed: true,
                     is_update: isUpdate,
                     substitute_players: substitutes,
-                    home_team_points: matchResults.home_team.total_points,
-                    away_team_points: matchResults.away_team.total_points
+                    player_summaries: playerSummaries,
+                    ...teamSummary
                 }),
             });
 
@@ -934,8 +991,7 @@ const MatchScoreEntry = () => {
             setMatch({
                 ...match,
                 is_completed: true,
-                home_team_points: matchResults.home_team.total_points,
-                away_team_points: matchResults.away_team.total_points,
+                ...teamSummary,
                 substitute_players: substitutes
             });
 
