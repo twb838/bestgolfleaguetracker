@@ -206,6 +206,26 @@ function Leagues() {
         });
     };
 
+    // Add this function to handle selecting all teams
+    const handleSelectAllTeams = () => {
+        // Get all team IDs
+        const allTeamIds = teams.map(team => team.id);
+
+        // Update the newLeague state with all team IDs
+        setNewLeague({
+            ...newLeague,
+            teams: allTeamIds
+        });
+    };
+
+    // Add this function to handle deselecting all teams
+    const handleDeselectAllTeams = () => {
+        setNewLeague({
+            ...newLeague,
+            teams: []
+        });
+    };
+
     // EDIT FUNCTIONALITY
 
     const handleEditLeague = (league) => {
