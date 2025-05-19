@@ -12,7 +12,7 @@ class PlayerScore(Base):
     
     # Foreign keys
     player_id = Column(Integer, ForeignKey("players.id"), nullable=False)
-    match_id = Column(Integer, ForeignKey("matches.id"), nullable=False)
+    match_id = Column(Integer, ForeignKey('matches.id', ondelete='CASCADE'))    
     hole_id = Column(Integer, ForeignKey("holes.id"), nullable=False)
     
     # Relationships

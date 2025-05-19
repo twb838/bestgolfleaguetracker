@@ -8,7 +8,7 @@ class Course(Base):
     __tablename__ = "courses"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
+    name = Column(String(255), nullable=False)
     
     # Relationship to holes - use string reference to avoid import
     holes = relationship("Hole", back_populates="course", cascade="all, delete-orphan")

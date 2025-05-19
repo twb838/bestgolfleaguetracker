@@ -11,7 +11,7 @@ class Match(Base):
     is_completed = Column(Boolean, default=False)
     
     # Foreign keys
-    week_id = Column(Integer, ForeignKey("weeks.id"), nullable=False)
+    week_id = Column(Integer, ForeignKey('weeks.id', ondelete='CASCADE'))
     course_id = Column(Integer, ForeignKey("courses.id"), nullable=False)
     home_team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
     away_team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
