@@ -728,14 +728,60 @@ const MatchScoreEntry = () => {
                 // Get the lowest net score
                 const lowestNetScore = allPlayersForHole[0].net;
 
-                // Check if there are any ties for lowest net score
+                // Find all players with the lowest net score
                 const lowestNetScorePlayers = allPlayersForHole.filter(p => p.net === lowestNetScore);
 
-                // Award point only if there's a single player with the lowest net score (no ties)
-                if (lowestNetScorePlayers.length === 1) {
+                // Group lowest net scores by team
+                const groupedByTeam = {};
+                lowestNetScorePlayers.forEach(player => {
+                    if (!groupedByTeam[player.team]) {
+                        groupedByTeam[player.team] = [];
+                    }
+                    groupedByTeam[player.team].push(player);
+                });
+
+                // Check if only one team has players with the lowest net score and more than one player
+                const teamsWithLowestScore = Object.keys(groupedByTeam);
+
+                if (teamsWithLowestScore.length === 1) {
+                    const teamWithLowScore = teamsWithLowestScore[0];
+                    const playersWithLowScore = groupedByTeam[teamWithLowScore];
+
+                    // If there's exactly one player with the low score, give them 1 point
+                    if (playersWithLowScore.length === 1) {
+                        const winner = playersWithLowScore[0];
+                        if (winner.team === 'home') {
+                            results.home_team.players[winner.playerIndex].points += 1;
+                            results.home_team.players[winner.playerIndex].points_by_hole[holeIndex] = 1;
+                            results.home_team.total_points += 1;
+                        } else {
+                            results.away_team.players[winner.playerIndex].points += 1;
+                            results.away_team.players[winner.playerIndex].points_by_hole[holeIndex] = 1;
+                            results.away_team.total_points += 1;
+                        }
+                    }
+                    // If there are multiple players from the same team with the low score,
+                    // give each a half point, but NO additional team point
+                    else if (playersWithLowScore.length > 1) {
+                        // Award 0.5 points to each player with lowest net score
+                        playersWithLowScore.forEach(player => {
+                            if (player.team === 'home') {
+                                results.home_team.players[player.playerIndex].points += 0.5;
+                                results.home_team.players[player.playerIndex].points_by_hole[holeIndex] = 0.5;
+                                results.home_team.total_points += 0.5;
+                            } else {
+                                results.away_team.players[player.playerIndex].points += 0.5;
+                                results.away_team.players[player.playerIndex].points_by_hole[holeIndex] = 0.5;
+                                results.away_team.total_points += 0.5;
+                            }
+                        });
+
+                        // REMOVED: The additional team point for multiple low scores
+                    }
+                } else if (lowestNetScorePlayers.length === 1) {
+                    // Single player with lowest net score - award 1 point
                     const winner = lowestNetScorePlayers[0];
 
-                    // Award the point to the correct player
                     if (winner.team === 'home') {
                         results.home_team.players[winner.playerIndex].points += 1;
                         results.home_team.players[winner.playerIndex].points_by_hole[holeIndex] = 1;
@@ -745,23 +791,8 @@ const MatchScoreEntry = () => {
                         results.away_team.players[winner.playerIndex].points_by_hole[holeIndex] = 1;
                         results.away_team.total_points += 1;
                     }
-                }
-
-                // Mark all other players as having 0 points for this hole if they submitted a score
-                for (let i = 0; i < pairings; i++) {
-                    // Only update players who have a score for this hole
-                    const homeHasScore = homeTeamScores[i].scores[hole.id] !== undefined &&
-                        homeTeamScores[i].scores[hole.id] !== '';
-                    const awayHasScore = awayTeamScores[i].scores[hole.id] !== undefined &&
-                        awayTeamScores[i].scores[hole.id] !== '';
-
-                    if (homeHasScore && results.home_team.players[i].points_by_hole[holeIndex] !== 1) {
-                        results.home_team.players[i].points_by_hole[holeIndex] = 0;
-                    }
-
-                    if (awayHasScore && results.away_team.players[i].points_by_hole[holeIndex] !== 1) {
-                        results.away_team.players[i].points_by_hole[holeIndex] = 0;
-                    }
+                } else {
+                    // Players from different teams tied - no points awarded
                 }
             }
 
@@ -1019,9 +1050,12 @@ const MatchScoreEntry = () => {
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                             Team Total: {results.home_team.total_score}
-                            {results.home_team.team_point ? ' (+1 point)' : ''}
                         </Typography>
-                        {/* Add net team total display */}
+                        {results.home_team.sweep_bonuses && results.home_team.sweep_bonuses.length > 0 && (
+                            <Typography variant="body2" color="success.main" sx={{ fontWeight: 'medium' }}>
+                                Team sweep bonus points: {results.home_team.sweep_bonuses.length}
+                            </Typography>
+                        )}
                         <Typography variant="body2" color="primary.main" sx={{ fontWeight: 'medium' }}>
                             Net Total: {calculateTeamNetTotal(results.home_team.players)}
                         </Typography>
@@ -1222,16 +1256,22 @@ const MatchScoreEntry = () => {
                         Scoring System
                     </Typography>
                     <Typography variant="body2">
-                        • 1 point awarded for each player with the lowest individual net score (no points for ties)
+                        • 1 point awarded to the player with the lowest individual net score
                     </Typography>
                     <Typography variant="body2">
-                        • 1 additional point awarded to the team with the lowest combined net total (no points for ties)
+                        • When players from the same team tie for lowest net score, each player earns 0.5 points
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                        • When multiple players from the same team tie for low net, an additional team point is awarded
+                    </Typography>
+                    <Typography variant="body2">
+                        • When players from different teams tie for lowest net score, no points are awarded
+                    </Typography>
+                    <Typography variant="body2">
+                        • 1 additional point awarded to the team with the lowest combined net total
                     </Typography>
                     <Typography variant="body2" sx={{ mt: 1 }}>
                         • Player pops are calculated by subtracting the lowest handicap in the group from each player's handicap
-                    </Typography>
-                    <Typography variant="body2">
-                        • Net scores apply pops across holes based on hole handicap (lower hole handicap = higher difficulty)
                     </Typography>
                 </Box>
             </Paper>
