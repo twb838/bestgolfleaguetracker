@@ -576,8 +576,17 @@ const MatchScoreEntry = () => {
 
     const handleBack = () => {
         if (location.state?.returnTo) {
+            // Use the specific return path if provided
             navigate(location.state.returnTo);
+        } else if (match && match.league_id && match.week_id) {
+            // Navigate back to the league management page with the specific week selected
+            navigate(`/leagues/${match.league_id}/manage`, {
+                state: {
+                    selectedWeekId: match.week_id
+                }
+            });
         } else {
+            // Fallback to leagues list
             navigate('/leagues');
         }
     };

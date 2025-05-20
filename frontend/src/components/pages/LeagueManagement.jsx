@@ -117,12 +117,30 @@ function LeagueManagement() {
         }
     }, [league]);
 
-    // When selected week changes, fetch matches for that week
+    // Add this useEffect to handle week changes and always fetch matches when the selected week changes
     useEffect(() => {
-        if (selectedWeekId) {
+        if (selectedWeekId && league?.id) {
+            console.log("Selected week changed, fetching matches for:", selectedWeekId);
             fetchMatchesForWeek(selectedWeekId);
         }
-    }, [selectedWeekId]);
+    }, [selectedWeekId, league?.id]); // Only depend on selectedWeekId and league.id
+
+    // Then update your existing location.state handler useEffect to avoid conflicts
+    useEffect(() => {
+        // Only handle the initial state from navigation
+        if (location.state?.selectedWeekId) {
+            const weekToSelect = location.state.selectedWeekId;
+
+            // Clear the location state
+            window.history.replaceState({}, document.title);
+
+            // Just set the selected week - the other useEffect will handle fetching
+            setSelectedWeekId(weekToSelect);
+        } else if (weeks.length > 0 && !selectedWeekId) {
+            // Default behavior - select first week if none is selected
+            setSelectedWeekId(weeks[0].id);
+        }
+    }, [location.state, weeks, selectedWeekId]); // Remove league from dependencies
 
     const fetchLeagueDetails = async () => {
         setLoading(true);
@@ -186,8 +204,15 @@ function LeagueManagement() {
         }
     };
 
+    // Also ensure the fetchMatchesForWeek function resets the matches state before loading
     const fetchMatchesForWeek = async (weekId) => {
+        if (!weekId) return;
+
+        console.log("Fetching matches for week:", weekId);
         setLoadingMatches(true);
+        // Clear existing matches while loading
+        setMatches([]);
+
         try {
             const matchesResponse = await fetch(`${env.API_BASE_URL}/matches/weeks/${weekId}/matches`);
             if (!matchesResponse.ok) {
@@ -196,21 +221,26 @@ function LeagueManagement() {
 
             const matchesData = await matchesResponse.json();
 
-            // Enrich the matches data with full team objects from the league data
-            const enrichedMatches = matchesData.map(match => {
-                const homeTeam = league.teams.find(team => team.id === match.home_team_id);
-                const awayTeam = league.teams.find(team => team.id === match.away_team_id);
-                const course = league.courses.find(course => course.id === match.course_id);
+            // Ensure we have league data before enriching
+            if (league?.teams && league?.courses) {
+                // Enrich the matches data with full team objects
+                const enrichedMatches = matchesData.map(match => {
+                    const homeTeam = league.teams.find(team => team.id === match.home_team_id);
+                    const awayTeam = league.teams.find(team => team.id === match.away_team_id);
+                    const course = league.courses.find(course => course.id === match.course_id);
 
-                return {
-                    ...match,
-                    home_team: homeTeam || { name: `Team #${match.home_team_id}` },
-                    away_team: awayTeam || { name: `Team #${match.away_team_id}` },
-                    course: course || { name: `Course #${match.course_id}` }
-                };
-            });
+                    return {
+                        ...match,
+                        home_team: homeTeam || { name: `Team #${match.home_team_id}` },
+                        away_team: awayTeam || { name: `Team #${match.away_team_id}` },
+                        course: course || { name: `Course #${match.course_id}` }
+                    };
+                });
 
-            setMatches(enrichedMatches);
+                setMatches(enrichedMatches);
+            } else {
+                setMatches(matchesData);
+            }
         } catch (error) {
             console.error('Error fetching matches:', error);
         } finally {
