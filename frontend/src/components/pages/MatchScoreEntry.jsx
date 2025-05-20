@@ -1413,8 +1413,7 @@ const MatchScoreEntry = () => {
         }
     };
 
-    // Update the handleApplySubstitute function to properly recalculate pops for both teams
-
+    // Update the handleApplySubstitute function to round handicaps
     const handleApplySubstitute = async () => {
         const { teamType, playerIndex, originalPlayer, substitute } = currentSubstitute;
         let substituteFinal = { ...substitute };
@@ -1426,6 +1425,9 @@ const MatchScoreEntry = () => {
                     // Use the provided email or generate one if empty
                     const email = substitute.email || `temp_${Date.now()}@golftracker.example.com`;
 
+                    // Round the handicap to the nearest whole number
+                    const roundedHandicap = Math.round(parseFloat(substitute.handicap) || 0);
+
                     // Create the new player in the database
                     const response = await fetch(`${env.API_BASE_URL}/players`, {
                         method: 'POST',
@@ -1436,7 +1438,7 @@ const MatchScoreEntry = () => {
                             first_name: substitute.first_name,
                             last_name: substitute.last_name || '',
                             email: email,
-                            handicap: parseFloat(substitute.handicap) || 0,
+                            handicap: roundedHandicap, // Use rounded handicap
                             team_id: null // Don't associate with any team
                         })
                     });
@@ -1463,13 +1465,15 @@ const MatchScoreEntry = () => {
                     // Continue with the temporary substitute even if saving failed
                     return;
                 }
+            } else if (substitute.player_id) {
+                // For existing players, ensure their handicap is rounded
+                substituteFinal.handicap = Math.round(parseFloat(substituteFinal.handicap) || 0);
             }
 
             // Determine team ID
             const teamId = teamType === 'home' ? match.home_team_id : match.away_team_id;
 
-            // 1. Update match_players table - add the substitute
-            // Mark the original player as inactive and the substitute as active
+            // Update match_players table - add the substitute with rounded handicap
             const updateMatchPlayersResponse = await fetch(`${env.API_BASE_URL}/matches/${match.id}/players/substitute`, {
                 method: 'POST',
                 headers: {
@@ -1479,8 +1483,9 @@ const MatchScoreEntry = () => {
                     original_player_id: originalPlayer.player_id,
                     substitute_player_id: substituteFinal.player_id,
                     team_id: teamId,
-                    is_substitute: true
-                })
+                    is_substitute: true,
+                    handicap: Math.round(parseFloat(substituteFinal.handicap) || 0) // Send the rounded handicap
+                }),
             });
 
             if (!updateMatchPlayersResponse.ok) {
@@ -1492,23 +1497,25 @@ const MatchScoreEntry = () => {
             let newHomeTeamScores = [...homeTeamScores];
             let newAwayTeamScores = [...awayTeamScores];
 
-            // Apply the substitute to the appropriate team
+            // Apply the substitute to the appropriate team with rounded handicap
             if (teamType === 'home') {
                 // Preserve existing scores when substituting
                 const existingScores = newHomeTeamScores[playerIndex].scores;
 
-                // Replace player but keep the scores
+                // Replace player but keep the scores, ensure handicap is rounded
                 newHomeTeamScores[playerIndex] = {
                     ...substituteFinal,
+                    handicap: Math.round(parseFloat(substituteFinal.handicap) || 0), // Ensure handicap is rounded in UI
                     scores: existingScores
                 };
             } else {
                 // Preserve existing scores when substituting
                 const existingScores = newAwayTeamScores[playerIndex].scores;
 
-                // Replace player but keep the scores
+                // Replace player but keep the scores, ensure handicap is rounded
                 newAwayTeamScores[playerIndex] = {
                     ...substituteFinal,
+                    handicap: Math.round(parseFloat(substituteFinal.handicap) || 0), // Ensure handicap is rounded in UI
                     scores: existingScores
                 };
             }

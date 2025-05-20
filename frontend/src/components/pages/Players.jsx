@@ -21,7 +21,8 @@ import {
     MenuItem,
     IconButton,
     Alert,
-    CircularProgress
+    CircularProgress,
+    TableSortLabel
 } from '@mui/material';
 import {
     Add as AddIcon,
@@ -46,6 +47,12 @@ const Players = () => {
     });
     const [isEditing, setIsEditing] = useState(false);
     const [successMessage, setSuccessMessage] = useState(null);
+
+    // Add sorting state
+    const [sortConfig, setSortConfig] = useState({
+        key: 'last_name',
+        direction: 'asc'
+    });
 
     // Fetch players and teams
     const fetchData = async () => {
@@ -79,7 +86,6 @@ const Players = () => {
         fetchData();
     }, []);
 
-    // Clear success message after 3 seconds
     useEffect(() => {
         if (successMessage) {
             const timer = setTimeout(() => {
@@ -195,6 +201,61 @@ const Players = () => {
         return team ? team.name : 'Unknown';
     };
 
+    // Add sorting function
+    const handleSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    // Function to get sorted data
+    const getSortedPlayers = () => {
+        const sortedPlayers = [...players];
+        if (sortConfig.key) {
+            sortedPlayers.sort((a, b) => {
+                // Handle null or undefined values
+                if (a[sortConfig.key] === null || a[sortConfig.key] === undefined) return 1;
+                if (b[sortConfig.key] === null || b[sortConfig.key] === undefined) return -1;
+
+                // Special case for team sorting - use team name instead of ID
+                if (sortConfig.key === 'team_id') {
+                    const teamA = getTeamName(a.team_id).toLowerCase();
+                    const teamB = getTeamName(b.team_id).toLowerCase();
+
+                    if (teamA < teamB) {
+                        return sortConfig.direction === 'asc' ? -1 : 1;
+                    }
+                    if (teamA > teamB) {
+                        return sortConfig.direction === 'asc' ? 1 : -1;
+                    }
+                    return 0;
+                }
+
+                // Normal string/number comparison
+                if (typeof a[sortConfig.key] === 'string') {
+                    const valueA = a[sortConfig.key].toLowerCase();
+                    const valueB = b[sortConfig.key].toLowerCase();
+
+                    if (valueA < valueB) {
+                        return sortConfig.direction === 'asc' ? -1 : 1;
+                    }
+                    if (valueA > valueB) {
+                        return sortConfig.direction === 'asc' ? 1 : -1;
+                    }
+                    return 0;
+                } else {
+                    // For numbers like handicap
+                    return sortConfig.direction === 'asc'
+                        ? a[sortConfig.key] - b[sortConfig.key]
+                        : b[sortConfig.key] - a[sortConfig.key];
+                }
+            });
+        }
+        return sortedPlayers;
+    };
+
     return (
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -242,22 +303,64 @@ const Players = () => {
                     <Table>
                         <TableHead>
                             <TableRow>
-                                <TableCell>Name</TableCell>
-                                <TableCell>Email</TableCell>
-                                <TableCell>Handicap</TableCell>
-                                <TableCell>Team</TableCell>
+                                <TableCell>
+                                    <TableSortLabel
+                                        active={sortConfig.key === 'first_name'}
+                                        direction={sortConfig.key === 'first_name' ? sortConfig.direction : 'asc'}
+                                        onClick={() => handleSort('first_name')}
+                                    >
+                                        First Name
+                                    </TableSortLabel>
+                                </TableCell>
+                                <TableCell>
+                                    <TableSortLabel
+                                        active={sortConfig.key === 'last_name'}
+                                        direction={sortConfig.key === 'last_name' ? sortConfig.direction : 'asc'}
+                                        onClick={() => handleSort('last_name')}
+                                    >
+                                        Last Name
+                                    </TableSortLabel>
+                                </TableCell>
+                                <TableCell>
+                                    <TableSortLabel
+                                        active={sortConfig.key === 'email'}
+                                        direction={sortConfig.key === 'email' ? sortConfig.direction : 'asc'}
+                                        onClick={() => handleSort('email')}
+                                    >
+                                        Email
+                                    </TableSortLabel>
+                                </TableCell>
+                                <TableCell>
+                                    <TableSortLabel
+                                        active={sortConfig.key === 'handicap'}
+                                        direction={sortConfig.key === 'handicap' ? sortConfig.direction : 'asc'}
+                                        onClick={() => handleSort('handicap')}
+                                    >
+                                        Handicap
+                                    </TableSortLabel>
+                                </TableCell>
+                                <TableCell>
+                                    <TableSortLabel
+                                        active={sortConfig.key === 'team_id'}
+                                        direction={sortConfig.key === 'team_id' ? sortConfig.direction : 'asc'}
+                                        onClick={() => handleSort('team_id')}
+                                    >
+                                        Team
+                                    </TableSortLabel>
+                                </TableCell>
                                 <TableCell align="right">Actions</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
                             {players.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} align="center">No players found</TableCell>
+                                    <TableCell colSpan={6} align="center">No players found</TableCell>
                                 </TableRow>
                             ) : (
-                                players.map((player) => (
+                                getSortedPlayers().map((player) => (
                                     <TableRow key={player.id}>
-                                        <TableCell>{`${player.first_name} ${player.last_name}`}</TableCell>
+                                        <TableCell>{player.first_name}</TableCell>
+                                        <TableCell>{player.last_name}</TableCell>
                                         <TableCell>{player.email}</TableCell>
                                         <TableCell>{player.handicap || 0}</TableCell>
                                         <TableCell>{getTeamName(player.team_id)}</TableCell>
