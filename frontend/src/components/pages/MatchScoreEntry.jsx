@@ -895,7 +895,7 @@ const MatchScoreEntry = () => {
                 const grossScore = calculatePlayerTotal(player);
 
                 // Calculate net score (gross - handicap)
-                const netScore = grossScore - (player.pops || 0);
+                const netScore = grossScore - (player.handicap || 0);
 
                 // Get player results from matchResults
                 const playerResults = matchResults?.home_team?.players[index];
@@ -938,7 +938,7 @@ const MatchScoreEntry = () => {
                 const grossScore = calculatePlayerTotal(player);
 
                 // Calculate net score (gross - handicap)
-                const netScore = grossScore - (player.pops || 0);
+                const netScore = grossScore - (player.handicap || 0);
 
                 // Get player results from matchResults
                 const playerResults = matchResults?.away_team?.players[index];
