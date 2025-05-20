@@ -108,7 +108,14 @@ def get_matches_by_week(week_id: int, db: Session = Depends(get_db)):
             "away_team_id": match.away_team_id,
             "home_team": {"id": home_team.id, "name": home_team.name} if home_team else None,
             "away_team": {"id": away_team.id, "name": away_team.name} if away_team else None,
-            "course": {"id": course.id, "name": course.name} if course else None
+            "course": {"id": course.id, "name": course.name} if course else None,
+            # Add team score and points fields
+            "home_team_gross_score": match.home_team_gross_score,
+            "home_team_net_score": match.home_team_net_score,
+            "home_team_points": match.home_team_points,
+            "away_team_gross_score": match.away_team_gross_score,
+            "away_team_net_score": match.away_team_net_score,
+            "away_team_points": match.away_team_points
         })
     
     return match_responses
@@ -118,7 +125,22 @@ def get_match(match_id: int, db: Session = Depends(get_db)):
     match = db.query(Match).filter(Match.id == match_id).first()
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
-    return match
+    
+    # Add team information to response
+    response = dict(match.__dict__)
+    if '_sa_instance_state' in response:
+        del response['_sa_instance_state']
+    
+    # Get team and course info
+    home_team = db.query(Team).filter(Team.id == match.home_team_id).first()
+    away_team = db.query(Team).filter(Team.id == match.away_team_id).first()
+    course = db.query(Course).filter(Course.id == match.course_id).first()
+    
+    response["home_team"] = {"id": home_team.id, "name": home_team.name} if home_team else None
+    response["away_team"] = {"id": away_team.id, "name": away_team.name} if away_team else None
+    response["course"] = {"id": course.id, "name": course.name} if course else None
+    
+    return response
 
 @router.put("/{match_id}", response_model=MatchResponse)
 def update_match(match_id: int, match: MatchUpdate, db: Session = Depends(get_db)):

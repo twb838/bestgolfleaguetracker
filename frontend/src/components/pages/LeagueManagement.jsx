@@ -834,15 +834,18 @@ function LeagueManagement() {
                                                                 });
                                                             }}
                                                         >
-                                                            {/* Status badge */}
+                                                            {/* Updated status badge (Completed/Scheduled) with improved design */}
                                                             <Chip
                                                                 label={match.is_completed ? "Completed" : "Scheduled"}
                                                                 color={match.is_completed ? "success" : "primary"}
                                                                 size="small"
+                                                                variant={match.is_completed ? "outlined" : "filled"}
                                                                 sx={{
                                                                     position: 'absolute',
                                                                     top: 12,
                                                                     right: 12,
+                                                                    fontWeight: match.is_completed ? 'bold' : 'normal',
+                                                                    borderWidth: match.is_completed ? 2 : 1
                                                                 }}
                                                             />
 
@@ -856,19 +859,39 @@ function LeagueManagement() {
                                                                 </Box>
 
                                                                 {/* Teams */}
-                                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                                                     <Box sx={{ textAlign: 'center', width: '45%' }}>
                                                                         <Typography sx={{ fontWeight: 'bold', mb: 1 }}>
                                                                             {match.home_team ? match.home_team.name : 'Home Team'}
                                                                         </Typography>
-                                                                        {match.is_completed && (
-                                                                            <Chip
-                                                                                label="Winner"
-                                                                                color="success"
-                                                                                size="small"
-                                                                                sx={{ visibility: 'hidden' /* Show based on actual winner */ }}
-                                                                            />
+
+                                                                        {/* Match points display without "pts" text */}
+                                                                        {match.is_completed && match.home_team_points !== null && (
+                                                                            <Typography variant="h6" color="primary" sx={{ fontWeight: 'bold' }}>
+                                                                                {match.home_team_points % 1 === 0
+                                                                                    ? Math.floor(match.home_team_points)
+                                                                                    : Number(match.home_team_points).toFixed(1)}
+                                                                            </Typography>
                                                                         )}
+
+                                                                        {/* Updated "Winner" chip for home team */}
+                                                                        {match.is_completed &&
+                                                                            match.home_team_points !== null &&
+                                                                            match.away_team_points !== null &&
+                                                                            match.home_team_points > match.away_team_points && (
+                                                                                <Chip
+                                                                                    label="Winner"
+                                                                                    color="success"
+                                                                                    size="small"
+                                                                                    sx={{
+                                                                                        mt: 1,
+                                                                                        fontWeight: 'bold',
+                                                                                        bgcolor: 'success.light',
+                                                                                        borderWidth: 2,
+                                                                                        borderColor: 'success.main'
+                                                                                    }}
+                                                                                />
+                                                                            )}
                                                                     </Box>
 
                                                                     <Box sx={{ textAlign: 'center', width: '10%' }}>
@@ -879,16 +902,50 @@ function LeagueManagement() {
                                                                         <Typography sx={{ fontWeight: 'bold', mb: 1 }}>
                                                                             {match.away_team ? match.away_team.name : 'Away Team'}
                                                                         </Typography>
-                                                                        {match.is_completed && (
-                                                                            <Chip
-                                                                                label="Winner"
-                                                                                color="success"
-                                                                                size="small"
-                                                                                sx={{ visibility: 'hidden' /* Show based on actual winner */ }}
-                                                                            />
+
+                                                                        {/* Display away team points if match is completed */}
+                                                                        {match.is_completed && match.away_team_points !== null && (
+                                                                            <Typography variant="h6" color="primary" sx={{ fontWeight: 'bold' }}>
+                                                                                {match.away_team_points % 1 === 0
+                                                                                    ? Math.floor(match.away_team_points)
+                                                                                    : Number(match.away_team_points).toFixed(1)}
+                                                                            </Typography>
                                                                         )}
+
+                                                                        {/* Show winner indicator for away team */}
+                                                                        {match.is_completed &&
+                                                                            match.home_team_points !== null &&
+                                                                            match.away_team_points !== null &&
+                                                                            match.away_team_points > match.home_team_points && (
+                                                                                <Chip
+                                                                                    label="Winner"
+                                                                                    color="success"
+                                                                                    size="small"
+                                                                                    sx={{
+                                                                                        mt: 1,
+                                                                                        fontWeight: 'bold',
+                                                                                        bgcolor: 'success.light',
+                                                                                        borderWidth: 2,
+                                                                                        borderColor: 'success.main'
+                                                                                    }}
+                                                                                />
+                                                                            )}
                                                                     </Box>
                                                                 </Box>
+
+                                                                {/* Show tie indicator if there's a tie */}
+                                                                {match.is_completed &&
+                                                                    match.home_team_points !== null &&
+                                                                    match.away_team_points !== null &&
+                                                                    Math.abs(match.home_team_points - match.away_team_points) < 0.01 && (
+                                                                        <Box sx={{ textAlign: 'center', mt: 1 }}>
+                                                                            <Chip
+                                                                                label="Tie"
+                                                                                color="info"
+                                                                                size="small"
+                                                                            />
+                                                                        </Box>
+                                                                    )}
 
                                                                 {/* Additional detail indicator */}
                                                                 <Box sx={{ mt: 2, pt: 2, borderTop: '1px dashed', borderColor: 'divider', textAlign: 'center' }}>
