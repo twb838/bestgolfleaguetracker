@@ -760,8 +760,20 @@ function LeagueManagement() {
                                     </Typography>
                                     <Chip
                                         size="small"
-                                        label={new Date(selectedWeek.end_date) < new Date() ? "Completed" : "Current"}
-                                        color={new Date(selectedWeek.end_date) < new Date() ? "default" : "primary"}
+                                        label={
+                                            new Date(selectedWeek.end_date) < new Date()
+                                                ? (matches.every(match => match.is_completed)
+                                                    ? "Completed"
+                                                    : "In Progress")
+                                                : "Current"
+                                        }
+                                        color={
+                                            new Date(selectedWeek.end_date) < new Date()
+                                                ? (matches.every(match => match.is_completed)
+                                                    ? "success"
+                                                    : "warning")
+                                                : "primary"
+                                        }
                                     />
                                 </Box>
                             </Box>
