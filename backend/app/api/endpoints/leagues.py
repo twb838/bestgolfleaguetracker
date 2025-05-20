@@ -295,3 +295,4 @@ def get_league_leaderboard(league_id: int, db: Session = Depends(get_db)):
     result.sort(key=lambda x: x["win_percentage"], reverse=True)
     
     return result
+

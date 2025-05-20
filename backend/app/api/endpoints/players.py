@@ -1,9 +1,17 @@
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List, Optional, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
+from sqlalchemy import func
+import statistics
+from datetime import datetime
 
 from app.db.session import get_db
 from app.models.player import Player
+from app.models.league import League
+from app.models.match_player import MatchPlayer
+from app.models.match import Match
+from app.models.week import Week
+from app.models.course import Course
 from app.schemas.player import PlayerCreate, PlayerUpdate, PlayerResponse
 
 router = APIRouter(prefix="/players", tags=["players"])
@@ -109,3 +117,145 @@ def delete_player(player_id: int, db: Session = Depends(get_db)):
     db.delete(player)
     db.commit()
     return None
+
+@router.post("/leagues/{league_id}/update-handicaps", response_model=Dict[str, Any])
+def update_league_player_handicaps(
+    league_id: int, 
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Update handicaps for all eligible players in a league.
+    Uses league settings for:
+    - minimum scores required (handicap_required_scores)
+    - number of recent scores to use (handicap_recent_scores_used)
+    - handicap percentage to par (handicap_perecentage_to_par)
+    """
+    # Get league and verify it exists
+    league = db.query(League).filter(League.id == league_id).first()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    
+    # Get league handicap settings - ensure we have Python int/float values
+    min_scores_required = 3
+    scores_to_use = 10
+    handicap_percentage = 0.85
+    
+    if league.handicap_required_scores is not None:
+        min_scores_required = league.handicap_required_scores
+    if league.handicap_recent_scores_used is not None:
+        scores_to_use = league.handicap_recent_scores_used
+    if league.handicap_perecentage_to_par is not None:
+        handicap_percentage = league.handicap_perecentage_to_par / 100
+    
+    # Run the update as a background task to avoid timeouts for large leagues
+    background_tasks.add_task(
+        _process_handicap_updates,
+        db_session=db,
+        league_id=league_id,
+        min_scores_required=min_scores_required, # type: ignore
+        scores_to_use=scores_to_use, # type: ignore
+        handicap_percentage=handicap_percentage # type: ignore
+    )
+    
+    return {
+        "message": "Handicap update started",
+        "league_id": league_id,
+        "min_scores_required": min_scores_required,
+        "scores_to_use": scores_to_use,
+        "handicap_percentage": handicap_percentage
+    }
+
+def _process_handicap_updates(
+    db_session: Session,
+    league_id: int,
+    min_scores_required: int,
+    scores_to_use: int,
+    handicap_percentage: float
+):
+    """Background task to process handicap updates for all players in a league"""
+    updated_count = 0
+    skipped_count = 0
+    
+    try:
+        # Get all players who have played in this league
+        player_scores = (
+            db_session.query(
+                MatchPlayer.player_id,
+                Player.first_name,
+                Player.last_name,
+                func.count(MatchPlayer.id).label("score_count")
+            )
+            .join(Player, MatchPlayer.player_id == Player.id)
+            .join(Match, MatchPlayer.match_id == Match.id)
+            .join(Week, Match.week_id == Week.id)
+            .filter(Week.league_id == league_id)
+            .filter(MatchPlayer.gross_score.isnot(None))
+            .group_by(MatchPlayer.player_id, Player.first_name, Player.last_name)
+            .all()
+        )
+        
+        # Process each player
+        for player_id, first_name, last_name, score_count in player_scores:
+            # Skip if not enough scores
+            if score_count < min_scores_required:
+                skipped_count += 1
+                continue
+            
+            # Get the player's recent scores with course par info
+            recent_scores = (
+                db_session.query(
+                    MatchPlayer.gross_score,
+                    Match.course_id,
+                    Course.total_par.label("course_par")
+                )
+                .join(Match, MatchPlayer.match_id == Match.id)
+                .join(Week, Match.week_id == Week.id)
+                .join(Course, Match.course_id == Course.id)
+                .filter(Week.league_id == league_id)
+                .filter(MatchPlayer.player_id == player_id)
+                .filter(MatchPlayer.gross_score.isnot(None))
+                .order_by(Match.match_date.desc())
+                .limit(scores_to_use)
+                .all()
+            )
+            
+            # Calculate differentials (score minus par)
+            differentials = []
+            for score in recent_scores:
+                if score.gross_score and score.course_par:
+                    differential = score.gross_score - score.course_par
+                    differentials.append(differential)
+            
+            if not differentials:
+                skipped_count += 1
+                continue
+            
+            # Calculate average differential
+            avg_differential = statistics.mean(differentials)
+            
+            # Apply handicap percentage (typically 85% of average differential)
+            handicap = avg_differential * handicap_percentage
+            
+            # Round to nearest tenth (1 decimal place)
+            handicap = round(handicap, 1)
+            
+            # Update player handicap
+            player = db_session.query(Player).filter(Player.id == player_id).first()
+            if player:
+                player.handicap = handicap
+                db_session.add(player)
+                updated_count += 1
+        
+        # Commit all changes
+        db_session.commit()
+        
+        print(f"Handicap update complete: {updated_count} players updated, {skipped_count} players skipped")
+    
+    except Exception as e:
+        db_session.rollback()
+        print(f"Error updating handicaps: {str(e)}")
+        
+    finally:
+        db_session.close()
+

@@ -14,6 +14,9 @@ class League(Base):
     name = Column(String(255), nullable=False)
     description = Column(String(1000), nullable=True)
     is_active = Column(Boolean, default=True)
+    handicap_required_scores = Column(Integer, nullable=True, default=3)
+    handicap_recent_scores_used = Column(Integer, nullable=True, default=10)
+    handicap_perecentage_to_par = Column(Integer, nullable=True, default=85)
     
     # Relationships
     teams = relationship("Team", secondary=league_teams, back_populates="leagues")

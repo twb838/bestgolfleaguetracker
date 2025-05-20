@@ -403,8 +403,7 @@ const MatchScoreEntry = () => {
         return player.name || "Unknown Player";
     };
 
-    // Update the fetchExistingScores function to force match results calculation
-
+    // Update fetchExistingScores function to use handicaps from match_players
     const fetchExistingScores = async (matchId) => {
         try {
             console.log(`Fetching scores for match ${matchId}`);
@@ -442,38 +441,39 @@ const MatchScoreEntry = () => {
                 const homePlayersData = activeMatchPlayers
                     .filter(mp => mp.team_id === match.home_team_id)
                     .map(mp => {
-                        // Include the is_substitute flag from the match_players table
+                        // Use handicap from match_players table instead of player.handicap
                         return {
                             player_id: mp.player_id,
                             player_name: formatPlayerName(mp.player),
                             first_name: mp.player.first_name,
                             last_name: mp.player.last_name,
                             email: mp.player.email,
-                            handicap: mp.player.handicap || 0,
+                            // Use mp.handicap from match_players instead of player's current handicap
+                            handicap: mp.handicap || mp.player.handicap || 0,
                             scores: playerScores[mp.player_id] || {},
-                            is_substitute: mp.is_substitute || false  // Make sure this flag is properly set
+                            is_substitute: mp.is_substitute || false
                         };
                     });
 
                 const awayPlayersData = activeMatchPlayers
                     .filter(mp => mp.team_id === match.away_team_id)
                     .map(mp => {
-                        // Include the is_substitute flag from the match_players table
                         return {
                             player_id: mp.player_id,
                             player_name: formatPlayerName(mp.player),
                             first_name: mp.player.first_name,
                             last_name: mp.player.last_name,
                             email: mp.player.email,
-                            handicap: mp.player.handicap || 0,
+                            // Use mp.handicap from match_players instead of player's current handicap
+                            handicap: mp.handicap || mp.player.handicap || 0,
                             scores: playerScores[mp.player_id] || {},
-                            is_substitute: mp.is_substitute || false  // Make sure this flag is properly set
+                            is_substitute: mp.is_substitute || false
                         };
                     });
 
                 console.log(`Got ${homePlayersData.length} home players and ${awayPlayersData.length} away players from API`);
-                console.log('Home players data with substitute flags:', homePlayersData);
-                console.log('Away players data with substitute flags:', awayPlayersData);
+                console.log('Home players data with handicaps from match_players:', homePlayersData);
+                console.log('Away players data with handicaps from match_players:', awayPlayersData);
 
                 // Apply pops based on lowest handicap
                 setHomeTeamScores(calculatePlayerPops(homePlayersData, awayPlayersData));

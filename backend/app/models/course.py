@@ -9,6 +9,7 @@ class Course(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
+    total_par = Column(Integer, default=72)
     
     # Relationship to holes - use string reference to avoid import
     holes = relationship("Hole", back_populates="course", cascade="all, delete-orphan")
