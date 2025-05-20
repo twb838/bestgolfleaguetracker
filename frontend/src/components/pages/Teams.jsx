@@ -366,42 +366,45 @@ function Teams() {
             <Paper>
                 {teams.length > 0 ? (
                     <List>
-                        {teams.map((team) => (
-                            <ListItem
-                                key={team.id}
-                                button
-                                onClick={() => handleEditTeam(team)}
-                            >
-                                <ListItemText
-                                    primary={team.name}
-                                    secondary={`Players: ${team.players?.length || 0}`}
-                                />
-                                <ListItemSecondaryAction>
-                                    <IconButton
-                                        edge="end"
-                                        color="primary"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleEditTeam(team);
-                                        }}
-                                        sx={{ mr: 1 }}
-                                    >
-                                        <EditIcon />
-                                    </IconButton>
-                                    <IconButton
-                                        edge="end"
-                                        color="error"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setTeamToDelete(team);
-                                            setDeleteDialogOpen(true);
-                                        }}
-                                    >
-                                        <DeleteIcon />
-                                    </IconButton>
-                                </ListItemSecondaryAction>
-                            </ListItem>
-                        ))}
+                        {teams
+                            .slice() // Create a copy to avoid mutating the original array
+                            .sort((a, b) => a.name.localeCompare(b.name)) // Sort alphabetically by name
+                            .map((team) => (
+                                <ListItem
+                                    key={team.id}
+                                    button
+                                    onClick={() => handleEditTeam(team)}
+                                >
+                                    <ListItemText
+                                        primary={team.name}
+                                        secondary={`Players: ${team.players?.length || 0}`}
+                                    />
+                                    <ListItemSecondaryAction>
+                                        <IconButton
+                                            edge="end"
+                                            color="primary"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleEditTeam(team);
+                                            }}
+                                            sx={{ mr: 1 }}
+                                        >
+                                            <EditIcon />
+                                        </IconButton>
+                                        <IconButton
+                                            edge="end"
+                                            color="error"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setTeamToDelete(team);
+                                                setDeleteDialogOpen(true);
+                                            }}
+                                        >
+                                            <DeleteIcon />
+                                        </IconButton>
+                                    </ListItemSecondaryAction>
+                                </ListItem>
+                            ))}
                     </List>
                 ) : (
                     <Box

@@ -327,7 +327,7 @@ function LeagueManagement() {
                 fetchMatchesForWeek(selectedWeekId);
             }, 500);
 
-            alert(`Note: Match might have been created, but there was an error: ${error.message}`);
+            //alert(`Note: Match might have been created, but there was an error: ${error.message}`);
         }
     };
 
@@ -1113,7 +1113,7 @@ function LeagueManagement() {
                                 onChange={handleMatchInputChange}
                                 label="Home Team"
                             >
-                                {league.teams?.map(team => (
+                                {league.teams?.slice().sort((a, b) => a.name.localeCompare(b.name)).map(team => (
                                     <MenuItem key={team.id} value={team.id}>
                                         {team.name}
                                     </MenuItem>
@@ -1130,11 +1130,13 @@ function LeagueManagement() {
                                 onChange={handleMatchInputChange}
                                 label="Away Team"
                             >
-                                {league.teams?.filter(team => team.id !== newMatch.home_team_id).map(team => (
-                                    <MenuItem key={team.id} value={team.id}>
-                                        {team.name}
-                                    </MenuItem>
-                                ))}
+                                {league.teams?.filter(team => team.id !== newMatch.home_team_id)
+                                    .slice().sort((a, b) => a.name.localeCompare(b.name))
+                                    .map(team => (
+                                        <MenuItem key={team.id} value={team.id}>
+                                            {team.name}
+                                        </MenuItem>
+                                    ))}
                             </Select>
                         </FormControl>
 
