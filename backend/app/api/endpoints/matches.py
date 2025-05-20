@@ -46,7 +46,13 @@ def create_match(match: MatchCreate, db: Session = Depends(get_db)):
         week_id=match.week_id,
         course_id=match.course_id,
         home_team_id=match.home_team_id,
-        away_team_id=match.away_team_id
+        away_team_id=match.away_team_id,
+        home_team_gross_score=None,
+        home_team_net_score=None,
+        home_team_points=None,
+        away_team_gross_score=None,
+        away_team_net_score=None,
+        away_team_points=None
     )
     
     db.add(db_match)
