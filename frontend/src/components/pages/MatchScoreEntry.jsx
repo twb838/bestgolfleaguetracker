@@ -852,6 +852,17 @@ const MatchScoreEntry = () => {
             // Make sure match results are calculated before saving
             calculateMatchResults();
 
+            // Wait a moment to ensure calculation completes
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Check if matchResults is available
+            if (!matchResults) {
+                console.error("Match results not available");
+                throw new Error("Failed to calculate match results");
+            }
+
+            console.log("Match results:", matchResults);
+
             // Combine home and away team scores into a single array
             const allScores = [];
 
@@ -949,15 +960,17 @@ const MatchScoreEntry = () => {
 
             const isUpdate = match.is_completed && editMode;
 
-            // Create team summary data
+            // Create team summary data with explicit values (not relying on optional chaining)
             const teamSummary = {
-                home_team_gross_score: matchResults?.home_team?.total_score || 0,
-                home_team_net_score: calculateTeamNetTotal(matchResults?.home_team?.players || []),
-                home_team_points: matchResults?.home_team?.total_points || 0,
-                away_team_gross_score: matchResults?.away_team?.total_score || 0,
-                away_team_net_score: calculateTeamNetTotal(matchResults?.away_team?.players || []),
-                away_team_points: matchResults?.away_team?.total_points || 0
+                home_team_gross_score: matchResults.home_team.total_score,
+                home_team_net_score: calculateTeamNetTotal(matchResults.home_team.players),
+                home_team_points: matchResults.home_team.total_points,
+                away_team_gross_score: matchResults.away_team.total_score,
+                away_team_net_score: calculateTeamNetTotal(matchResults.away_team.players),
+                away_team_points: matchResults.away_team.total_points
             };
+
+            console.log("Team summary:", teamSummary);
 
             // Send scores and match results to the API
             const response = await fetch(`${env.API_BASE_URL}/matches/${matchId}/scores`, {
@@ -1655,20 +1668,26 @@ const MatchScoreEntry = () => {
                             {teamScores.map((player, playerIndex) => {
                                 const score = player.scores[hole.id] || '';
 
-                                // Determine if this is the low NET score across ALL players for this hole
+                                // Determine if this is part of a low NET score group
                                 let isLowScore = false;
+                                let isTeamTiedLowScore = false;
+
                                 if (score !== '') {
                                     // Calculate the net score for this player
                                     const netScore = calculateNetScore(score, player.pops, hole);
 
                                     // Get all net scores for this hole from both teams
                                     const allNetScoresForHole = [];
+                                    const homeNetScoresForHole = [];
+                                    const awayNetScoresForHole = [];
 
                                     // Get home team net scores for this hole
                                     homeTeamScores.forEach(p => {
                                         const holeScore = p.scores[hole.id];
                                         if (holeScore !== undefined && holeScore !== '') {
-                                            allNetScoresForHole.push(calculateNetScore(holeScore, p.pops, hole));
+                                            const pNetScore = calculateNetScore(holeScore, p.pops, hole);
+                                            allNetScoresForHole.push(pNetScore);
+                                            homeNetScoresForHole.push(pNetScore);
                                         }
                                     });
 
@@ -1676,15 +1695,27 @@ const MatchScoreEntry = () => {
                                     awayTeamScores.forEach(p => {
                                         const holeScore = p.scores[hole.id];
                                         if (holeScore !== undefined && holeScore !== '') {
-                                            allNetScoresForHole.push(calculateNetScore(holeScore, p.pops, hole));
+                                            const pNetScore = calculateNetScore(holeScore, p.pops, hole);
+                                            allNetScoresForHole.push(pNetScore);
+                                            awayNetScoresForHole.push(pNetScore);
                                         }
                                     });
 
-                                    // Only highlight if this is the absolute lowest net score
-                                    // and there is more than one score to compare
-                                    isLowScore = allNetScoresForHole.length > 1 &&
-                                        netScore === Math.min(...allNetScoresForHole) &&
-                                        allNetScoresForHole.filter(s => s === netScore).length === 1; // No ties
+                                    // Find the lowest net score
+                                    const lowestNetScore = Math.min(...allNetScoresForHole);
+
+                                    // Count how many players have the lowest score on each team
+                                    const homeTeamLowScoreCount = homeNetScoresForHole.filter(s => s === lowestNetScore).length;
+                                    const awayTeamLowScoreCount = awayNetScoresForHole.filter(s => s === lowestNetScore).length;
+
+                                    // Highlight individual lowest net score with no ties
+                                    isLowScore = netScore === lowestNetScore &&
+                                        ((homeTeamLowScoreCount + awayTeamLowScoreCount) === 1);
+
+                                    // Highlight tied players on same team (when there are no ties on other team)
+                                    isTeamTiedLowScore = netScore === lowestNetScore &&
+                                        ((teamType === 'home' && homeTeamLowScoreCount > 1 && awayTeamLowScoreCount === 0) ||
+                                            (teamType === 'away' && awayTeamLowScoreCount > 1 && homeTeamLowScoreCount === 0));
                                 }
 
                                 return (
@@ -1735,13 +1766,15 @@ const MatchScoreEntry = () => {
                                                     width: '45px',
                                                     '& .MuiOutlinedInput-root': {
                                                         backgroundColor: score !== ''
-                                                            ? (isLowScore ? 'rgba(76, 175, 80, 0.2)' : 'white') // Only highlight low score
+                                                            ? (isLowScore ? 'rgba(76, 175, 80, 0.2)' :
+                                                                isTeamTiedLowScore ? 'rgba(156, 39, 176, 0.2)' : 'white')
                                                             : undefined,
-                                                        border: isLowScore ? '2px solid #4caf50' : undefined,
+                                                        border: isLowScore ? '2px solid #4caf50' :
+                                                            isTeamTiedLowScore ? '2px solid #9c27b0' : undefined,
                                                     },
                                                     '& input': {
                                                         p: 0.5,
-                                                        color: 'text.primary' // Use consistent text color instead of par-based colors
+                                                        color: 'text.primary'
                                                     },
                                                     '& .MuiOutlinedInput-notchedOutline': {
                                                         borderWidth: '1px'
@@ -1754,7 +1787,7 @@ const MatchScoreEntry = () => {
                                                 data-hole-index={holes.findIndex(h => h.id === hole.id)}
                                             />
 
-                                            {/* Net score display - only show if different from gross */}
+                                            {/* Net score display - show in purple for team-tied low scores */}
                                             {score !== '' && player.pops > 0 && (
                                                 (() => {
                                                     const netScore = calculateNetScore(score, player.pops, hole);
@@ -1764,7 +1797,7 @@ const MatchScoreEntry = () => {
                                                             variant="caption"
                                                             sx={{
                                                                 fontSize: '0.65rem',
-                                                                color: 'text.secondary',
+                                                                color: isTeamTiedLowScore ? 'secondary.main' : 'text.secondary',
                                                                 mt: 0.5,
                                                                 display: 'block',
                                                                 fontWeight: 'bold'
