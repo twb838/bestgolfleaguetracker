@@ -63,22 +63,30 @@ def create_match(match: MatchCreate, db: Session = Depends(get_db)):
     home_players = db.query(Player).filter(Player.team_id == match.home_team_id).all()
     away_players = db.query(Player).filter(Player.team_id == match.away_team_id).all()
     
-    # Add all players to match_players table
+    # Add all players to match_players table with rounded handicaps
     for player in home_players:
+        # Round the player's handicap to the nearest whole number
+        rounded_handicap = round(player.handicap) if player.handicap is not None else 0 # type: ignore
+        
         match_player = MatchPlayer(
             match_id=db_match.id,
             team_id=match.home_team_id,
             player_id=player.id,
+            handicap=rounded_handicap,  # Add the rounded handicap here
             is_substitute=False,
             is_active=True
         )
         db.add(match_player)
     
     for player in away_players:
+        # Round the player's handicap to the nearest whole number
+        rounded_handicap = round(player.handicap) if player.handicap is not None else 0 # type: ignore
+        
         match_player = MatchPlayer(
             match_id=db_match.id,
             team_id=match.away_team_id,
             player_id=player.id,
+            handicap=rounded_handicap,  # Add the rounded handicap here
             is_substitute=False,
             is_active=True
         )
@@ -419,6 +427,20 @@ def substitute_match_player(
         if original_player:
             setattr(original_player, "is_active", False)
             
+        # Get substitute player's handicap
+        substitute = db.query(Player).filter(Player.id == substitute_player_id).first()
+        if not substitute:
+            raise HTTPException(status_code=404, detail="Substitute player not found")
+            
+        # Round the handicap to the nearest whole number
+        handicap = data.get("handicap")
+        if handicap is None and substitute.handicap is not None:
+            handicap = round(substitute.handicap) # type: ignore
+        elif handicap is not None:
+            handicap = round(float(handicap))
+        else:
+            handicap = 0
+        
         # Check if substitute is already in match_players (could be substituting back in)
         existing_substitute = db.query(MatchPlayer).filter(
             MatchPlayer.match_id == match_id,
@@ -430,12 +452,14 @@ def substitute_match_player(
             # Reactivate an existing player
             setattr(existing_substitute, "is_active", True)
             setattr(existing_substitute, "is_substitute", True)
+            setattr(existing_substitute, "handicap", handicap)  # Update with rounded handicap
         else:
-            # Add new substitute player
+            # Add new substitute player with rounded handicap
             new_substitute = MatchPlayer(
                 match_id=match_id,
                 team_id=team_id,
                 player_id=substitute_player_id,
+                handicap=handicap,  # Use rounded handicap
                 is_substitute=True,
                 is_active=True
             )
