@@ -189,3 +189,109 @@ def delete_week(league_id: int, week_id: int, db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": "Week and associated matches deleted successfully"}
+
+@router.get("/{league_id}/leaderboard", response_model=List[dict])
+def get_league_leaderboard(league_id: int, db: Session = Depends(get_db)):
+    """
+    Get leaderboard statistics for all teams in a league
+    Returns team stats including matches played, points won, points lost, win percentage,
+    and lowest team gross/net scores from matches
+    """
+    # Verify league exists
+    league = db.query(League).filter(League.id == league_id).first()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    
+    # Get all completed matches for this league
+    completed_matches = (db.query(Match)
+        .join(Week, Match.week_id == Week.id)
+        .filter(Week.league_id == league_id, Match.is_completed == True)
+        .all())
+    
+    # Initialize team stats dictionary
+    team_stats = {}
+    
+    # Get all teams in the league
+    for team in league.teams:
+        team_stats[team.id] = {
+            "id": team.id,
+            "name": team.name,
+            "matches_played": 0,
+            "points_won": 0,
+            "points_lost": 0,
+            "lowest_gross": None,
+            "lowest_net": None
+        }
+    
+    # Track lowest scores
+    lowest_gross_scores = {}
+    lowest_net_scores = {}
+    
+    # Calculate statistics for each team based on completed matches
+    for match in completed_matches:
+        if (match.home_team_id is not None and match.away_team_id is not None and 
+            match.home_team_points is not None and match.away_team_points is not None):
+            
+            # Update home team stats
+            if match.home_team_id in team_stats:
+                team_stats[match.home_team_id]["matches_played"] += 1
+                team_stats[match.home_team_id]["points_won"] += match.home_team_points
+                team_stats[match.home_team_id]["points_lost"] += match.away_team_points
+                
+                # Track home team's gross score if available
+                if match.home_team_gross_score is not None:
+                    if (match.home_team_id not in lowest_gross_scores or 
+                        match.home_team_gross_score < lowest_gross_scores[match.home_team_id]):
+                        lowest_gross_scores[match.home_team_id] = match.home_team_gross_score
+                        team_stats[match.home_team_id]["lowest_gross"] = match.home_team_gross_score
+                
+                # Track home team's net score if available
+                if match.home_team_net_score is not None:
+                    if (match.home_team_id not in lowest_net_scores or 
+                        match.home_team_net_score < lowest_net_scores[match.home_team_id]):
+                        lowest_net_scores[match.home_team_id] = match.home_team_net_score
+                        team_stats[match.home_team_id]["lowest_net"] = match.home_team_net_score
+            
+            # Update away team stats
+            if match.away_team_id in team_stats:
+                team_stats[match.away_team_id]["matches_played"] += 1
+                team_stats[match.away_team_id]["points_won"] += match.away_team_points
+                team_stats[match.away_team_id]["points_lost"] += match.home_team_points
+                
+                # Track away team's gross score if available
+                if match.away_team_gross_score is not None:
+                    if (match.away_team_id not in lowest_gross_scores or 
+                        match.away_team_gross_score < lowest_gross_scores[match.away_team_id]):
+                        lowest_gross_scores[match.away_team_id] = match.away_team_gross_score
+                        team_stats[match.away_team_id]["lowest_gross"] = match.away_team_gross_score
+                
+                # Track away team's net score if available
+                if match.away_team_net_score is not None:
+                    if (match.away_team_id not in lowest_net_scores or 
+                        match.away_team_net_score < lowest_net_scores[match.away_team_id]):
+                        lowest_net_scores[match.away_team_id] = match.away_team_net_score
+                        team_stats[match.away_team_id]["lowest_net"] = match.away_team_net_score
+    
+    # Calculate win percentage and convert to list
+    result = []
+    for team_id, stats in team_stats.items():
+        total_points = stats["points_won"] + stats["points_lost"]
+        win_percentage = 0
+        if total_points > 0:
+            win_percentage = round((stats["points_won"] / total_points) * 100)
+        
+        result.append({
+            "id": stats["id"],
+            "name": stats["name"],
+            "matches_played": stats["matches_played"],
+            "points_won": stats["points_won"],
+            "points_lost": stats["points_lost"],
+            "win_percentage": win_percentage,
+            "lowest_gross": stats["lowest_gross"],
+            "lowest_net": stats["lowest_net"]
+        })
+    
+    # Sort by win percentage (descending)
+    result.sort(key=lambda x: x["win_percentage"], reverse=True)
+    
+    return result
