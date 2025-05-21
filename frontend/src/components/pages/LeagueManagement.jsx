@@ -49,7 +49,11 @@ import {
     DateRange as WeekIcon,
     Delete as DeleteIcon,
     ArrowUpward as ArrowUpwardIcon,
-    ArrowDownward as ArrowDownwardIcon
+    ArrowDownward as ArrowDownwardIcon,
+    Person as PersonIcon,
+    Dangerous as DangerousIcon,
+    Hotel as HotelIcon,
+    Stars as StarsIcon
 } from '@mui/icons-material';
 import format from 'date-fns/format';
 import env from '../../config/env';
@@ -116,6 +120,14 @@ function LeagueManagement() {
         direction: 'desc'
     });
 
+    // Add with your other state declarations
+    const [playerStats, setPlayerStats] = useState([]);
+    const [loadingPlayerStats, setLoadingPlayerStats] = useState(false);
+    const [playerStatsSortConfig, setPlayerStatsSortConfig] = useState({
+        key: 'average_score',
+        direction: 'asc'
+    });
+
     useEffect(() => {
         // If league data wasn't passed via navigation state, fetch it
         if (!league) {
@@ -167,6 +179,13 @@ function LeagueManagement() {
             setSelectedWeekId(weeks[0].id);
         }
     }, [location.state, weeks, selectedWeekId]); // Remove league from dependencies
+
+    // Add this useEffect
+    useEffect(() => {
+        if (activeTab === 2 && league?.id) {
+            fetchPlayerStats();
+        }
+    }, [activeTab, league?.id]);
 
     const fetchLeagueDetails = async () => {
         setLoading(true);
@@ -295,6 +314,27 @@ function LeagueManagement() {
         }
     };
 
+    // Add this function with your other data fetching functions
+    const fetchPlayerStats = async () => {
+        if (!league?.id) return;
+
+        setLoadingPlayerStats(true);
+        try {
+            const response = await fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/player-stats?minimum_rounds=1`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch player statistics');
+            }
+            const data = await response.json();
+            setPlayerStats(data);
+        } catch (error) {
+            console.error('Error fetching player statistics:', error);
+            // If API endpoint doesn't exist yet, return empty array
+            setPlayerStats([]);
+        } finally {
+            setLoadingPlayerStats(false);
+        }
+    };
+
     // Add this sort function before your return statement
     const handleSort = (key) => {
         // Toggle direction if clicking the same column
@@ -350,6 +390,50 @@ function LeagueManagement() {
     const getSortArrow = (key) => {
         if (sortConfig.key !== key) return null;
         return sortConfig.direction === 'asc'
+            ? <ArrowUpwardIcon fontSize="small" sx={{ fontSize: 16, ml: 0.5, verticalAlign: 'middle' }} />
+            : <ArrowDownwardIcon fontSize="small" sx={{ fontSize: 16, ml: 0.5, verticalAlign: 'middle' }} />;
+    };
+
+    // Add this function with your other utility functions
+    const handlePlayerStatsSort = (key) => {
+        let direction = 'asc';
+        if (playerStatsSortConfig.key === key && playerStatsSortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setPlayerStatsSortConfig({ key, direction });
+    };
+
+    const getSortedPlayerStats = () => {
+        if (!playerStats || playerStats.length === 0) return [];
+
+        const sortableData = [...playerStats];
+
+        sortableData.sort((a, b) => {
+            // Handle null values
+            if (a[playerStatsSortConfig.key] === null && b[playerStatsSortConfig.key] === null) return 0;
+            if (a[playerStatsSortConfig.key] === null) return 1;
+            if (b[playerStatsSortConfig.key] === null) return -1;
+
+            // String sorting for name
+            if (playerStatsSortConfig.key === 'player_name') {
+                return playerStatsSortConfig.direction === 'asc'
+                    ? a.player_name.localeCompare(b.player_name)
+                    : b.player_name.localeCompare(a.player_name);
+            }
+
+            // Number sorting for everything else
+            return playerStatsSortConfig.direction === 'asc'
+                ? a[playerStatsSortConfig.key] - b[playerStatsSortConfig.key]
+                : b[playerStatsSortConfig.key] - a[playerStatsSortConfig.key];
+        });
+
+        return sortableData;
+    };
+
+    // Reuse your existing getSortArrow function for player stats
+    const getPlayerStatsSortArrow = (key) => {
+        if (playerStatsSortConfig.key !== key) return null;
+        return playerStatsSortConfig.direction === 'asc'
             ? <ArrowUpwardIcon fontSize="small" sx={{ fontSize: 16, ml: 0.5, verticalAlign: 'middle' }} />
             : <ArrowDownwardIcon fontSize="small" sx={{ fontSize: 16, ml: 0.5, verticalAlign: 'middle' }} />;
     };
@@ -936,6 +1020,7 @@ function LeagueManagement() {
                 >
                     <Tab icon={<EventIcon />} label="Schedule" />
                     <Tab icon={<TrophyIcon />} label="Standings" />
+                    <Tab icon={<PersonIcon />} label="Player Stats" />
                     <Tab icon={<TeamIcon />} label="Teams" />
                     <Tab icon={<CourseIcon />} label="Courses" />
                 </Tabs>
@@ -1349,6 +1434,131 @@ function LeagueManagement() {
                 )}
 
                 {activeTab === 2 && (
+                    <Box>
+                        <Typography variant="h6" gutterBottom>
+                            Player Statistics
+                        </Typography>
+                        {loadingPlayerStats ? (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+                                <CircularProgress />
+                            </Box>
+                        ) : playerStats && playerStats.length > 0 ? (
+                            <Box>
+                                <TableContainer component={Paper} sx={{ mt: 2, overflow: 'auto' }}>
+                                    <Table size="small">
+                                        <TableHead>
+                                            <TableRow sx={{ backgroundColor: 'primary.main' }}>
+                                                <TableCell
+                                                    sx={{ color: 'white', fontWeight: 'bold', padding: '6px 8px', cursor: 'pointer' }}
+                                                    onClick={() => handlePlayerStatsSort('player_name')}
+                                                >
+                                                    Player {getPlayerStatsSortArrow('player_name')}
+                                                </TableCell>
+                                                <TableCell
+                                                    align="center"
+                                                    sx={{ color: 'white', fontWeight: 'bold', padding: '6px 8px', cursor: 'pointer' }}
+                                                    onClick={() => handlePlayerStatsSort('rounds_played')}
+                                                >
+                                                    Rounds {getPlayerStatsSortArrow('rounds_played')}
+                                                </TableCell>
+                                                <TableCell
+                                                    align="center"
+                                                    sx={{ color: 'white', fontWeight: 'bold', padding: '6px 8px', cursor: 'pointer' }}
+                                                    onClick={() => handlePlayerStatsSort('avg_gross_score')}
+                                                >
+                                                    Avg Score {getPlayerStatsSortArrow('avg_gross_score')}
+                                                </TableCell>
+                                                <TableCell
+                                                    align="center"
+                                                    sx={{ color: 'white', fontWeight: 'bold', padding: '6px 8px', cursor: 'pointer' }}
+                                                    onClick={() => handlePlayerStatsSort('lowest_gross_score')}
+                                                >
+                                                    Best Score {getPlayerStatsSortArrow('lowest_gross_score')}
+                                                </TableCell>
+                                                <TableCell
+                                                    align="center"
+                                                    sx={{ color: 'white', fontWeight: 'bold', padding: '6px 8px', cursor: 'pointer' }}
+                                                    onClick={() => handlePlayerStatsSort('avg_net_score')}
+                                                >
+                                                    Avg Net {getPlayerStatsSortArrow('avg_net_score')}
+                                                </TableCell>
+                                                <TableCell
+                                                    align="center"
+                                                    sx={{ color: 'white', fontWeight: 'bold', padding: '6px 8px', cursor: 'pointer' }}
+                                                    onClick={() => handlePlayerStatsSort('lowest_net_score')}
+                                                >
+                                                    Low Net {getPlayerStatsSortArrow('lowest_net_score')}
+                                                </TableCell>
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                            {getSortedPlayerStats().map((player) => (
+                                                <TableRow
+                                                    key={player.player_id}
+                                                    sx={{
+                                                        '&:nth-of-type(odd)': { bgcolor: 'action.hover' },
+                                                        '&:hover': { bgcolor: 'action.selected' }
+                                                    }}
+                                                >
+                                                    <TableCell sx={{ fontWeight: 'bold', padding: '6px 8px' }}>
+                                                        {player.player_name}
+                                                    </TableCell>
+                                                    <TableCell align="center" sx={{ padding: '6px 8px' }}>
+                                                        {player.rounds_played}
+                                                    </TableCell>
+                                                    <TableCell align="center" sx={{ padding: '6px 8px' }}>
+                                                        {player.avg_gross_score ? player.avg_gross_score.toFixed(1) : '—'}
+                                                    </TableCell>
+                                                    <TableCell align="center" sx={{ padding: '6px 8px' }}>
+                                                        {player.lowest_gross_score || '—'}
+                                                    </TableCell>
+                                                    <TableCell align="center" sx={{ padding: '6px 8px' }}>
+                                                        {player.avg_net_score ? player.avg_net_score.toFixed(1) : '—'}
+                                                    </TableCell>
+                                                    <TableCell align="center" sx={{ padding: '6px 8px' }}>
+                                                        {player.lowest_net_score ? player.lowest_net_score.toFixed(1) : '—'}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </TableContainer>
+
+                                <Box sx={{ mt: 4 }}>
+                                    <Typography variant="subtitle2" gutterBottom>
+                                        Notable Achievements
+                                    </Typography>
+                                    <Grid container spacing={2}>
+                                        {/* This section can be populated in the future with dynamic data */}
+                                        {playerStats.some(p => p.birdies > 0) && (
+                                            <Grid item xs={12} sm={6} md={3}>
+                                                <Paper sx={{ p: 2, display: 'flex', alignItems: 'center' }}>
+                                                    <StarsIcon color="primary" sx={{ mr: 1 }} />
+                                                    <Typography variant="body2">
+                                                        {playerStats.reduce((sum, p) => sum + (p.birdies || 0), 0)} Total Birdies
+                                                    </Typography>
+                                                </Paper>
+                                            </Grid>
+                                        )}
+                                        {/* Add more achievement cards here as needed */}
+                                    </Grid>
+                                </Box>
+                            </Box>
+                        ) : (
+                            <Box sx={{ textAlign: 'center', py: 4 }}>
+                                <DangerousIcon color="action" sx={{ fontSize: 40, opacity: 0.5, mb: 2 }} />
+                                <Typography variant="body1" color="text.secondary">
+                                    No player statistics available yet.
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                    Stats will appear once players have completed rounds.
+                                </Typography>
+                            </Box>
+                        )}
+                    </Box>
+                )}
+
+                {activeTab === 3 && (
                     <Paper sx={{ p: 3 }}>
                         <Typography variant="h6" gutterBottom>
                             Teams
@@ -1372,7 +1582,7 @@ function LeagueManagement() {
                     </Paper>
                 )}
 
-                {activeTab === 3 && (
+                {activeTab === 4 && (
                     <Paper sx={{ p: 3 }}>
                         <Typography variant="h6" gutterBottom>
                             Courses
@@ -1654,9 +1864,9 @@ function LeagueManagement() {
                                                                                 label={`Played ${matchup.previous_matchups}x`}
                                                                                 color="warning"
                                                                                 title={`These teams previously played on ${matchup.matchup_history ?
-                                                                                        matchup.matchup_history
-                                                                                            .map(m => format(new Date(m.match_date), 'MMM d'))
-                                                                                            .join(', ') : 'unknown dates'
+                                                                                    matchup.matchup_history
+                                                                                        .map(m => format(new Date(m.match_date), 'MMM d'))
+                                                                                        .join(', ') : 'unknown dates'
                                                                                     }`}
                                                                             />
                                                                         ) : (

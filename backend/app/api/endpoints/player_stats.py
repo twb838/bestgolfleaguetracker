@@ -212,19 +212,19 @@ def get_league_player_stats(
     """
     Get comprehensive stats for all players in a league
     Requires players to have played at least min_rounds to be included
+    Combines results across teams if a player has played for multiple teams
     """
     # Verify league exists
     league = db.query(League).filter(League.id == league_id).first()
     if not league:
         raise HTTPException(status_code=404, detail="League not found")
     
-    # Get all player scores for this league with player and team info
+    # Get all player scores for this league with player info
+    # Query raw data for each player across all teams
     stats_query = db.query(
         MatchPlayer.player_id,
         Player.first_name,
         Player.last_name,
-        Team.id.label("team_id"),
-        Team.name.label("team_name"),
         func.count(MatchPlayer.id).label("rounds_played"),
         func.avg(MatchPlayer.gross_score).label("avg_gross"),
         func.avg(MatchPlayer.net_score).label("avg_net"),
@@ -232,8 +232,6 @@ def get_league_player_stats(
         func.min(MatchPlayer.net_score).label("lowest_net")
     ).join(
         Player, MatchPlayer.player_id == Player.id
-    ).join(
-        Team, MatchPlayer.team_id == Team.id
     ).join(
         Match, MatchPlayer.match_id == Match.id
     ).join(
@@ -244,14 +242,36 @@ def get_league_player_stats(
     ).group_by(
         MatchPlayer.player_id,
         Player.first_name,
-        Player.last_name,
-        Team.id,
-        Team.name
+        Player.last_name
     ).having(
         func.count(MatchPlayer.id) >= min_rounds
     ).order_by(
         func.avg(MatchPlayer.gross_score)
     ).all()
+    
+    # Now get the most recent team for each player
+    player_teams = {}
+    
+    for player_id in [stat.player_id for stat in stats_query]:
+        most_recent_team = db.query(
+            Team.name.label("team_name")
+        ).join(
+            MatchPlayer, MatchPlayer.team_id == Team.id
+        ).join(
+            Match, MatchPlayer.match_id == Match.id
+        ).join(
+            Week, Match.week_id == Week.id
+        ).filter(
+            MatchPlayer.player_id == player_id,
+            Week.league_id == league_id
+        ).order_by(
+            Match.match_date.desc()
+        ).first()
+        
+        if most_recent_team:
+            player_teams[player_id] = most_recent_team.team_name
+        else:
+            player_teams[player_id] = "Unknown Team"
     
     results = []
     for stat in stats_query:
@@ -263,8 +283,7 @@ def get_league_player_stats(
         results.append({
             "player_id": stat.player_id,
             "player_name": f"{stat.first_name} {stat.last_name}",
-            "team_id": stat.team_id,
-            "team_name": stat.team_name,
+            "team_name": player_teams.get(stat.player_id, "Unknown Team"),
             "rounds_played": stat.rounds_played,
             "avg_gross_score": float(stat.avg_gross) if stat.avg_gross else None,
             "avg_net_score": float(stat.avg_net) if stat.avg_net else None,

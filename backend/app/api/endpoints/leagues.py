@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
+from sqlalchemy.sql.expression import case
 from typing import List, Optional
 import random
 from datetime import timedelta, date
@@ -12,6 +13,7 @@ from app.models.match import Match
 from app.models.team import Team
 from app.models.course import Course
 from app.models.score import PlayerScore
+from app.models.player import Player
 from app.schemas.league import (
     LeagueCreate, LeagueUpdate, LeagueResponse, LeagueDetailResponse
 )
