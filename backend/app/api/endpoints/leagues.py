@@ -296,3 +296,44 @@ def get_league_leaderboard(league_id: int, db: Session = Depends(get_db)):
     
     return result
 
+@router.get("/{league_id}/matches", response_model=List[MatchResponse])
+def get_league_matches(league_id: int, db: Session = Depends(get_db)):
+    """
+    Get all matches for a league, including details needed for matchup generation
+    """
+    # Verify league exists
+    league = db.query(League).filter(League.id == league_id).first()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    
+    # Fetch all matches for this league
+    matches = (db.query(Match)
+        .join(Week, Match.week_id == Week.id)
+        .join(Team, Match.home_team_id == Team.id)
+        .filter(Week.league_id == league_id)
+        .order_by(Match.match_date)
+        .all())
+    
+    # Convert to response format
+    response_matches = []
+    for match in matches:
+        # Create dictionary from SQLAlchemy model
+        match_dict = {
+            "id": match.id,
+            "week_id": match.week_id,
+            "match_date": match.match_date,
+            "home_team_id": match.home_team_id,
+            "away_team_id": match.away_team_id,
+            "course_id": match.course_id,
+            "is_completed": match.is_completed,
+            "home_team_points": match.home_team_points,
+            "away_team_points": match.away_team_points,
+            "home_team_gross_score": match.home_team_gross_score,
+            "away_team_gross_score": match.away_team_gross_score,
+            "home_team_net_score": match.home_team_net_score,
+            "away_team_net_score": match.away_team_net_score,
+        }
+        response_matches.append(match_dict)
+            
+    return response_matches
+

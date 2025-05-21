@@ -550,125 +550,222 @@ function LeagueManagement() {
         }
     };
 
-    const generatePossibleMatchups = (selectedTeamIds, courseId, matchDate) => {
+    const generatePossibleMatchups = async (selectedTeamIds, courseId, matchDate) => {
         if (!selectedTeamIds || selectedTeamIds.length < 2) {
             setGeneratedMatchups([]);
             return;
         }
 
-        // Get the selected teams from the league teams
-        const selectedTeams = league.teams.filter(team => selectedTeamIds.includes(team.id));
-        const selectedCourse = league.courses.find(course => course.id === courseId);
-
-        // Create a mapping of previous matchups
-        const previousMatchups = new Map();
-
-        // Check all past matches in the league to track which teams have already played each other
-        matches.forEach(match => {
-            // Create a unique key for each team pairing regardless of home/away
-            const pairingKey = [match.home_team_id, match.away_team_id].sort().join('-');
-
-            if (!previousMatchups.has(pairingKey)) {
-                previousMatchups.set(pairingKey, 1);
-            } else {
-                previousMatchups.set(pairingKey, previousMatchups.get(pairingKey) + 1);
+        try {
+            // First, fetch ALL historical matches for these teams across all weeks
+            setMatchupWarning(null);
+            const historicalMatchesResponse = await fetch(`${env.API_BASE_URL}/leagues/${leagueId}/matches`);
+            if (!historicalMatchesResponse.ok) {
+                throw new Error('Failed to fetch historical matches');
             }
-        });
+            const historicalMatches = await historicalMatchesResponse.json();
 
-        // Create a copy of teams to work with
-        const teams = [...selectedTeams];
+            // Get the selected teams from the league teams
+            const selectedTeams = league.teams.filter(team => selectedTeamIds.includes(team.id));
+            const selectedCourse = league.courses.find(course => course.id === courseId);
 
-        // Determine if we have an odd number of teams
-        const hasOddTeams = teams.length % 2 !== 0;
-        let byeTeam = null;
+            // Create a matchup history tracking structure - key is teamA-teamB (sorted), value is count
+            const matchupHistory = new Map();
 
-        // If odd number of teams, remove the last team and mark it for a bye
-        if (hasOddTeams) {
-            byeTeam = teams.pop();
-        }
+            // Also track the weeks where teams played each other
+            const matchupDetails = new Map();
 
-        // Generate matches, trying to create unique pairings first
-        const matchups = [];
-        const usedTeams = new Set();
-        let hasDuplicatePairings = false;
+            // Process historical matches to build matchup history
+            historicalMatches.forEach(match => {
+                // Create a unique key for each team pairing regardless of home/away
+                const teamIds = [match.home_team_id, match.away_team_id].sort();
+                if (!selectedTeamIds.includes(teamIds[0]) || !selectedTeamIds.includes(teamIds[1])) {
+                    return; // Skip matches that don't include our selected teams
+                }
 
-        // Create a list of all possible team pairings
-        const possiblePairings = [];
-        for (let i = 0; i < teams.length; i++) {
-            for (let j = i + 1; j < teams.length; j++) {
-                const team1 = teams[i];
-                const team2 = teams[j];
-                const pairingKey = [team1.id, team2.id].sort().join('-');
-                const matchupCount = previousMatchups.get(pairingKey) || 0;
+                const pairingKey = teamIds.join('-');
 
-                possiblePairings.push({
-                    team1,
-                    team2,
-                    pairingKey,
-                    matchupCount
-                });
+                // Track count of matchups
+                if (!matchupHistory.has(pairingKey)) {
+                    matchupHistory.set(pairingKey, 1);
+                    matchupDetails.set(pairingKey, [{
+                        week_id: match.week_id,
+                        match_date: match.match_date
+                    }]);
+                } else {
+                    matchupHistory.set(pairingKey, matchupHistory.get(pairingKey) + 1);
+                    matchupDetails.get(pairingKey).push({
+                        week_id: match.week_id,
+                        match_date: match.match_date
+                    });
+                }
+            });
+
+            console.log("Matchup history:", matchupHistory);
+
+            // Determine if we have an odd number of teams
+            const hasOddTeams = selectedTeams.length % 2 !== 0;
+            let byeTeam = null;
+
+            // If odd number of teams, we'll need to give one a bye
+            if (hasOddTeams) {
+                // Find the team that has had the fewest byes
+                // This would ideally be tracked in your database
+                // For now, just pick the last team
+                byeTeam = selectedTeams.pop();
             }
-        }
 
-        // Sort pairings by the number of times they've played (ascending)
-        possiblePairings.sort((a, b) => a.matchupCount - b.matchupCount);
+            // Create all possible pairings ranked by how many times they've played
+            const possiblePairings = [];
+            for (let i = 0; i < selectedTeams.length; i++) {
+                for (let j = i + 1; j < selectedTeams.length; j++) {
+                    const team1 = selectedTeams[i];
+                    const team2 = selectedTeams[j];
+                    const pairingKey = [team1.id, team2.id].sort().join('-');
+                    const matchupCount = matchupHistory.get(pairingKey) || 0;
+                    const matchupInfo = matchupDetails.get(pairingKey) || [];
 
-        // First attempt to create matches with teams that haven't played each other yet
-        for (const pairing of possiblePairings) {
-            if (!usedTeams.has(pairing.team1.id) && !usedTeams.has(pairing.team2.id)) {
-                matchups.push({
-                    home_team_id: pairing.team1.id,
-                    home_team_name: pairing.team1.name,
-                    away_team_id: pairing.team2.id,
-                    away_team_name: pairing.team2.name,
-                    course_id: courseId,
-                    course_name: selectedCourse ? selectedCourse.name : 'Not selected',
-                    match_date: matchDate,
-                    previous_matchups: pairing.matchupCount
-                });
-
-                usedTeams.add(pairing.team1.id);
-                usedTeams.add(pairing.team2.id);
-
-                if (pairing.matchupCount > 0) {
-                    hasDuplicatePairings = true;
+                    possiblePairings.push({
+                        team1,
+                        team2,
+                        pairingKey,
+                        matchupCount,
+                        matchupInfo
+                    });
                 }
             }
-        }
 
-        // Check if we have any unused teams due to all potential opponents being used
-        const unusedTeams = teams.filter(team => !usedTeams.has(team.id));
+            // Sort pairings by the number of times they've played (ascending)
+            possiblePairings.sort((a, b) => a.matchupCount - b.matchupCount);
 
-        if (unusedTeams.length > 0) {
-            // We have teams that couldn't be paired optimally
-            // Create additional matches with teams that have played before
-            for (let i = 0; i < unusedTeams.length; i += 2) {
-                if (i + 1 < unusedTeams.length) {
-                    const team1 = unusedTeams[i];
-                    const team2 = unusedTeams[i + 1];
-                    const pairingKey = [team1.id, team2.id].sort().join('-');
-                    const matchupCount = previousMatchups.get(pairingKey) || 0;
+            // Use a greedy algorithm to select pairings
+            const matchups = [];
+            const usedTeams = new Set();
+            let hasDuplicatePairings = false;
+
+            // First, try to use teams that haven't played each other at all
+            for (const pairing of possiblePairings) {
+                if (!usedTeams.has(pairing.team1.id) && !usedTeams.has(pairing.team2.id)) {
+                    const isDuplicate = pairing.matchupCount > 0;
 
                     matchups.push({
-                        home_team_id: team1.id,
-                        home_team_name: team1.name,
-                        away_team_id: team2.id,
-                        away_team_name: team2.name,
+                        home_team_id: pairing.team1.id,
+                        home_team_name: pairing.team1.name,
+                        away_team_id: pairing.team2.id,
+                        away_team_name: pairing.team2.name,
                         course_id: courseId,
                         course_name: selectedCourse ? selectedCourse.name : 'Not selected',
                         match_date: matchDate,
-                        previous_matchups: matchupCount,
-                        is_forced: true
+                        previous_matchups: pairing.matchupCount,
+                        is_duplicate: isDuplicate,
+                        matchup_history: pairing.matchupInfo,
                     });
 
-                    if (matchupCount > 0) {
+                    usedTeams.add(pairing.team1.id);
+                    usedTeams.add(pairing.team2.id);
+
+                    if (isDuplicate) {
                         hasDuplicatePairings = true;
                     }
                 }
             }
+
+            // If there are unused teams, pair them even if they've played before
+            const unusedTeams = selectedTeams.filter(team => !usedTeams.has(team.id));
+            if (unusedTeams.length > 0) {
+                // Pair remaining teams optimally
+                for (let i = 0; i < unusedTeams.length; i += 2) {
+                    if (i + 1 < unusedTeams.length) {
+                        const team1 = unusedTeams[i];
+                        const team2 = unusedTeams[i + 1];
+                        const pairingKey = [team1.id, team2.id].sort().join('-');
+                        const matchupCount = matchupHistory.get(pairingKey) || 0;
+                        const matchupInfo = matchupDetails.get(pairingKey) || [];
+
+                        matchups.push({
+                            home_team_id: team1.id,
+                            home_team_name: team1.name,
+                            away_team_id: team2.id,
+                            away_team_name: team2.name,
+                            course_id: courseId,
+                            course_name: selectedCourse ? selectedCourse.name : 'Not selected',
+                            match_date: matchDate,
+                            previous_matchups: matchupCount,
+                            is_duplicate: matchupCount > 0,
+                            matchup_history: matchupInfo,
+                            is_forced: true // This indicates we had to force this pairing
+                        });
+
+                        if (matchupCount > 0) {
+                            hasDuplicatePairings = true;
+                        }
+                    }
+                }
+            }
+
+            // If there was a bye team, add it to the generated data
+            if (byeTeam) {
+                matchups.push({
+                    home_team_id: byeTeam.id,
+                    home_team_name: byeTeam.name,
+                    away_team_id: null,
+                    away_team_name: "BYE",
+                    course_id: null,
+                    course_name: "N/A - Bye Week",
+                    match_date: matchDate,
+                    is_bye: true
+                });
+            }
+
+            setGeneratedMatchups(matchups);
+
+            // Set warning message if needed
+            if (hasDuplicatePairings) {
+                setMatchupWarning(
+                    "Some teams will play against each other more than once because not all matchups can be unique. " +
+                    "Duplicate matchups are highlighted."
+                );
+            }
+        } catch (error) {
+            console.error("Error generating matchups:", error);
+            setMatchupWarning("Error fetching match history. Matches may not be optimally paired.");
+
+            // Fall back to basic matchup generation without historical data
+            basicMatchupGeneration(selectedTeamIds, courseId, matchDate);
+        }
+    };
+
+    // Fallback method if API call fails
+    const basicMatchupGeneration = (selectedTeamIds, courseId, matchDate) => {
+        // Similar to original implementation, but without historical data
+        const selectedTeams = league.teams.filter(team => selectedTeamIds.includes(team.id));
+        const selectedCourse = league.courses.find(course => course.id === courseId);
+
+        // Create simple pairings
+        const matchups = [];
+        const hasOddTeams = selectedTeams.length % 2 !== 0;
+        let byeTeam = null;
+
+        if (hasOddTeams) {
+            byeTeam = selectedTeams.pop();
         }
 
-        // If there was a bye team, add it to the generated data but marked as a bye
+        // Simple pairing algorithm
+        for (let i = 0; i < selectedTeams.length; i += 2) {
+            if (i + 1 < selectedTeams.length) {
+                matchups.push({
+                    home_team_id: selectedTeams[i].id,
+                    home_team_name: selectedTeams[i].name,
+                    away_team_id: selectedTeams[i + 1].id,
+                    away_team_name: selectedTeams[i + 1].name,
+                    course_id: courseId,
+                    course_name: selectedCourse ? selectedCourse.name : 'Not selected',
+                    match_date: matchDate
+                });
+            }
+        }
+
+        // Add bye team
         if (byeTeam) {
             matchups.push({
                 home_team_id: byeTeam.id,
@@ -683,10 +780,6 @@ function LeagueManagement() {
         }
 
         setGeneratedMatchups(matchups);
-
-        // Set a warning state to display in the UI
-        setMatchupWarning(hasDuplicatePairings ?
-            "Some teams will play against each other more than once as all unique match combinations have been exhausted." : null);
     };
 
     const handleCreateWeek = async () => {
@@ -1535,15 +1628,41 @@ function LeagueManagement() {
                                                                 <TableCell>Away Team</TableCell>
                                                                 <TableCell>Course</TableCell>
                                                                 <TableCell>Date</TableCell>
+                                                                <TableCell>Status</TableCell>
                                                             </TableRow>
                                                         </TableHead>
                                                         <TableBody>
                                                             {generatedMatchups.map((matchup, index) => (
-                                                                <TableRow key={index}>
+                                                                <TableRow
+                                                                    key={index}
+                                                                    sx={{
+                                                                        ...(matchup.is_duplicate && {
+                                                                            bgcolor: 'rgba(255, 152, 0, 0.08)', // Light orange background for duplicates
+                                                                        })
+                                                                    }}
+                                                                >
                                                                     <TableCell>{matchup.home_team_name}</TableCell>
                                                                     <TableCell>{matchup.away_team_name}</TableCell>
                                                                     <TableCell>{matchup.course_name}</TableCell>
                                                                     <TableCell>{format(new Date(matchup.match_date), 'MMM d, yyyy')}</TableCell>
+                                                                    <TableCell>
+                                                                        {matchup.is_bye ? (
+                                                                            <Chip size="small" label="BYE" color="default" />
+                                                                        ) : matchup.is_duplicate ? (
+                                                                            <Chip
+                                                                                size="small"
+                                                                                label={`Played ${matchup.previous_matchups}x`}
+                                                                                color="warning"
+                                                                                title={`These teams previously played on ${matchup.matchup_history ?
+                                                                                        matchup.matchup_history
+                                                                                            .map(m => format(new Date(m.match_date), 'MMM d'))
+                                                                                            .join(', ') : 'unknown dates'
+                                                                                    }`}
+                                                                            />
+                                                                        ) : (
+                                                                            <Chip size="small" label="New Matchup" color="success" />
+                                                                        )}
+                                                                    </TableCell>
                                                                 </TableRow>
                                                             ))}
                                                         </TableBody>

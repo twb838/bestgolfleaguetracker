@@ -23,21 +23,18 @@ class MatchUpdate(BaseModel):
 # In app/schemas/match.py
 class MatchResponse(BaseModel):
     id: int
-    match_date: date
-    is_completed: bool
     week_id: int
-    course_id: int
-    home_team_id: int
-    away_team_id: int
-    home_team: Optional[dict] = None  
-    away_team: Optional[dict] = None
-    course: Optional[dict] = None
-    home_team_gross_score: Optional[int] = None
-    home_team_net_score: Optional[int] = None
+    match_date: date
+    home_team_id: Optional[int] = None
+    away_team_id: Optional[int] = None
+    course_id: Optional[int] = None
+    is_completed: bool = False
     home_team_points: Optional[float] = None
-    away_team_gross_score: Optional[int] = None
-    away_team_net_score: Optional[int] = None
     away_team_points: Optional[float] = None
+    home_team_gross_score: Optional[int] = None
+    away_team_gross_score: Optional[int] = None
+    home_team_net_score: Optional[int] = None
+    away_team_net_score: Optional[int] = None
     
     class Config:
         orm_mode = True
