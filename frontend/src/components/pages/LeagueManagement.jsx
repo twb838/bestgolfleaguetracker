@@ -53,7 +53,10 @@ import {
     Person as PersonIcon,
     Dangerous as DangerousIcon,
     Hotel as HotelIcon,
-    Stars as StarsIcon
+    Stars as StarsIcon,
+    Star as StarIcon,
+    EmojiEventsOutlined as TrophyOutlineIcon,
+    Leaderboard as LeaderboardIcon
 } from '@mui/icons-material';
 import format from 'date-fns/format';
 import env from '../../config/env';
@@ -128,6 +131,15 @@ function LeagueManagement() {
         direction: 'asc'
     });
 
+    // Add with your other state declarations
+    const [rankingsData, setRankingsData] = useState({
+        topIndividualGross: [],
+        topIndividualNet: [],
+        topTeamGross: [],
+        topTeamNet: []
+    });
+    const [loadingRankings, setLoadingRankings] = useState(false);
+
     useEffect(() => {
         // If league data wasn't passed via navigation state, fetch it
         if (!league) {
@@ -184,6 +196,12 @@ function LeagueManagement() {
     useEffect(() => {
         if (activeTab === 2 && league?.id) {
             fetchPlayerStats();
+        }
+    }, [activeTab, league?.id]);
+
+    useEffect(() => {
+        if (activeTab === 3 && league?.id) {
+            fetchRankingsData();
         }
     }, [activeTab, league?.id]);
 
@@ -332,6 +350,48 @@ function LeagueManagement() {
             setPlayerStats([]);
         } finally {
             setLoadingPlayerStats(false);
+        }
+    };
+
+    // Add with your other data fetching functions
+    const fetchRankingsData = async () => {
+        if (!league?.id) return;
+
+        setLoadingRankings(true);
+        try {
+            // Fetch individual gross scores
+            const individualGrossResponse = await fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/top-scores?limit=5&score_type=gross`);
+            // Fetch individual net scores
+            const individualNetResponse = await fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/top-scores?limit=5&score_type=net`);
+            // Fetch team gross scores
+            const teamGrossResponse = await fetch(`${env.API_BASE_URL}/teamstats/league/${leagueId}/top-scores?limit=5&score_type=gross`);
+            // Fetch team net scores
+            const teamNetResponse = await fetch(`${env.API_BASE_URL}/teamstats/league/${leagueId}/top-scores?limit=5&score_type=net`);
+
+            const [individualGrossData, individualNetData, teamGrossData, teamNetData] = await Promise.all([
+                individualGrossResponse.ok ? individualGrossResponse.json() : [],
+                individualNetResponse.ok ? individualNetResponse.json() : [],
+                teamGrossResponse.ok ? teamGrossResponse.json() : [],
+                teamNetResponse.ok ? teamNetResponse.json() : []
+            ]);
+
+            setRankingsData({
+                topIndividualGross: individualGrossData,
+                topIndividualNet: individualNetData,
+                topTeamGross: teamGrossData,
+                topTeamNet: teamNetData
+            });
+        } catch (error) {
+            console.error('Error fetching rankings data:', error);
+            // If API endpoints don't exist yet, use empty arrays
+            setRankingsData({
+                topIndividualGross: [],
+                topIndividualNet: [],
+                topTeamGross: [],
+                topTeamNet: []
+            });
+        } finally {
+            setLoadingRankings(false);
         }
     };
 
@@ -1021,6 +1081,7 @@ function LeagueManagement() {
                     <Tab icon={<EventIcon />} label="Schedule" />
                     <Tab icon={<TrophyIcon />} label="Standings" />
                     <Tab icon={<PersonIcon />} label="Player Stats" />
+                    <Tab icon={<StarIcon />} label="Rankings" />
                     <Tab icon={<TeamIcon />} label="Teams" />
                     <Tab icon={<CourseIcon />} label="Courses" />
                 </Tabs>
@@ -1559,6 +1620,353 @@ function LeagueManagement() {
                 )}
 
                 {activeTab === 3 && (
+                    <Box>
+                        <Typography variant="h6" gutterBottom>
+                            Top Rankings
+                        </Typography>
+                        {loadingRankings ? (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+                                <CircularProgress />
+                            </Box>
+                        ) : (
+                            <Grid container spacing={3}>
+                                {/* Individual Gross Scores */}
+                                <Grid item xs={12} md={6}>
+                                    <Paper
+                                        sx={{
+                                            p: 2,
+                                            height: '100%',
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                            overflow: 'hidden'
+                                        }}
+                                    >
+                                        <Box sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            mb: 2,
+                                            pb: 1,
+                                            borderBottom: '1px solid',
+                                            borderColor: 'divider'
+                                        }}>
+                                            <TrophyOutlineIcon sx={{ mr: 1, color: 'primary.main' }} />
+                                            <Typography variant="h6" component="h3">
+                                                Lowest Individual Gross Scores
+                                            </Typography>
+                                        </Box>
+
+                                        {rankingsData.topIndividualGross.length > 0 ? (
+                                            <List disablePadding>
+                                                {rankingsData.topIndividualGross.map((score, index) => (
+                                                    <ListItem
+                                                        key={`gross-${score.player_id}-${index}`}
+                                                        sx={{
+                                                            px: 1,
+                                                            py: 0.5,
+                                                            backgroundColor: index % 2 === 0 ? 'action.hover' : 'transparent'
+                                                        }}
+                                                    >
+                                                        <Box
+                                                            sx={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                width: '100%'
+                                                            }}
+                                                        >
+                                                            <Typography
+                                                                variant="body1"
+                                                                sx={{
+                                                                    fontWeight: 'bold',
+                                                                    minWidth: '24px',
+                                                                    color: index === 0 ? 'warning.dark' : 'text.primary'
+                                                                }}
+                                                            >
+                                                                {index + 1}.
+                                                            </Typography>
+                                                            <Box sx={{ flexGrow: 1 }}>
+                                                                <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                                                                    {score.player_name}
+                                                                </Typography>
+                                                                <Typography variant="caption" color="text.secondary">
+                                                                    {score.date ? format(new Date(score.date), 'MMM d, yyyy') : 'Unknown date'} - {score.course_name || 'Unknown course'}
+                                                                </Typography>
+                                                            </Box>
+                                                            <Typography
+                                                                variant="body1"
+                                                                sx={{
+                                                                    fontWeight: 'bold',
+                                                                    color: 'success.main',
+                                                                    fontSize: index === 0 ? '1.2rem' : '1rem'
+                                                                }}
+                                                            >
+                                                                {score.score}
+                                                            </Typography>
+                                                        </Box>
+                                                    </ListItem>
+                                                ))}
+                                            </List>
+                                        ) : (
+                                            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                                                No individual gross scores recorded yet
+                                            </Typography>
+                                        )}
+                                    </Paper>
+                                </Grid>
+
+                                {/* Individual Net Scores */}
+                                <Grid item xs={12} md={6}>
+                                    <Paper
+                                        sx={{
+                                            p: 2,
+                                            height: '100%',
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                            overflow: 'hidden'
+                                        }}
+                                    >
+                                        <Box sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            mb: 2,
+                                            pb: 1,
+                                            borderBottom: '1px solid',
+                                            borderColor: 'divider'
+                                        }}>
+                                            <TrophyOutlineIcon sx={{ mr: 1, color: 'primary.main' }} />
+                                            <Typography variant="h6" component="h3">
+                                                Lowest Individual Net Scores
+                                            </Typography>
+                                        </Box>
+
+                                        {rankingsData.topIndividualNet.length > 0 ? (
+                                            <List disablePadding>
+                                                {rankingsData.topIndividualNet.map((score, index) => (
+                                                    <ListItem
+                                                        key={`net-${score.player_id}-${index}`}
+                                                        sx={{
+                                                            px: 1,
+                                                            py: 0.5,
+                                                            backgroundColor: index % 2 === 0 ? 'action.hover' : 'transparent'
+                                                        }}
+                                                    >
+                                                        <Box
+                                                            sx={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                width: '100%'
+                                                            }}
+                                                        >
+                                                            <Typography
+                                                                variant="body1"
+                                                                sx={{
+                                                                    fontWeight: 'bold',
+                                                                    minWidth: '24px',
+                                                                    color: index === 0 ? 'warning.dark' : 'text.primary'
+                                                                }}
+                                                            >
+                                                                {index + 1}.
+                                                            </Typography>
+                                                            <Box sx={{ flexGrow: 1 }}>
+                                                                <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                                                                    {score.player_name}
+                                                                </Typography>
+                                                                <Typography variant="caption" color="text.secondary">
+                                                                    {score.date ? format(new Date(score.date), 'MMM d, yyyy') : 'Unknown date'} - {score.course_name || 'Unknown course'}
+                                                                </Typography>
+                                                            </Box>
+                                                            <Typography
+                                                                variant="body1"
+                                                                sx={{
+                                                                    fontWeight: 'bold',
+                                                                    color: 'success.main',
+                                                                    fontSize: index === 0 ? '1.2rem' : '1rem'
+                                                                }}
+                                                            >
+                                                                {score.score}
+                                                            </Typography>
+                                                        </Box>
+                                                    </ListItem>
+                                                ))}
+                                            </List>
+                                        ) : (
+                                            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                                                No individual net scores recorded yet
+                                            </Typography>
+                                        )}
+                                    </Paper>
+                                </Grid>
+
+                                {/* Team Gross Scores */}
+                                <Grid item xs={12} md={6}>
+                                    <Paper
+                                        sx={{
+                                            p: 2,
+                                            height: '100%',
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                            overflow: 'hidden'
+                                        }}
+                                    >
+                                        <Box sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            mb: 2,
+                                            pb: 1,
+                                            borderBottom: '1px solid',
+                                            borderColor: 'divider'
+                                        }}>
+                                            <LeaderboardIcon sx={{ mr: 1, color: 'primary.main' }} />
+                                            <Typography variant="h6" component="h3">
+                                                Lowest Team Gross Scores
+                                            </Typography>
+                                        </Box>
+
+                                        {rankingsData.topTeamGross.length > 0 ? (
+                                            <List disablePadding>
+                                                {rankingsData.topTeamGross.map((score, index) => (
+                                                    <ListItem
+                                                        key={`team-gross-${score.team_id}-${index}`}
+                                                        sx={{
+                                                            px: 1,
+                                                            py: 0.5,
+                                                            backgroundColor: index % 2 === 0 ? 'action.hover' : 'transparent'
+                                                        }}
+                                                    >
+                                                        <Box
+                                                            sx={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                width: '100%'
+                                                            }}
+                                                        >
+                                                            <Typography
+                                                                variant="body1"
+                                                                sx={{
+                                                                    fontWeight: 'bold',
+                                                                    minWidth: '24px',
+                                                                    color: index === 0 ? 'warning.dark' : 'text.primary'
+                                                                }}
+                                                            >
+                                                                {index + 1}.
+                                                            </Typography>
+                                                            <Box sx={{ flexGrow: 1 }}>
+                                                                <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                                                                    {score.team_name}
+                                                                </Typography>
+                                                                <Typography variant="caption" color="text.secondary">
+                                                                    {score.date ? format(new Date(score.date), 'MMM d, yyyy') : 'Unknown date'} - {score.course_name || 'Unknown course'}
+                                                                </Typography>
+                                                            </Box>
+                                                            <Typography
+                                                                variant="body1"
+                                                                sx={{
+                                                                    fontWeight: 'bold',
+                                                                    color: 'success.main',
+                                                                    fontSize: index === 0 ? '1.2rem' : '1rem'
+                                                                }}
+                                                            >
+                                                                {score.score}
+                                                            </Typography>
+                                                        </Box>
+                                                    </ListItem>
+                                                ))}
+                                            </List>
+                                        ) : (
+                                            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                                                No team gross scores recorded yet
+                                            </Typography>
+                                        )}
+                                    </Paper>
+                                </Grid>
+
+                                {/* Team Net Scores */}
+                                <Grid item xs={12} md={6}>
+                                    <Paper
+                                        sx={{
+                                            p: 2,
+                                            height: '100%',
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                            overflow: 'hidden'
+                                        }}
+                                    >
+                                        <Box sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            mb: 2,
+                                            pb: 1,
+                                            borderBottom: '1px solid',
+                                            borderColor: 'divider'
+                                        }}>
+                                            <LeaderboardIcon sx={{ mr: 1, color: 'primary.main' }} />
+                                            <Typography variant="h6" component="h3">
+                                                Lowest Team Net Scores
+                                            </Typography>
+                                        </Box>
+
+                                        {rankingsData.topTeamNet.length > 0 ? (
+                                            <List disablePadding>
+                                                {rankingsData.topTeamNet.map((score, index) => (
+                                                    <ListItem
+                                                        key={`team-net-${score.team_id}-${index}`}
+                                                        sx={{
+                                                            px: 1,
+                                                            py: 0.5,
+                                                            backgroundColor: index % 2 === 0 ? 'action.hover' : 'transparent'
+                                                        }}
+                                                    >
+                                                        <Box
+                                                            sx={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                width: '100%'
+                                                            }}
+                                                        >
+                                                            <Typography
+                                                                variant="body1"
+                                                                sx={{
+                                                                    fontWeight: 'bold',
+                                                                    minWidth: '24px',
+                                                                    color: index === 0 ? 'warning.dark' : 'text.primary'
+                                                                }}
+                                                            >
+                                                                {index + 1}.
+                                                            </Typography>
+                                                            <Box sx={{ flexGrow: 1 }}>
+                                                                <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                                                                    {score.team_name}
+                                                                </Typography>
+                                                                <Typography variant="caption" color="text.secondary">
+                                                                    {score.date ? format(new Date(score.date), 'MMM d, yyyy') : 'Unknown date'} - {score.course_name || 'Unknown course'}
+                                                                </Typography>
+                                                            </Box>
+                                                            <Typography
+                                                                variant="body1"
+                                                                sx={{
+                                                                    fontWeight: 'bold',
+                                                                    color: 'success.main',
+                                                                    fontSize: index === 0 ? '1.2rem' : '1rem'
+                                                                }}
+                                                            >
+                                                                {score.score}
+                                                            </Typography>
+                                                        </Box>
+                                                    </ListItem>
+                                                ))}
+                                            </List>
+                                        ) : (
+                                            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                                                No team net scores recorded yet
+                                            </Typography>
+                                        )}
+                                    </Paper>
+                                </Grid>
+                            </Grid>
+                        )}
+                    </Box>
+                )}
+
+                {activeTab === 4 && (
                     <Paper sx={{ p: 3 }}>
                         <Typography variant="h6" gutterBottom>
                             Teams
@@ -1582,7 +1990,7 @@ function LeagueManagement() {
                     </Paper>
                 )}
 
-                {activeTab === 4 && (
+                {activeTab === 5 && (
                     <Paper sx={{ p: 3 }}>
                         <Typography variant="h6" gutterBottom>
                             Courses

@@ -10,6 +10,7 @@ from app.models.player import Player
 from app.models.league import League
 from app.models.team import Team
 from app.models.week import Week
+from app.models.course import Course
 
 router = APIRouter(prefix="/playerstats", tags=["playerstats"])
 
@@ -293,3 +294,57 @@ def get_league_player_stats(
         })
     
     return results
+
+@router.get("/league/{league_id}/top-scores", response_model=List[Dict[str, Any]])
+def get_top_player_scores(
+    league_id: int,
+    score_type: str = "gross",
+    limit: int = 5,
+    db: Session = Depends(get_db)
+):
+    """
+    Get top individual scores for a league (either gross or net)
+    Returns the lowest scores with player name, score, and match details
+    """
+    # Verify league exists
+    league = db.query(League).filter(League.id == league_id).first()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    
+    # Select the score field based on type
+    score_field = MatchPlayer.gross_score if score_type == "gross" else MatchPlayer.net_score
+    
+    # Query for top scores
+    top_scores = (
+        db.query(
+            MatchPlayer.player_id,
+            func.concat(Player.first_name, ' ', Player.last_name).label("player_name"),
+            score_field.label("score"),
+            Match.match_date.label("date"),
+            Course.name.label("course_name")
+        )
+        .join(Match, MatchPlayer.match_id == Match.id)
+        .join(Week, Match.week_id == Week.id)
+        .join(Player, MatchPlayer.player_id == Player.id)
+        .join(Course, Match.course_id == Course.id)
+        .filter(
+            Week.league_id == league_id,
+            score_field.isnot(None)
+        )
+        .order_by(score_field.asc())
+        .limit(limit)
+        .all()
+    )
+    
+    # Convert to response format
+    result = []
+    for row in top_scores:
+        result.append({
+            "player_id": row.player_id,
+            "player_name": row.player_name,
+            "score": row.score,
+            "date": row.date,
+            "course_name": row.course_name
+        })
+    
+    return result
