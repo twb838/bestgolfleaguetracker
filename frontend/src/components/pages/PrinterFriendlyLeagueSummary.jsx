@@ -43,6 +43,7 @@ const PrinterFriendlyLeagueSummary = () => {
         topTeamGross: [],
         topTeamNet: []
     });
+    const [makeupMatches, setMakeupMatches] = useState([]);
 
     // Fetch all data on load
     useEffect(() => {
@@ -104,6 +105,14 @@ const PrinterFriendlyLeagueSummary = () => {
         fetchAllData();
     }, [leagueId]);
 
+    // Separate useEffect to fetch makeup matches after weeks and selectedWeekId are set
+    useEffect(() => {
+        if (weeks.length > 0 && selectedWeekId && league) {
+            console.log('Fetching makeup matches after week and league data loaded');
+            fetchMakeupMatches();
+        }
+    }, [weeks, selectedWeekId, league]);
+
     const fetchMatchesForWeek = async (weekId, leagueData) => {
         if (!weekId) return;
 
@@ -136,6 +145,83 @@ const PrinterFriendlyLeagueSummary = () => {
             }
         } catch (error) {
             console.error('Error fetching matches:', error);
+        }
+    };
+
+    const fetchMakeupMatches = async () => {
+        try {
+            // Fetch all matches for the league
+            const response = await fetch(`${env.API_BASE_URL}/leagues/${leagueId}/matches`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch league matches');
+            }
+
+            const allMatches = await response.json();
+
+            // Find the current date
+            const currentDate = new Date();
+
+            // Find the week with the selectedWeekId
+            const currentWeek = weeks.find(week => week.id === selectedWeekId);
+
+            if (!currentWeek) {
+                console.log('No current week found for makeup matches calculation');
+                return;
+            }
+
+            console.log('Looking for makeup matches, current week:', currentWeek.week_number);
+
+            // Filter matches that:
+            // 1. Are not completed
+            // 2. Are from past weeks (not the current week)
+            // 3. Have a date in the past or are overdue
+            const makeup = allMatches.filter(match => {
+                // Check if match is not completed
+                if (match.is_completed) return false;
+
+                // Check if match is not from the current week
+                if (match.week_id === currentWeek.id) return false;
+
+                // Find the week this match belongs to
+                const matchWeek = weeks.find(w => w.id === match.week_id);
+                if (!matchWeek) return false;
+
+                // Check if the week's end date is in the past
+                const isOverdue = new Date(matchWeek.end_date) < currentDate;
+
+                // Add some debugging
+                if (isOverdue) {
+                    console.log(`Found makeup match: Week ${matchWeek.week_number}, Teams: ${match.home_team_id} vs ${match.away_team_id}`);
+                }
+
+                return isOverdue;
+            });
+
+            console.log(`Found ${makeup.length} makeup matches`);
+
+            // Enrich the makeup matches with team and course details
+            if (league?.teams && league?.courses) {
+                const enrichedMakeupMatches = makeup.map(match => {
+                    const homeTeam = league.teams.find(team => team.id === match.home_team_id);
+                    const awayTeam = league.teams.find(team => team.id === match.away_team_id);
+                    const course = league.courses.find(course => course.id === match.course_id);
+                    const matchWeek = weeks.find(w => w.id === match.week_id);
+
+                    return {
+                        ...match,
+                        home_team: homeTeam || { name: `Team #${match.home_team_id}` },
+                        away_team: awayTeam || { name: `Team #${match.away_team_id}` },
+                        course: course || { name: `Course #${match.course_id}` },
+                        week_number: matchWeek?.week_number || 'Unknown'
+                    };
+                });
+
+                setMakeupMatches(enrichedMakeupMatches);
+            } else {
+                setMakeupMatches(makeup);
+            }
+        } catch (error) {
+            console.error('Error fetching makeup matches:', error);
         }
     };
 
@@ -202,6 +288,9 @@ const PrinterFriendlyLeagueSummary = () => {
             </Box>
         );
     }
+
+    // Log makeup matches for debugging
+    console.log(`Rendering with ${makeupMatches.length} makeup matches:`, makeupMatches);
 
     // Find the selected week
     const selectedWeek = weeks.find(week => week.id === selectedWeekId);
@@ -299,6 +388,100 @@ const PrinterFriendlyLeagueSummary = () => {
                         )}
                     </Paper>
                 </Grid>
+
+                {/* SECTION 1.5: Makeup Matches */}
+                {makeupMatches && makeupMatches.length > 0 ? (
+                    <Grid item xs={12}>
+                        <Paper sx={{ p: 2, mb: 3, bgcolor: '#fff8e1' }} className="print-force-background">
+                            <Typography variant="h5" component="h2" gutterBottom sx={{
+                                fontWeight: 'bold',
+                                borderBottom: '2px solid',
+                                borderColor: 'warning.main',
+                                pb: 1,
+                                display: 'flex',
+                                alignItems: 'center'
+                            }}>
+                                <Box component="span" sx={{
+                                    bgcolor: 'warning.main',
+                                    color: 'white',
+                                    px: 1,
+                                    py: 0.5,
+                                    mr: 1,
+                                    borderRadius: 1,
+                                    fontSize: '0.8em'
+                                }}>
+                                    ATTENTION
+                                </Box>
+                                Makeup Matches ({makeupMatches.length})
+                            </Typography>
+
+                            <Typography variant="body2" sx={{ mb: 2, fontStyle: 'italic' }}>
+                                The following matches are from previous weeks and still need to be completed.
+                            </Typography>
+
+                            <TableContainer>
+                                <Table size="small">
+                                    <TableHead>
+                                        <TableRow sx={{ backgroundColor: '#fff3cd' }} className="print-force-background">
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Week</TableCell>
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Original Date</TableCell>
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Course</TableCell>
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Home Team</TableCell>
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Away Team</TableCell>
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {makeupMatches.map(match => (
+                                            <TableRow key={`makeup-${match.id}`} sx={{
+                                                backgroundColor: '#fffdf7'
+                                            }} className="print-force-background">
+                                                <TableCell>
+                                                    Week {match.week_number}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {format(new Date(match.match_date), 'MMM d, yyyy')}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {match.course?.name || 'TBD'}
+                                                </TableCell>
+                                                <TableCell sx={{ fontWeight: 'bold' }}>
+                                                    {match.home_team?.name || 'Home Team'}
+                                                </TableCell>
+                                                <TableCell sx={{ fontWeight: 'bold' }}>
+                                                    {match.away_team?.name || 'Away Team'}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Box sx={{
+                                                        display: 'inline-block',
+                                                        bgcolor: 'warning.light',
+                                                        color: 'warning.contrastText',
+                                                        px: 1,
+                                                        py: 0.25,
+                                                        borderRadius: 1,
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 'bold'
+                                                    }} className="print-force-background">
+                                                        Makeup Required
+                                                    </Box>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        </Paper>
+                    </Grid>
+                ) : (
+                    // If you want to show something when there are no makeup matches
+                    <Grid item xs={12} className="no-print">
+                        <Box sx={{ p: 1, mb: 2 }}>
+                            <Typography variant="body2" color="text.secondary">
+                                No makeup matches pending.
+                            </Typography>
+                        </Box>
+                    </Grid>
+                )}
 
                 {/* SECTION 2: League Standings */}
                 <Grid item xs={12}>
