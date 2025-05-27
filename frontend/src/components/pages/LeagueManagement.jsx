@@ -56,7 +56,8 @@ import {
     Stars as StarsIcon,
     Star as StarIcon,
     EmojiEventsOutlined as TrophyOutlineIcon,
-    Leaderboard as LeaderboardIcon
+    Leaderboard as LeaderboardIcon,
+    PrintOutlined as PrintIcon
 } from '@mui/icons-material';
 import format from 'date-fns/format';
 import env from '../../config/env';
@@ -1050,9 +1051,16 @@ function LeagueManagement() {
 
     return (
         <div>
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between' }}>
                 <Button startIcon={<ArrowBackIcon />} onClick={handleBackClick}>
                     Back to Leagues
+                </Button>
+                <Button
+                    startIcon={<PrintIcon />}
+                    onClick={() => navigate(`/leagues/${leagueId}/print`)}
+                    variant="outlined"
+                >
+                    Printer-Friendly View
                 </Button>
             </Box>
 
@@ -2103,6 +2111,7 @@ function LeagueManagement() {
                 onClose={handleCreateWeekClose}
                 maxWidth="md"
                 fullWidth
+
             >
                 <DialogTitle>Add New Week</DialogTitle>
                 <DialogContent>

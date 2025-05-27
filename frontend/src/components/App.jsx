@@ -21,6 +21,7 @@ import LeagueManagement from './pages/LeagueManagement';
 import MatchScoreEntry from './pages/MatchScoreEntry';
 import Players from './pages/Players';
 import TeamScoreEntry from './pages/TeamScoreEntry';
+import PrinterFriendlyLeagueSummary from './pages/PrinterFriendlyLeagueSummary';
 
 // Create a layout wrapper component
 const AppLayout = ({ children }) => {
@@ -151,6 +152,7 @@ function App() {
                     <Route path="/courses" element={<Courses />} />
                     <Route path="/leagues" element={<Leagues />} />
                     <Route path="/leagues/:leagueId" element={<LeagueManagement />} />
+                    <Route path="/leagues/:leagueId/print" element={<PrinterFriendlyLeagueSummary />} />
                     <Route path="/matches/:matchId/scores" element={<MatchScoreEntry />} />
                     <Route path="/score-entry/:matchId/team/:token" element={<TeamScoreEntry />} />
                 </Routes>

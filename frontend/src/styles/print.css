@@ -1,0 +1,61 @@
+@media print {
+
+    /* Hide elements not needed for printing */
+    .no-print {
+        display: none !important;
+    }
+
+    /* General page settings */
+    body {
+        margin: 0;
+        padding: 0 !important;
+        background-color: white !important;
+        color: black !important;
+    }
+
+    /* Ensure the page has proper margins */
+    @page {
+        size: auto;
+        margin: 0.5in 0.5in 0.5in 0.5in;
+    }
+
+    /* Fix table layout for printing */
+    table {
+        width: 100% !important;
+        page-break-inside: auto !important;
+    }
+
+    tr {
+        page-break-inside: avoid !important;
+        page-break-after: auto !important;
+    }
+
+    th,
+    td {
+        padding: 4px 8px !important;
+    }
+
+    /* Ensure certain sections start on a new page if needed */
+    .page-break-before {
+        page-break-before: always !important;
+    }
+
+    /* Ensure backgrounds and colors print well */
+    .MuiPaper-root {
+        box-shadow: none !important;
+        border: 1px solid #ddd !important;
+    }
+
+    /* Force background colors to print */
+    .print-force-background {
+        -webkit-print-color-adjust: exact !important;
+        color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Prevent Material-UI components from cutting off */
+    .MuiContainer-root {
+        max-width: none !important;
+        padding: 0 !important;
+    }
+}
