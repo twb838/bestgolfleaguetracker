@@ -119,8 +119,8 @@ const TeamScoreEntry = () => {
         }
     };
 
-    // Handle score changes
-    const handleScoreChange = (playerIndex, holeId, value) => {
+    // Handle score changes with auto-save and auto-focus
+    const handleScoreChange = async (playerIndex, holeId, value, event) => {
         // Clone scores
         const newScores = [...teamScores];
 
@@ -133,6 +133,72 @@ const TeamScoreEntry = () => {
         // Update score
         newScores[playerIndex].scores[holeId] = value;
         setTeamScores(newScores);
+
+        // If the value is valid (not empty), auto-save and move to next field
+        if (value !== '') {
+            // Identify current hole and player
+            const currentHole = holes.find(h => h.id === holeId);
+            const currentHoleIndex = holes.findIndex(h => h.id === holeId);
+
+            // Auto-save this score
+            try {
+                setSaving(true);
+
+                // Prepare just this score for saving
+                const scoreToSave = {
+                    player_id: newScores[playerIndex].player_id,
+                    hole_id: parseInt(holeId),
+                    strokes: parseInt(value)
+                };
+
+                // Call API with just this one score
+                const response = await fetch(`${env.API_BASE_URL}/matches/${matchId}/team-scores?token=${token}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ scores: [scoreToSave] }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to save score');
+                }
+
+                // Show subtle success indicator
+                setSuccessMessage('Score saved');
+                setTimeout(() => setSuccessMessage(null), 1500);
+
+            } catch (error) {
+                console.error('Error auto-saving score:', error);
+                setError('Failed to save score: ' + error.message);
+                setTimeout(() => setError(null), 3000);
+            } finally {
+                setSaving(false);
+            }
+
+            // Determine the next input to focus on
+            let nextElement = null;
+
+            // If there are more players for this hole
+            if (playerIndex < teamScores.length - 1) {
+                // Focus on the next player's input for the same hole
+                const nextPlayerIndex = playerIndex + 1;
+                nextElement = document.getElementById(`score-${nextPlayerIndex}-${holeId}`);
+            } else if (currentHoleIndex < holes.length - 1) {
+                // If this is the last player for this hole, move to the first player of the next hole
+                const nextHole = holes[currentHoleIndex + 1];
+                nextElement = document.getElementById(`score-0-${nextHole.id}`);
+            }
+
+            // Focus the next element if found
+            if (nextElement) {
+                setTimeout(() => {
+                    nextElement.focus();
+                    nextElement.select(); // Select the text for easy overwriting
+                }, 50);
+            }
+        }
     };
 
     // Save team scores
@@ -192,7 +258,7 @@ const TeamScoreEntry = () => {
     // Render loading state
     if (loading) {
         return (
-            <Container maxWidth="md" sx={{ px: { xs: 1, sm: 2 } }}>
+            <Container maxWidth="lg" sx={{ py: 4, px: { xs: 2, sm: 3 } }}>
                 <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
                     <CircularProgress />
                 </Box>
@@ -203,7 +269,7 @@ const TeamScoreEntry = () => {
     // Render error state
     if (error && !teamData) {
         return (
-            <Container maxWidth="md" sx={{ px: { xs: 1, sm: 2 } }}>
+            <Container maxWidth="lg" sx={{ py: 4, px: { xs: 2, sm: 3 } }}>
                 <Box sx={{ my: 4 }}>
                     <Alert severity="error" sx={{ mb: 2 }}>
                         {error}
@@ -214,192 +280,238 @@ const TeamScoreEntry = () => {
     }
 
     return (
-        <Container maxWidth="md" sx={{ px: { xs: 1, sm: 2 } }}>
-            <Box sx={{ py: 2 }}>
-                {/* Simple Header */}
-                <Paper sx={{ p: 2, mb: 2 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                        <Typography variant="h5" component="h1">
-                            {teamData?.team_name} Scores
+        <Container maxWidth="lg" sx={{ py: 4, px: { xs: 2, sm: 3 } }}>
+            <Paper elevation={2} sx={{ p: 3, borderRadius: 2 }}>
+                {/* Add a simple header */}
+                <Typography variant="h4" component="h1" gutterBottom>
+                    Team Score Entry
+                </Typography>
+
+                {/* Your existing UI components */}
+                <Box sx={{ py: 2 }}>
+                    {/* Simple Header */}
+                    <Paper sx={{ p: 2, mb: 2 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                            <Typography variant="h5" component="h1">
+                                {teamData?.team_name} Scores
+                            </Typography>
+
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                startIcon={<SaveIcon />}
+                                onClick={handleSaveScores}
+                                disabled={saving}
+                            >
+                                {saving ? 'Saving...' : 'Save'}
+                            </Button>
+                        </Box>
+
+                        <Typography variant="body1">
+                            {match?.home_team && match?.away_team && (
+                                teamData?.team_id === match?.home_team?.id ? (
+                                    <>
+                                        <strong>Home:</strong> {teamData?.team_name} vs <strong>Away:</strong> {match?.away_team?.name}
+                                    </>
+                                ) : (
+                                    <>
+                                        <strong>Home:</strong> {match?.home_team?.name} vs <strong>Away:</strong> {teamData?.team_name}
+                                    </>
+                                )
+                            )}
                         </Typography>
 
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            startIcon={<SaveIcon />}
-                            onClick={handleSaveScores}
-                            disabled={saving}
-                        >
-                            {saving ? 'Saving...' : 'Save'}
-                        </Button>
-                    </Box>
+                        <Typography variant="body2" color="text.secondary">
+                            Course: {course?.name}
+                        </Typography>
+                    </Paper>
 
-                    <Typography variant="body1">
-                        Match: {match?.home_team?.name} vs {match?.away_team?.name}
-                    </Typography>
-
-                    <Typography variant="body2" color="text.secondary">
-                        Course: {course?.name}
-                    </Typography>
-                </Paper>
-
-                {error && (
-                    <Alert severity="error" sx={{ mb: 2 }}>
-                        {error}
-                    </Alert>
-                )}
-
-                {successMessage && (
-                    <Alert severity="success" sx={{ mb: 2 }}>
-                        {successMessage}
-                    </Alert>
-                )}
-
-                {/* Scorecard */}
-                <Paper sx={{ p: 2 }}>
-                    {teamScores.length === 0 ? (
-                        <Alert severity="info">
-                            No active players found for your team.
+                    {error && (
+                        <Alert severity="error" sx={{ mb: 2 }}>
+                            {error}
                         </Alert>
-                    ) : (
-                        <Box>
-                            {/* Player Names */}
-                            <Paper sx={{ mb: 1, p: 1, bgcolor: 'background.paper' }}>
-                                <Grid container spacing={1} alignItems="center">
-                                    <Grid item xs={3} sx={{ fontWeight: 'bold' }}>
-                                        <Typography variant="body2">Hole</Typography>
-                                    </Grid>
-                                    {teamScores.map((player) => (
-                                        <Grid item xs key={player.player_id} sx={{ textAlign: 'center' }}>
-                                            <Typography
-                                                variant="body2"
-                                                sx={{
-                                                    fontWeight: 'bold',
-                                                    fontSize: { xs: '0.7rem', sm: '0.8rem' }
-                                                }}
-                                            >
-                                                {player.first_name}
-                                            </Typography>
-                                        </Grid>
-                                    ))}
-                                </Grid>
-                            </Paper>
+                    )}
 
-                            {/* Holes with scores */}
-                            {holes.sort((a, b) => a.number - b.number).map((hole) => (
-                                <Paper
-                                    key={hole.id}
-                                    sx={{
-                                        mb: 1,
-                                        p: 1,
-                                        bgcolor: 'background.paper'
-                                    }}
-                                >
+                    {successMessage && (
+                        <Box
+                            sx={{
+                                position: 'fixed',
+                                top: 16,
+                                right: 16,
+                                bgcolor: 'success.main',
+                                color: 'white',
+                                px: 2,
+                                py: 1,
+                                borderRadius: 1,
+                                zIndex: 1300,
+                                boxShadow: 2,
+                                opacity: 0.9,
+                                transition: 'opacity 0.3s',
+                            }}
+                        >
+                            <Typography variant="body2">{successMessage}</Typography>
+                        </Box>
+                    )}
+
+                    {/* Scorecard */}
+                    <Paper sx={{ p: 2 }}>
+                        {teamScores.length === 0 ? (
+                            <Alert severity="info">
+                                No active players found for your team.
+                            </Alert>
+                        ) : (
+                            <Box>
+                                {/* Player Names */}
+                                <Paper sx={{ mb: 1, p: 1, bgcolor: 'background.paper' }}>
                                     <Grid container spacing={1} alignItems="center">
-                                        <Grid item xs={3}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                <Box
+                                        <Grid item xs={3} sx={{ fontWeight: 'bold' }}>
+                                            <Typography variant="body2">Hole</Typography>
+                                        </Grid>
+                                        {teamScores.map((player) => (
+                                            <Grid item xs key={player.player_id} sx={{ textAlign: 'center' }}>
+                                                <Typography
+                                                    variant="body2"
                                                     sx={{
-                                                        width: 28,
-                                                        height: 28,
-                                                        borderRadius: '50%',
-                                                        bgcolor: 'primary.main',
-                                                        color: 'white',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        mr: 1,
                                                         fontWeight: 'bold',
-                                                        fontSize: '0.8rem'
+                                                        fontSize: { xs: '0.7rem', sm: '0.8rem' }
                                                     }}
                                                 >
-                                                    {hole.number}
-                                                </Box>
-                                                <Box>
-                                                    <Typography variant="caption" sx={{ display: 'block' }}>
-                                                        Par {hole.par}
-                                                    </Typography>
-                                                    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-                                                        {hole.yards || '—'} yds
-                                                    </Typography>
-                                                </Box>
-                                            </Box>
-                                        </Grid>
-
-                                        {teamScores.map((player, playerIndex) => (
-                                            <Grid
-                                                item
-                                                xs
-                                                key={`${player.player_id}-${hole.id}`}
-                                                sx={{ textAlign: 'center' }}
-                                            >
-                                                <TextField
-                                                    type="number"
-                                                    variant="outlined"
-                                                    inputMode="numeric"
-                                                    value={player.scores[hole.id] || ''}
-                                                    onChange={(e) => handleScoreChange(
-                                                        playerIndex,
-                                                        hole.id,
-                                                        e.target.value
-                                                    )}
-                                                    inputProps={{
-                                                        min: 1,
-                                                        max: 20,
-                                                        style: {
-                                                            textAlign: 'center',
-                                                            padding: '8px 0',
-                                                            fontSize: '1rem'
-                                                        }
-                                                    }}
-                                                    sx={{
-                                                        width: '45px',
-                                                        '& .MuiOutlinedInput-root': {
-                                                            padding: 0
-                                                        }
-                                                    }}
-                                                    size="small"
-                                                />
+                                                    {player.first_name}
+                                                </Typography>
                                             </Grid>
                                         ))}
                                     </Grid>
                                 </Paper>
-                            ))}
 
-                            {/* Fixed Save button at bottom */}
-                            <Box
-                                sx={{
-                                    position: 'fixed',
-                                    bottom: 16,
-                                    left: 0,
-                                    right: 0,
-                                    textAlign: 'center',
-                                    zIndex: 10
-                                }}
-                            >
-                                <Button
-                                    variant="contained"
-                                    color="primary"
-                                    startIcon={<SaveIcon />}
-                                    onClick={handleSaveScores}
-                                    disabled={saving}
-                                    size="large"
+                                {/* Holes with scores */}
+                                {holes.sort((a, b) => a.number - b.number).map((hole) => (
+                                    <Paper
+                                        key={hole.id}
+                                        sx={{
+                                            mb: 1,
+                                            p: 1,
+                                            bgcolor: 'background.paper'
+                                        }}
+                                    >
+                                        <Grid container spacing={1} alignItems="center">
+                                            <Grid item xs={3}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                    <Box
+                                                        sx={{
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: '50%',
+                                                            bgcolor: 'primary.main',
+                                                            color: 'white',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            mr: 1,
+                                                            fontWeight: 'bold',
+                                                            fontSize: '0.8rem'
+                                                        }}
+                                                    >
+                                                        {hole.number}
+                                                    </Box>
+                                                    <Box>
+                                                        <Typography variant="caption" sx={{ display: 'block' }}>
+                                                            Par {hole.par}
+                                                        </Typography>
+                                                        <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                                            {hole.yards || '—'} yds
+                                                        </Typography>
+                                                    </Box>
+                                                </Box>
+                                            </Grid>
+
+                                            {teamScores.map((player, playerIndex) => (
+                                                <Grid
+                                                    item
+                                                    xs
+                                                    key={`${player.player_id}-${hole.id}`}
+                                                    sx={{ textAlign: 'center' }}
+                                                >
+                                                    <TextField
+                                                        id={`score-${playerIndex}-${hole.id}`}
+                                                        type="number"
+                                                        variant="outlined"
+                                                        inputMode="numeric"
+                                                        value={player.scores[hole.id] || ''}
+                                                        onChange={(e) => handleScoreChange(
+                                                            playerIndex,
+                                                            hole.id,
+                                                            e.target.value,
+                                                            e
+                                                        )}
+                                                        onKeyDown={(e) => {
+                                                            // Handle tab and enter keys for navigation
+                                                            if (e.key === 'Enter' || e.key === 'Tab') {
+                                                                e.preventDefault();
+
+                                                                // Simulate a change event to trigger auto-focus logic
+                                                                if (player.scores[hole.id]) {
+                                                                    handleScoreChange(playerIndex, hole.id, player.scores[hole.id], e);
+                                                                }
+                                                            }
+                                                        }}
+                                                        inputProps={{
+                                                            min: 1,
+                                                            max: 20,
+                                                            style: {
+                                                                textAlign: 'center',
+                                                                padding: '8px 0',
+                                                                fontSize: '1rem'
+                                                            }
+                                                        }}
+                                                        sx={{
+                                                            width: '45px',
+                                                            '& .MuiOutlinedInput-root': {
+                                                                padding: 0
+                                                            }
+                                                        }}
+                                                        size="small"
+                                                    />
+                                                </Grid>
+                                            ))}
+                                        </Grid>
+                                    </Paper>
+                                ))}
+
+                                {/* Fixed Save button at bottom */}
+                                <Box
                                     sx={{
-                                        boxShadow: 3,
-                                        px: 4,
-                                        py: 1
+                                        position: 'fixed',
+                                        bottom: 16,
+                                        left: 0,
+                                        right: 0,
+                                        textAlign: 'center',
+                                        zIndex: 10
                                     }}
                                 >
-                                    {saving ? 'Saving...' : 'Save All Scores'}
-                                </Button>
-                            </Box>
+                                    <Button
+                                        variant="contained"
+                                        color="primary"
+                                        startIcon={<SaveIcon />}
+                                        onClick={handleSaveScores}
+                                        disabled={saving}
+                                        size="large"
+                                        sx={{
+                                            boxShadow: 3,
+                                            px: 4,
+                                            py: 1
+                                        }}
+                                    >
+                                        {saving ? 'Saving...' : 'Save All Scores'}
+                                    </Button>
+                                </Box>
 
-                            {/* Add extra space at bottom to account for fixed button */}
-                            <Box sx={{ height: 80 }} />
-                        </Box>
-                    )}
-                </Paper>
-            </Box>
+                                {/* Add extra space at bottom to account for fixed button */}
+                                <Box sx={{ height: 80 }} />
+                            </Box>
+                        )}
+                    </Paper>
+                </Box>
+            </Paper>
         </Container>
     );
 };

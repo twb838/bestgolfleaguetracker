@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import {
     AppBar, Toolbar, Typography, Button, Container, Box,
     IconButton, Menu, MenuItem, useMediaQuery, useTheme
@@ -22,10 +22,15 @@ import MatchScoreEntry from './pages/MatchScoreEntry';
 import Players from './pages/Players';
 import TeamScoreEntry from './pages/TeamScoreEntry';
 
-function App() {
-    const [mobileMenuAnchor, setMobileMenuAnchor] = useState(null);
+// Create a layout wrapper component
+const AppLayout = ({ children }) => {
+    const location = useLocation();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    const [mobileMenuAnchor, setMobileMenuAnchor] = useState(null);
+
+    // Check if current route should use minimal layout
+    const isMinimalLayout = location.pathname.includes('/score-entry/');
 
     const handleOpenMobileMenu = (event) => {
         setMobileMenuAnchor(event.currentTarget);
@@ -43,95 +48,113 @@ function App() {
         { name: 'Leagues', path: '/leagues', icon: <EmojiEventsIcon fontSize="small" /> },
     ];
 
-    return (
-        <Router>
+    // If minimal layout, only render children without navigation
+    if (isMinimalLayout) {
+        return (
             <div className="App">
-                <AppBar position="static">
-                    <Toolbar variant="dense">
-                        <Typography
-                            variant="h6"
-                            component="div"
-                            sx={{
-                                flexGrow: 0,
-                                mr: { xs: 1, sm: 2 },
-                                fontSize: { xs: '1rem', sm: '1.25rem' }
-                            }}
-                        >
-                            Golf Tracker
-                        </Typography>
+                {children}
+            </div>
+        );
+    }
 
-                        {isMobile ? (
-                            <>
-                                <Box sx={{ flexGrow: 1 }} />
-                                <IconButton
-                                    size="large"
-                                    edge="end"
-                                    color="inherit"
-                                    aria-label="menu"
-                                    onClick={handleOpenMobileMenu}
-                                >
-                                    <MenuIcon />
-                                </IconButton>
-                                <Menu
-                                    anchorEl={mobileMenuAnchor}
-                                    open={Boolean(mobileMenuAnchor)}
-                                    onClose={handleCloseMobileMenu}
-                                    keepMounted
-                                >
-                                    {navItems.map((item) => (
-                                        <MenuItem
-                                            key={item.name}
-                                            component={Link}
-                                            to={item.path}
-                                            onClick={handleCloseMobileMenu}
-                                            sx={{ minWidth: 150 }}
-                                        >
-                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                {item.icon}
-                                                <Typography sx={{ ml: 1 }}>{item.name}</Typography>
-                                            </Box>
-                                        </MenuItem>
-                                    ))}
-                                </Menu>
-                            </>
-                        ) : (
-                            <Box sx={{ flexGrow: 1, display: 'flex', gap: 1 }}>
+    // Otherwise render full layout with navigation
+    return (
+        <div className="App">
+            <AppBar position="static">
+                <Toolbar variant="dense">
+                    <Typography
+                        variant="h6"
+                        component="div"
+                        sx={{
+                            flexGrow: 0,
+                            mr: { xs: 1, sm: 2 },
+                            fontSize: { xs: '1rem', sm: '1.25rem' }
+                        }}
+                    >
+                        Golf Tracker
+                    </Typography>
+
+                    {isMobile ? (
+                        <>
+                            <Box sx={{ flexGrow: 1 }} />
+                            <IconButton
+                                size="large"
+                                edge="end"
+                                color="inherit"
+                                aria-label="menu"
+                                onClick={handleOpenMobileMenu}
+                            >
+                                <MenuIcon />
+                            </IconButton>
+                            <Menu
+                                anchorEl={mobileMenuAnchor}
+                                open={Boolean(mobileMenuAnchor)}
+                                onClose={handleCloseMobileMenu}
+                                keepMounted
+                            >
                                 {navItems.map((item) => (
-                                    <Button
+                                    <MenuItem
                                         key={item.name}
-                                        color="inherit"
                                         component={Link}
                                         to={item.path}
-                                        size="small"
-                                        startIcon={item.icon}
-                                        sx={{
-                                            px: 1,
-                                            py: 0.5,
-                                            minWidth: 'auto',
-                                            fontSize: '0.875rem'
-                                        }}
+                                        onClick={handleCloseMobileMenu}
+                                        sx={{ minWidth: 150 }}
                                     >
-                                        {item.name}
-                                    </Button>
+                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                            {item.icon}
+                                            <Typography sx={{ ml: 1 }}>{item.name}</Typography>
+                                        </Box>
+                                    </MenuItem>
                                 ))}
-                            </Box>
-                        )}
-                    </Toolbar>
-                </AppBar>
+                            </Menu>
+                        </>
+                    ) : (
+                        <Box sx={{ flexGrow: 1, display: 'flex', gap: 1 }}>
+                            {navItems.map((item) => (
+                                <Button
+                                    key={item.name}
+                                    color="inherit"
+                                    component={Link}
+                                    to={item.path}
+                                    size="small"
+                                    startIcon={item.icon}
+                                    sx={{
+                                        px: 1,
+                                        py: 0.5,
+                                        minWidth: 'auto',
+                                        fontSize: '0.875rem'
+                                    }}
+                                >
+                                    {item.name}
+                                </Button>
+                            ))}
+                        </Box>
+                    )}
+                </Toolbar>
+            </AppBar>
 
-                <Container sx={{ mt: 2, px: { xs: 1, sm: 2, md: 3 } }}>
-                    <Routes>
-                        <Route path="/" element={<Dashboard />} />
-                        <Route path="/players" element={<Players />} />
-                        <Route path="/teams" element={<Teams />} />
-                        <Route path="/courses" element={<Courses />} />
-                        <Route path="/leagues" element={<Leagues />} />
-                        <Route path="/leagues/:leagueId" element={<LeagueManagement />} />
-                        <Route path="/matches/:matchId/scores" element={<MatchScoreEntry />} />
-                        <Route path="/score-entry/:matchId/team/:token" element={<TeamScoreEntry />} />
-                    </Routes>
-                </Container>
-            </div>
+            <Container sx={{ mt: 2, px: { xs: 1, sm: 2, md: 3 } }}>
+                {children}
+            </Container>
+        </div>
+    );
+};
+
+function App() {
+    return (
+        <Router>
+            <AppLayout>
+                <Routes>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/players" element={<Players />} />
+                    <Route path="/teams" element={<Teams />} />
+                    <Route path="/courses" element={<Courses />} />
+                    <Route path="/leagues" element={<Leagues />} />
+                    <Route path="/leagues/:leagueId" element={<LeagueManagement />} />
+                    <Route path="/matches/:matchId/scores" element={<MatchScoreEntry />} />
+                    <Route path="/score-entry/:matchId/team/:token" element={<TeamScoreEntry />} />
+                </Routes>
+            </AppLayout>
         </Router>
     );
 }
