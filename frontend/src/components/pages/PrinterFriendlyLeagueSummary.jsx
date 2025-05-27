@@ -310,7 +310,7 @@ const PrinterFriendlyLeagueSummary = () => {
             {/* Page title */}
             <Box sx={{ mb: 4, textAlign: 'center' }}>
                 <Typography variant="h4" component="h1" gutterBottom>
-                    {league?.name} League Summary
+                    {league?.name} - Summary
                 </Typography>
                 <Typography variant="subtitle1" gutterBottom>
                     {selectedWeek ? `Week ${selectedWeek.week_number}: ${format(parseISO(selectedWeek.start_date), 'MMMM d')} - ${format(parseISO(selectedWeek.end_date), 'MMMM d, yyyy')}` : ''}

@@ -59,7 +59,7 @@ import {
     Leaderboard as LeaderboardIcon,
     PrintOutlined as PrintIcon
 } from '@mui/icons-material';
-import format from 'date-fns/format';
+import { format, parseISO, addDays } from 'date-fns';
 import env from '../../config/env';
 
 function LeagueManagement() {
@@ -979,8 +979,8 @@ function LeagueManagement() {
             // Reset the form with incremented week number and updated dates
             setNewWeek({
                 week_number: newWeek.week_number + 1,
-                start_date: format(new Date(new Date(newWeek.end_date).getTime() + 86400000), 'yyyy-MM-dd'),
-                end_date: format(new Date(new Date(newWeek.end_date).getTime() + 7 * 86400000), 'yyyy-MM-dd')
+                start_date: format(addDays(parseISO(newWeek.end_date), 1), 'yyyy-MM-dd'),
+                end_date: format(addDays(parseISO(newWeek.end_date), 7), 'yyyy-MM-dd')
             });
 
             // Reset the matchup generation state
@@ -1022,6 +1022,23 @@ function LeagueManagement() {
         } catch (error) {
             console.error('Error deleting week:', error);
             alert('Failed to delete week. Please try again.');
+        }
+    };
+
+    // Add/update formatDate function to properly handle dates from the API
+
+    const formatDate = (dateString, formatPattern) => {
+        if (!dateString) return '';
+
+        try {
+            // First parse the ISO date string properly
+            const parsedDate = parseISO(dateString);
+
+            // Format with the requested pattern
+            return format(parsedDate, formatPattern);
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return 'Invalid date';
         }
     };
 
@@ -1114,7 +1131,7 @@ function LeagueManagement() {
                                     >
                                         {weeks.map((week) => (
                                             <MenuItem key={week.id} value={week.id}>
-                                                Week {week.week_number} ({format(new Date(week.start_date), 'MMM d')} - {format(new Date(week.end_date), 'MMM d')})
+                                                Week {week.week_number} ({formatDate(week.start_date, 'MMM d')} - {formatDate(week.end_date, 'MMM d')})
                                             </MenuItem>
                                         ))}
                                     </Select>
@@ -1166,22 +1183,22 @@ function LeagueManagement() {
                                 </Box>
                                 <Box sx={{ display: 'flex', gap: 3, color: 'text.secondary', mt: 1 }}>
                                     <Typography variant="body2">
-                                        Start: {format(new Date(selectedWeek.start_date), 'MMMM d, yyyy')}
+                                        Start: {formatDate(selectedWeek.start_date, 'MMMM d, yyyy')}
                                     </Typography>
                                     <Typography variant="body2">
-                                        End: {format(new Date(selectedWeek.end_date), 'MMMM d, yyyy')}
+                                        End: {formatDate(selectedWeek.end_date, 'MMMM d, yyyy')}
                                     </Typography>
                                     <Chip
                                         size="small"
                                         label={
-                                            new Date(selectedWeek.end_date) < new Date()
+                                            new Date(parseISO(selectedWeek.end_date)) < new Date()
                                                 ? (matches.every(match => match.is_completed)
                                                     ? "Completed"
                                                     : "In Progress")
                                                 : "Current"
                                         }
                                         color={
-                                            new Date(selectedWeek.end_date) < new Date()
+                                            new Date(parseISO(selectedWeek.end_date)) < new Date()
                                                 ? (matches.every(match => match.is_completed)
                                                     ? "success"
                                                     : "warning")
@@ -1220,7 +1237,7 @@ function LeagueManagement() {
                                 {(() => {
                                     // Group matches by date
                                     const matchesByDate = matches.reduce((groups, match) => {
-                                        const date = format(new Date(match.match_date), 'yyyy-MM-dd');
+                                        const date = format((parseISO(match.match_date)), 'yyyy-MM-dd');
                                         if (!groups[date]) {
                                             groups[date] = [];
                                         }
@@ -1234,7 +1251,7 @@ function LeagueManagement() {
                                     return sortedDates.map(date => (
                                         <Box key={date} sx={{ mb: 3 }}>
                                             <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold', borderBottom: '1px solid', borderColor: 'divider', pb: 0.5 }}>
-                                                {format(new Date(date), 'EEEE, MMMM d, yyyy')}
+                                                {format(new Date(parseISO(date)), 'EEEE, MMMM d, yyyy')}
                                             </Typography>
 
                                             <TableContainer component={Paper} sx={{ mb: 3 }}>
@@ -1696,7 +1713,7 @@ function LeagueManagement() {
                                                                     {score.player_name}
                                                                 </Typography>
                                                                 <Typography variant="caption" color="text.secondary">
-                                                                    {score.date ? format(new Date(score.date), 'MMM d, yyyy') : 'Unknown date'} - {score.course_name || 'Unknown course'}
+                                                                    {score.date ? formatDate(score.date, 'MMM d, yyyy') : 'Unknown date'} - {score.course_name || 'Unknown course'}
                                                                 </Typography>
                                                             </Box>
                                                             <Typography
@@ -1779,7 +1796,7 @@ function LeagueManagement() {
                                                                     {score.player_name}
                                                                 </Typography>
                                                                 <Typography variant="caption" color="text.secondary">
-                                                                    {score.date ? format(new Date(score.date), 'MMM d, yyyy') : 'Unknown date'} - {score.course_name || 'Unknown course'}
+                                                                    {score.date ? formatDate(score.date, 'MMM d, yyyy') : 'Unknown date'} - {score.course_name || 'Unknown course'}
                                                                 </Typography>
                                                             </Box>
                                                             <Typography
@@ -1862,7 +1879,7 @@ function LeagueManagement() {
                                                                     {score.team_name}
                                                                 </Typography>
                                                                 <Typography variant="caption" color="text.secondary">
-                                                                    {score.date ? format(new Date(score.date), 'MMM d, yyyy') : 'Unknown date'} - {score.course_name || 'Unknown course'}
+                                                                    {score.date ? formatDate(score.date, 'MMM d, yyyy') : 'Unknown date'} - {score.course_name || 'Unknown course'}
                                                                 </Typography>
                                                             </Box>
                                                             <Typography
@@ -1945,7 +1962,7 @@ function LeagueManagement() {
                                                                     {score.team_name}
                                                                 </Typography>
                                                                 <Typography variant="caption" color="text.secondary">
-                                                                    {score.date ? format(new Date(score.date), 'MMM d, yyyy') : 'Unknown date'} - {score.course_name || 'Unknown course'}
+                                                                    {score.date ? formatDate(score.date, 'MMM d, yyyy') : 'Unknown date'} - {score.course_name || 'Unknown course'}
                                                                 </Typography>
                                                             </Box>
                                                             <Typography
@@ -2271,7 +2288,7 @@ function LeagueManagement() {
                                                                     <TableCell>{matchup.home_team_name}</TableCell>
                                                                     <TableCell>{matchup.away_team_name}</TableCell>
                                                                     <TableCell>{matchup.course_name}</TableCell>
-                                                                    <TableCell>{format(new Date(matchup.match_date), 'MMM d, yyyy')}</TableCell>
+                                                                    <TableCell>{formatDate(matchup.match_date, 'MMM d, yyyy')}</TableCell>
                                                                     <TableCell>
                                                                         {matchup.is_bye ? (
                                                                             <Chip size="small" label="BYE" color="default" />
@@ -2282,7 +2299,7 @@ function LeagueManagement() {
                                                                                 color="warning"
                                                                                 title={`These teams previously played on ${matchup.matchup_history ?
                                                                                     matchup.matchup_history
-                                                                                        .map(m => format(new Date(m.match_date), 'MMM d'))
+                                                                                        .map(m => formatDate(m.match_date, 'MMM d'))
                                                                                         .join(', ') : 'unknown dates'
                                                                                     }`}
                                                                             />
