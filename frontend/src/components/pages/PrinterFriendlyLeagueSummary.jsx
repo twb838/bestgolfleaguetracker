@@ -44,6 +44,7 @@ const PrinterFriendlyLeagueSummary = () => {
         topTeamNet: []
     });
     const [makeupMatches, setMakeupMatches] = useState([]);
+    const [mostImprovedPlayers, setMostImprovedPlayers] = useState([]);
 
     // Fetch all data on load
     useEffect(() => {
@@ -93,6 +94,9 @@ const PrinterFriendlyLeagueSummary = () => {
 
                 // Fetch rankings data
                 await fetchRankingsData();
+
+                // Fetch most improved players
+                await fetchMostImprovedPlayers();
 
             } catch (error) {
                 console.error('Error fetching data:', error);
@@ -257,6 +261,19 @@ const PrinterFriendlyLeagueSummary = () => {
                 topTeamGross: [],
                 topTeamNet: []
             });
+        }
+    };
+
+    const fetchMostImprovedPlayers = async () => {
+        try {
+            const response = await fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/most-improved?limit=5`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch most improved players');
+            }
+            const data = await response.json();
+            setMostImprovedPlayers(data);
+        } catch (error) {
+            console.error('Error fetching most improved players:', error);
         }
     };
 
@@ -754,6 +771,50 @@ const PrinterFriendlyLeagueSummary = () => {
                                 ) : (
                                     <Typography variant="body2" color="text.secondary">
                                         No team net scores recorded yet.
+                                    </Typography>
+                                )}
+                            </Grid>
+
+                            {/* Most Improved Players */}
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                    Most Improved Players
+                                </Typography>
+
+                                {mostImprovedPlayers.length > 0 ? (
+                                    <List disablePadding>
+                                        {mostImprovedPlayers.map((player, index) => (
+                                            <ListItem
+                                                key={`improved-${player.player_id}`}
+                                                sx={{
+                                                    px: 1,
+                                                    py: 0.25,
+                                                    backgroundColor: index % 2 === 0 ? '#f9f9f9' : 'transparent'
+                                                }}
+                                                disableGutters
+                                            >
+                                                <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: '20px' }}>
+                                                    {index + 1}.
+                                                </Typography>
+                                                <Box sx={{ ml: 1, flexGrow: 1 }}>
+                                                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                                        {player.player_name} - <span style={{
+                                                            color: player.improvement > 0 ? '#2e7d32' : '#d32f2f',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {player.improvement_display}
+                                                        </span>
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        Initial: {player.initial_avg} → Current: {player.overall_avg} ({player.total_rounds} rounds)
+                                                    </Typography>
+                                                </Box>
+                                            </ListItem>
+                                        ))}
+                                    </List>
+                                ) : (
+                                    <Typography variant="body2" color="text.secondary">
+                                        No players have enough rounds (minimum 4) to calculate improvement.
                                     </Typography>
                                 )}
                             </Grid>

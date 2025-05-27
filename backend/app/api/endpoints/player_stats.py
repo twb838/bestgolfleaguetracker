@@ -348,3 +348,94 @@ def get_top_player_scores(
         })
     
     return result
+
+@router.get("/league/{league_id}/most-improved", response_model=List[Dict[str, Any]])
+def get_most_improved_players(
+    league_id: int,
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """
+    Get the most improved players in a league.
+    Players must have at least 4 rounds to be considered.
+    Improvement is calculated by comparing their first 3 rounds average 
+    to their overall average. Positive values indicate improvement.
+    """
+    # Verify league exists
+    league = db.query(League).filter(League.id == league_id).first()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    
+    # First get all players with their match scores, ordered by date
+    player_rounds = db.query(
+        MatchPlayer.player_id,
+        Player.first_name,
+        Player.last_name,
+        MatchPlayer.gross_score,
+        Match.match_date
+    ).join(
+        Player, MatchPlayer.player_id == Player.id
+    ).join(
+        Match, MatchPlayer.match_id == Match.id
+    ).join(
+        Week, Match.week_id == Week.id
+    ).filter(
+        Week.league_id == league_id,
+        MatchPlayer.gross_score.isnot(None)
+    ).order_by(
+        MatchPlayer.player_id,
+        Match.match_date
+    ).all()
+    
+    # Organize scores by player
+    player_data = {}
+    for round_data in player_rounds:
+        player_id = round_data.player_id
+        player_name = f"{round_data.first_name} {round_data.last_name}"
+        gross_score = round_data.gross_score
+        
+        if player_id not in player_data:
+            player_data[player_id] = {
+                "player_id": player_id,
+                "player_name": player_name,
+                "rounds": []
+            }
+        
+        player_data[player_id]["rounds"].append(gross_score)
+    
+    # Calculate improvement for players with at least 4 rounds
+    improvements = []
+    for player_id, data in player_data.items():
+        rounds = data["rounds"]
+        if len(rounds) >= 4:  # Need at least 4 rounds
+            # Calculate initial average (first 3 rounds)
+            initial_rounds = rounds[:3]
+            initial_avg = sum(initial_rounds) / len(initial_rounds)
+            
+            # Calculate overall average (all rounds)
+            overall_avg = sum(rounds) / len(rounds)
+            
+            # Calculate improvement (positive = better)
+            improvement = initial_avg - overall_avg
+            
+            # Format improvement string with + or - sign
+            if improvement > 0:
+                improvement_display = f"+{improvement:.1f}"
+            else:
+                improvement_display = f"{improvement:.1f}"
+            
+            improvements.append({
+                "player_id": player_id,
+                "player_name": data["player_name"],
+                "total_rounds": len(rounds),
+                "initial_avg": round(initial_avg, 1),
+                "overall_avg": round(overall_avg, 1),
+                "improvement": round(improvement, 1),
+                "improvement_display": improvement_display
+            })
+    
+    # Sort by improvement (highest improvement first)
+    improvements.sort(key=lambda x: x["improvement"], reverse=True)
+    
+    # Apply the limit
+    return improvements[:limit]

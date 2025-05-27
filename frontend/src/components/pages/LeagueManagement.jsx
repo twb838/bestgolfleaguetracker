@@ -57,7 +57,8 @@ import {
     Star as StarIcon,
     EmojiEventsOutlined as TrophyOutlineIcon,
     Leaderboard as LeaderboardIcon,
-    PrintOutlined as PrintIcon
+    PrintOutlined as PrintIcon,
+    TrendingUp as TrendingUpIcon
 } from '@mui/icons-material';
 import { format, parseISO, addDays } from 'date-fns';
 import env from '../../config/env';
@@ -141,6 +142,10 @@ function LeagueManagement() {
     });
     const [loadingRankings, setLoadingRankings] = useState(false);
 
+    // Add state for most improved players
+    const [mostImprovedPlayers, setMostImprovedPlayers] = useState([]);
+    const [loadingMostImproved, setLoadingMostImproved] = useState(false);
+
     useEffect(() => {
         // If league data wasn't passed via navigation state, fetch it
         if (!league) {
@@ -205,6 +210,23 @@ function LeagueManagement() {
             fetchRankingsData();
         }
     }, [activeTab, league?.id]);
+
+    // Add function to fetch most improved players
+    const fetchMostImprovedPlayers = async () => {
+        setLoadingMostImproved(true);
+        try {
+            const response = await fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/most-improved?limit=5`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch most improved players');
+            }
+            const data = await response.json();
+            setMostImprovedPlayers(data);
+        } catch (error) {
+            console.error('Error fetching most improved players:', error);
+        } finally {
+            setLoadingMostImproved(false);
+        }
+    };
 
     const fetchLeagueDetails = async () => {
         setLoading(true);
@@ -1609,26 +1631,6 @@ function LeagueManagement() {
                                         </TableBody>
                                     </Table>
                                 </TableContainer>
-
-                                <Box sx={{ mt: 4 }}>
-                                    <Typography variant="subtitle2" gutterBottom>
-                                        Notable Achievements
-                                    </Typography>
-                                    <Grid container spacing={2}>
-                                        {/* This section can be populated in the future with dynamic data */}
-                                        {playerStats.some(p => p.birdies > 0) && (
-                                            <Grid item xs={12} sm={6} md={3}>
-                                                <Paper sx={{ p: 2, display: 'flex', alignItems: 'center' }}>
-                                                    <StarsIcon color="primary" sx={{ mr: 1 }} />
-                                                    <Typography variant="body2">
-                                                        {playerStats.reduce((sum, p) => sum + (p.birdies || 0), 0)} Total Birdies
-                                                    </Typography>
-                                                </Paper>
-                                            </Grid>
-                                        )}
-                                        {/* Add more achievement cards here as needed */}
-                                    </Grid>
-                                </Box>
                             </Box>
                         ) : (
                             <Box sx={{ textAlign: 'center', py: 4 }}>
@@ -2041,10 +2043,17 @@ function LeagueManagement() {
             </Paper>
 
             {/* Create Match Dialog */}
-            <Dialog open={createMatchDialogOpen} onClose={handleCreateMatchClose} maxWidth="sm" fullWidth>
+            <Dialog
+                open={createMatchDialogOpen}
+                onClose={handleCreateMatchClose}
+                maxWidth="md"
+                fullWidth
+
+            >
                 <DialogTitle>Create New Match</DialogTitle>
                 <DialogContent>
                     <Box sx={{ mt: 2 }}>
+                        <Typography variant="h6" gutterBottom>Match Details</Typography>
                         <TextField
                             fullWidth
                             label="Match Date"
