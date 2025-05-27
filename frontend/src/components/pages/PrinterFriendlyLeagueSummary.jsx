@@ -21,7 +21,7 @@ import {
     ArrowBack as ArrowBackIcon,
     Print as PrintIcon
 } from '@mui/icons-material';
-import format from 'date-fns/format';
+import { format, parseISO } from 'date-fns';
 import env from '../../config/env';
 
 const PrinterFriendlyLeagueSummary = () => {
@@ -313,7 +313,7 @@ const PrinterFriendlyLeagueSummary = () => {
                     {league?.name} League Summary
                 </Typography>
                 <Typography variant="subtitle1" gutterBottom>
-                    {selectedWeek ? `Week ${selectedWeek.week_number}: ${format(new Date(selectedWeek.start_date), 'MMMM d')} - ${format(new Date(selectedWeek.end_date), 'MMMM d, yyyy')}` : ''}
+                    {selectedWeek ? `Week ${selectedWeek.week_number}: ${format(parseISO(selectedWeek.start_date), 'MMMM d')} - ${format(parseISO(selectedWeek.end_date), 'MMMM d, yyyy')}` : ''}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                     Printed on: {format(new Date(), 'MMMM d, yyyy')}
@@ -344,7 +344,7 @@ const PrinterFriendlyLeagueSummary = () => {
                                         {matches.map(match => (
                                             <TableRow key={match.id}>
                                                 <TableCell>
-                                                    {format(new Date(match.match_date), 'MMM d, yyyy')}
+                                                    {format(parseISO(match.match_date), 'MMM d, yyyy')}
                                                 </TableCell>
                                                 <TableCell>
                                                     {match.course?.name || 'TBD'}
@@ -440,7 +440,7 @@ const PrinterFriendlyLeagueSummary = () => {
                                                     Week {match.week_number}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {format(new Date(match.match_date), 'MMM d, yyyy')}
+                                                    {format(parseISO(match.match_date), 'MMM d, yyyy')}
                                                 </TableCell>
                                                 <TableCell>
                                                     {match.course?.name || 'TBD'}
@@ -628,7 +628,7 @@ const PrinterFriendlyLeagueSummary = () => {
                                                         {score.player_name} - <span style={{ fontWeight: 'normal' }}>{score.score}</span>
                                                     </Typography>
                                                     <Typography variant="caption" color="text.secondary">
-                                                        {score.date ? format(new Date(score.date), 'MMM d, yyyy') : ''} - {score.course_name || ''}
+                                                        {score.date ? format(parseISO(score.date), 'MMM d, yyyy') : ''} - {score.course_name || ''}
                                                     </Typography>
                                                 </Box>
                                             </ListItem>
@@ -667,7 +667,7 @@ const PrinterFriendlyLeagueSummary = () => {
                                                         {score.player_name} - <span style={{ fontWeight: 'normal' }}>{score.score}</span>
                                                     </Typography>
                                                     <Typography variant="caption" color="text.secondary">
-                                                        {score.date ? format(new Date(score.date), 'MMM d, yyyy') : ''} - {score.course_name || ''}
+                                                        {score.date ? format(parseISO(score.date), 'MMM d, yyyy') : ''} - {score.course_name || ''}
                                                     </Typography>
                                                 </Box>
                                             </ListItem>
@@ -706,7 +706,7 @@ const PrinterFriendlyLeagueSummary = () => {
                                                         {score.team_name} - <span style={{ fontWeight: 'normal' }}>{score.score}</span>
                                                     </Typography>
                                                     <Typography variant="caption" color="text.secondary">
-                                                        {score.date ? format(new Date(score.date), 'MMM d, yyyy') : ''} - {score.course_name || ''}
+                                                        {score.date ? format(parseISO(score.date), 'MMM d, yyyy') : ''} - {score.course_name || ''}
                                                     </Typography>
                                                 </Box>
                                             </ListItem>
@@ -745,7 +745,7 @@ const PrinterFriendlyLeagueSummary = () => {
                                                         {score.team_name} - <span style={{ fontWeight: 'normal' }}>{score.score}</span>
                                                     </Typography>
                                                     <Typography variant="caption" color="text.secondary">
-                                                        {score.date ? format(new Date(score.date), 'MMM d, yyyy') : ''} - {score.course_name || ''}
+                                                        {score.date ? format(parseISO(score.date), 'MMM d, yyyy') : ''} - {score.course_name || ''}
                                                     </Typography>
                                                 </Box>
                                             </ListItem>
