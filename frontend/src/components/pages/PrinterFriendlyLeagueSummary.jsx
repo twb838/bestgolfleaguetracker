@@ -45,6 +45,12 @@ const PrinterFriendlyLeagueSummary = () => {
     });
     const [makeupMatches, setMakeupMatches] = useState([]);
     const [mostImprovedPlayers, setMostImprovedPlayers] = useState([]);
+    const [previousWeekMatches, setPreviousWeekMatches] = useState([]);
+    const [previousWeek, setPreviousWeek] = useState(null);
+    const [previousWeekTopScores, setPreviousWeekTopScores] = useState({
+        topGross: [],
+        topNet: []
+    });
 
     // Fetch all data on load
     useEffect(() => {
@@ -97,6 +103,19 @@ const PrinterFriendlyLeagueSummary = () => {
 
                 // Fetch most improved players
                 await fetchMostImprovedPlayers();
+
+                // Find the previous week for showing results
+                if (weeksData && weeksData.length > 1) {
+                    // Sort weeks by week number descending
+                    const sortedWeeks = [...weeksData].sort((a, b) => b.week_number - a.week_number);
+                    // Get the second week (index 1) which is the previous week
+                    const prevWeek = sortedWeeks[1];
+                    if (prevWeek) {
+                        setPreviousWeek(prevWeek);
+                        // Fetch the previous week's matches
+                        fetchPreviousWeekMatches(prevWeek.id, leagueData);
+                    }
+                }
 
             } catch (error) {
                 console.error('Error fetching data:', error);
@@ -229,6 +248,44 @@ const PrinterFriendlyLeagueSummary = () => {
         }
     };
 
+    const fetchPreviousWeekMatches = async (weekId, leagueData) => {
+        if (!weekId) return;
+
+        try {
+            const matchesResponse = await fetch(`${env.API_BASE_URL}/matches/weeks/${weekId}/matches`);
+            if (!matchesResponse.ok) {
+                throw new Error('Failed to fetch previous week matches');
+            }
+
+            const matchesData = await matchesResponse.json();
+
+            // Only include completed matches with results
+            const completedMatches = matchesData.filter(match => match.is_completed);
+
+            // Enrich the matches data with team and course details
+            if (leagueData?.teams && leagueData?.courses) {
+                const enrichedMatches = completedMatches.map(match => {
+                    const homeTeam = leagueData.teams.find(team => team.id === match.home_team_id);
+                    const awayTeam = leagueData.teams.find(team => team.id === match.away_team_id);
+                    const course = leagueData.courses.find(course => course.id === match.course_id);
+
+                    return {
+                        ...match,
+                        home_team: homeTeam || { name: `Team #${match.home_team_id}` },
+                        away_team: awayTeam || { name: `Team #${match.away_team_id}` },
+                        course: course || { name: `Course #${match.course_id}` }
+                    };
+                });
+
+                setPreviousWeekMatches(enrichedMatches);
+            } else {
+                setPreviousWeekMatches(completedMatches);
+            }
+        } catch (error) {
+            console.error('Error fetching previous week matches:', error);
+        }
+    };
+
     const fetchRankingsData = async () => {
         try {
             // Fetch all ranking data in parallel
@@ -274,6 +331,30 @@ const PrinterFriendlyLeagueSummary = () => {
             setMostImprovedPlayers(data);
         } catch (error) {
             console.error('Error fetching most improved players:', error);
+        }
+    };
+
+    const fetchPreviousWeekTopScores = async (weekId) => {
+        if (!weekId) return;
+
+        try {
+            // Fetch top gross and net scores from last week
+            const [grossResponse, netResponse] = await Promise.all([
+                fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/top-scores?limit=3&score_type=gross&week_id=${weekId}`),
+                fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/top-scores?limit=3&score_type=net&week_id=${weekId}`)
+            ]);
+
+            const [grossData, netData] = await Promise.all([
+                grossResponse.ok ? grossResponse.json() : [],
+                netResponse.ok ? netResponse.json() : []
+            ]);
+
+            setPreviousWeekTopScores({
+                topGross: grossData,
+                topNet: netData
+            });
+        } catch (error) {
+            console.error('Error fetching previous week top scores:', error);
         }
     };
 
@@ -499,6 +580,126 @@ const PrinterFriendlyLeagueSummary = () => {
                         </Box>
                     </Grid>
                 )}
+
+                {/* SECTION 1.7: Previous Week Results */}
+                {previousWeek && previousWeekMatches.length > 0 ? (
+                    <Grid item xs={12}>
+                        <Paper sx={{ p: 2, mb: 3, bgcolor: '#f0f7ff' }} className="print-force-background">
+                            <Typography variant="h5" component="h2" gutterBottom sx={{
+                                fontWeight: 'bold',
+                                borderBottom: '2px solid',
+                                borderColor: 'info.main',
+                                pb: 1,
+                                display: 'flex',
+                                alignItems: 'center'
+                            }}>
+                                <Box component="span" sx={{
+                                    bgcolor: 'info.main',
+                                    color: 'white',
+                                    px: 1,
+                                    py: 0.5,
+                                    mr: 1,
+                                    borderRadius: 1,
+                                    fontSize: '0.8em'
+                                }}>
+                                    RESULTS
+                                </Box>
+                                Week {previousWeek.week_number} Results ({format(parseISO(previousWeek.start_date), 'MMM d')} - {format(parseISO(previousWeek.end_date), 'MMM d')})
+                            </Typography>
+
+                            <TableContainer>
+                                <Table size="small">
+                                    <TableHead>
+                                        <TableRow sx={{ backgroundColor: '#e3f2fd' }} className="print-force-background">
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Date</TableCell>
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Course</TableCell>
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Home Team</TableCell>
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Away Team</TableCell>
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Result</TableCell>
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Winner</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {previousWeekMatches.map(match => {
+                                            // Determine winner
+                                            let winner = null;
+                                            if (match.home_team_points > match.away_team_points) {
+                                                winner = match.home_team.name;
+                                            } else if (match.away_team_points > match.home_team_points) {
+                                                winner = match.away_team.name;
+                                            } else {
+                                                winner = "Tied";
+                                            }
+
+                                            return (
+                                                <TableRow key={`prev-${match.id}`} sx={{
+                                                    backgroundColor: '#f5faff'
+                                                }} className="print-force-background">
+                                                    <TableCell>
+                                                        {format(parseISO(match.match_date), 'MMM d, yyyy')}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {match.course?.name || 'N/A'}
+                                                    </TableCell>
+                                                    <TableCell sx={{
+                                                        fontWeight: match.home_team_points > match.away_team_points ? 'bold' : 'normal'
+                                                    }}>
+                                                        {match.home_team?.name || 'Home Team'}
+                                                    </TableCell>
+                                                    <TableCell sx={{
+                                                        fontWeight: match.away_team_points > match.home_team_points ? 'bold' : 'normal'
+                                                    }}>
+                                                        {match.away_team?.name || 'Away Team'}
+                                                    </TableCell>
+                                                    <TableCell sx={{ fontWeight: 'bold' }}>
+                                                        {match.home_team_points !== null
+                                                            ? (match.home_team_points % 1 === 0
+                                                                ? match.home_team_points
+                                                                : match.home_team_points.toFixed(1))
+                                                            : '-'}
+                                                        {' - '}
+                                                        {match.away_team_points !== null
+                                                            ? (match.away_team_points % 1 === 0
+                                                                ? match.away_team_points
+                                                                : match.away_team_points.toFixed(1))
+                                                            : '-'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {winner === "Tied" ? (
+                                                            <Box sx={{
+                                                                display: 'inline-block',
+                                                                bgcolor: 'grey.200',
+                                                                px: 1,
+                                                                py: 0.25,
+                                                                borderRadius: 1,
+                                                                fontSize: '0.75rem'
+                                                            }} className="print-force-background">
+                                                                Tied Match
+                                                            </Box>
+                                                        ) : (
+                                                            <Box sx={{
+                                                                display: 'inline-block',
+                                                                bgcolor: 'success.light',
+                                                                color: 'success.contrastText',
+                                                                px: 1,
+                                                                py: 0.25,
+                                                                borderRadius: 1,
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 'bold'
+                                                            }} className="print-force-background">
+                                                                {winner}
+                                                            </Box>
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        </Paper>
+                    </Grid>
+                ) : null}
 
                 {/* SECTION 2: League Standings */}
                 <Grid item xs={12}>
