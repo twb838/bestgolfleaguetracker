@@ -1339,16 +1339,10 @@ const MatchScoreEntry = () => {
                     <Typography variant="body2">
                         • When players from the same team tie for lowest net score, each player earns 0.5 points
                     </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                        • When multiple players from the same team tie for low net, an additional team point is awarded
+                    <Typography variant="body2">
+                        • 1 point awarded to the team with the lowest combined net total
                     </Typography>
                     <Typography variant="body2">
-                        • When players from different teams tie for lowest net score, no points are awarded
-                    </Typography>
-                    <Typography variant="body2">
-                        • 1 additional point awarded to the team with the lowest combined net total
-                    </Typography>
-                    <Typography variant="body2" sx={{ mt: 1 }}>
                         • Player pops are calculated by subtracting the lowest handicap in the group from each player's handicap
                     </Typography>
                 </Box>
