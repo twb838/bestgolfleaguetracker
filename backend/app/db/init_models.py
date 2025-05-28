@@ -7,6 +7,7 @@ from app.models.team import Team
 from app.models.player import Player
 from app.models.league import League
 from app.models.association_tables import league_courses, league_teams
+from app.models.tournament import Tournament, TournamentFlight, TournamentParticipant, TournamentRound, TournamentScore, TournamentTeamScore, ParticipantType
 
 # Import models that depend on the base models
 from app.models.week import Week

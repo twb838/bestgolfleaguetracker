@@ -2,14 +2,29 @@ from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker, declarative_base
 from app.core.settings import settings
 Base = declarative_base()
+# Import all models here for Alembic autodiscovery
+from app.db.base import Base
+
+# Import all models
 from app.models.player import Player
-from app.models.team import Team
-from app.models.league import League
 from app.models.course import Course
 from app.models.hole import Hole
+from app.models.team import Team
+from app.models.league import League
 from app.models.match import Match
-from app.models.score import PlayerScore
 from app.models.week import Week
+from app.models.score import PlayerScore
+
+# Make sure to import your tournament models
+from app.models.tournament import (
+    Tournament, 
+    TournamentFlight, 
+    TournamentParticipant, 
+    TournamentRound,
+    TournamentScore,
+    TournamentTeamScore,
+    ParticipantType
+)
 
 # Create engine and session factory
 engine = create_engine(settings.database_url)

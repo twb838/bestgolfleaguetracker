@@ -22,6 +22,9 @@ import MatchScoreEntry from './pages/MatchScoreEntry';
 import Players from './pages/Players';
 import TeamScoreEntry from './pages/TeamScoreEntry';
 import PrinterFriendlyLeagueSummary from './pages/PrinterFriendlyLeagueSummary';
+import Tournaments from './pages/Tournaments';
+import TournamentManagement from './pages/TournamentManagement';
+import TournamentCreationWizard from './pages/TournamentCreationWizard';
 
 // Create a layout wrapper component
 const AppLayout = ({ children }) => {
@@ -41,12 +44,14 @@ const AppLayout = ({ children }) => {
         setMobileMenuAnchor(null);
     };
 
+    // Update the navItems array to include Tournaments
     const navItems = [
         { name: 'Dashboard', path: '/', icon: <HomeIcon fontSize="small" /> },
         { name: 'Players', path: '/players', icon: <PersonIcon fontSize="small" /> },
         { name: 'Teams', path: '/teams', icon: <GroupIcon fontSize="small" /> },
         { name: 'Courses', path: '/courses', icon: <GolfCourseIcon fontSize="small" /> },
         { name: 'Leagues', path: '/leagues', icon: <EmojiEventsIcon fontSize="small" /> },
+        { name: 'Tournaments', path: '/tournaments', icon: <EmojiEventsIcon fontSize="small" /> },
     ];
 
     // If minimal layout, only render children without navigation
@@ -155,6 +160,9 @@ function App() {
                     <Route path="/leagues/:leagueId/print" element={<PrinterFriendlyLeagueSummary />} />
                     <Route path="/matches/:matchId/scores" element={<MatchScoreEntry />} />
                     <Route path="/score-entry/:matchId/team/:token" element={<TeamScoreEntry />} />
+                    <Route path="/tournaments" element={<Tournaments />} />
+                    <Route path="/tournaments/create" element={<TournamentCreationWizard />} />
+                    <Route path="/tournaments/:tournamentId" element={<TournamentManagement />} />
                 </Routes>
             </AppLayout>
         </Router>
