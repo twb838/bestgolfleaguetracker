@@ -20,7 +20,7 @@ def get_weeks_by_league(league_id: int, db: Session = Depends(get_db), current_u
     weeks = week_crud.get_weeks_by_league(db, league_id)
     return weeks
 
-@router.get("/weeks/{week_id}", response_model=WeekReadWithMatches)
+@router.get("/{week_id}", response_model=WeekReadWithMatches)
 def get_week(week_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     week = week_crud.get_week(db, week_id)
     if not week:
@@ -30,7 +30,7 @@ def get_week(week_id: int, db: Session = Depends(get_db), current_user: User = D
         )
     return week
 
-@router.put("/weeks/{week_id}", response_model=WeekRead)
+@router.put("/{week_id}", response_model=WeekRead)
 def update_week(week_id: int, week_data: WeekUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     updated_week = week_crud.update_week(db, week_id, week_data)
     if not updated_week:
@@ -40,7 +40,7 @@ def update_week(week_id: int, week_data: WeekUpdate, db: Session = Depends(get_d
         )
     return updated_week
 
-@router.delete("/weeks/{week_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{week_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_week(week_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     success = week_crud.delete_week(db, week_id)
     if not success:

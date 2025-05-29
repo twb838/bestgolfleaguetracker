@@ -15,9 +15,9 @@ import {
     PersonAdd as SubstituteIcon,
     Refresh as RefreshIcon
 } from '@mui/icons-material';
-import format from 'date-fns/format';
-import env from '../../config/env';
+
 import MatchHeader from './MatchScoreEntry/MatchHeader';
+import { get, post, put, del } from '../../services/api'; // Import API service
 
 // Add this function to sort holes by handicap for pop application
 
@@ -87,14 +87,9 @@ const MatchScoreEntry = () => {
     // Add this function inside the MatchScoreEntry component
     const fetchAvailablePlayers = async () => {
         try {
-            const response = await fetch(`${env.API_BASE_URL}/players`);
-            if (!response.ok) {
-                throw new Error('Failed to fetch players');
-            }
-            const players = await response.json();
+            const players = await get('/players');
             setAvailablePlayers(players);
         } catch (error) {
-            console.error('Error fetching available players:', error);
             setError('Failed to load available players');
         }
     };
@@ -124,33 +119,19 @@ const MatchScoreEntry = () => {
     const fetchMatchDetails = async () => {
         setLoading(true);
         try {
-            console.log(`Fetching match details for ID: ${matchId}`);
-            const matchResponse = await fetch(`${env.API_BASE_URL}/matches/${matchId}`);
-            if (!matchResponse.ok) {
-                throw new Error(`Failed to fetch match details: ${matchResponse.status}`);
-            }
-            const matchData = await matchResponse.json();
-            console.log('Match data received:', matchData);
+            const matchData = await get(`/matches/${matchId}`);
             setMatch(matchData);
 
             // Fetch home and away teams directly to ensure we get full player data
             try {
-                const homeTeamResponse = await fetch(`${env.API_BASE_URL}/teams/${matchData.home_team_id}`);
-                const awayTeamResponse = await fetch(`${env.API_BASE_URL}/teams/${matchData.away_team_id}`);
+                const [homeTeamData, awayTeamData] = await Promise.all([
+                    get(`/teams/${matchData.home_team_id}`),
+                    get(`/teams/${matchData.away_team_id}`)
+                ]);
 
-                if (homeTeamResponse.ok && awayTeamResponse.ok) {
-                    const homeTeamData = await homeTeamResponse.json();
-                    const awayTeamData = await awayTeamResponse.json();
-                    console.log('Home team data:', homeTeamData);
-                    console.log('Away team data:', awayTeamData);
-
-                    // Initialize player scores directly from fetched team data
-                    initializeTeamScores(homeTeamData, awayTeamData, matchData);
-                } else {
-                    throw new Error("Failed to fetch team data");
-                }
+                // Initialize player scores directly from fetched team data
+                initializeTeamScores(homeTeamData, awayTeamData, matchData);
             } catch (teamError) {
-                console.error('Error fetching team data:', teamError);
                 setError(`Failed to load team data: ${teamError.message}`);
             }
 
@@ -160,18 +141,13 @@ const MatchScoreEntry = () => {
             // Also fetch the league if we need it for other purposes
             if (!league) {
                 try {
-                    const leagueResponse = await fetch(`${env.API_BASE_URL}/leagues/${matchData.league_id}`);
-                    if (leagueResponse.ok) {
-                        const leagueData = await leagueResponse.json();
-                        setLeague(leagueData);
-                    }
+                    const leagueData = await get(`/leagues/${matchData.league_id}`);
+                    setLeague(leagueData);
                 } catch (leagueError) {
-                    console.error('Error fetching league data:', leagueError);
                     // Non-critical error, don't show to user
                 }
             }
         } catch (error) {
-            console.error('Error fetching match details:', error);
             setError(`Failed to load match details: ${error.message}`);
         } finally {
             setLoading(false);
@@ -226,15 +202,8 @@ const MatchScoreEntry = () => {
     const fetchCourseHoles = async (courseId) => {
         try {
             const courseIdToUse = courseId || match.course_id;
-            console.log(`Fetching course data for ID: ${courseIdToUse}`);
 
-            const response = await fetch(`${env.API_BASE_URL}/courses/${courseIdToUse}`);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch course details: ${response.status}`);
-            }
-
-            const courseData = await response.json();
-            console.log('Course data received:', courseData);
+            const courseData = await get(`/courses/${courseIdToUse}`);
             setCourse(courseData);
 
             // Check which property name is used for hole number (hole_number or number)
@@ -245,11 +214,9 @@ const MatchScoreEntry = () => {
             const sortedHoles = [...(courseData.holes || [])].sort((a, b) => {
                 return a[holeNumberProp] - b[holeNumberProp];
             });
-            console.log('Sorted holes:', sortedHoles);
             setHoles(sortedHoles);
 
         } catch (error) {
-            console.error('Error fetching course holes:', error);
             setError('Failed to load course details. Some features may not work correctly.');
         }
     };
@@ -259,15 +226,7 @@ const MatchScoreEntry = () => {
 
         try {
             // Fetch match players from the match_players table
-            const response = await fetch(`${env.API_BASE_URL}/matches/${matchData.id}/players`);
-
-            if (!response.ok) {
-                console.error('Failed to fetch match players:', response.status);
-                throw new Error(`Failed to fetch match players: ${response.status}`);
-            }
-
-            const matchPlayersData = await response.json();
-            console.log('Match players data:', matchPlayersData);
+            const matchPlayersData = await get(`/matches/${matchData.id}/players`);
 
             // Group players by team and filter for active players only
             const homeTeamPlayers = matchPlayersData
@@ -278,66 +237,50 @@ const MatchScoreEntry = () => {
                 .filter(mp => mp.team_id === matchData.away_team_id && mp.is_active)
                 .map(mp => mp.player);
 
-            console.log('Home team players from match_players:', homeTeamPlayers);
-            console.log('Away team players from match_players:', awayTeamPlayers);
-
             // If we have no players from match_players, fall back to initializing from league teams
             if (homeTeamPlayers.length === 0 || awayTeamPlayers.length === 0) {
-                console.warn('No match players found, initializing from league teams');
-
                 // Find the teams in the league
                 const homeTeam = leagueData.teams.find(t => t.id === matchData.home_team_id);
                 const awayTeam = leagueData.teams.find(t => t.id === matchData.away_team_id);
 
                 // Create a new endpoint request to initialize match_players
                 try {
-                    const initPlayersResponse = await fetch(`${env.API_BASE_URL}/matches/${matchData.id}/initialize-players`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            home_team_id: matchData.home_team_id,
-                            away_team_id: matchData.away_team_id
-                        }),
+                    await post(`/matches/${matchData.id}/initialize-players`, {
+                        home_team_id: matchData.home_team_id,
+                        away_team_id: matchData.away_team_id
                     });
 
-                    if (initPlayersResponse.ok) {
-                        console.log('Successfully initialized match players from teams');
-                        // Refresh the data after initialization
-                        return await initializePlayerScores(matchData, leagueData);
-                    }
+                    // Refresh the data after initialization
+                    return await initializePlayerScores(matchData, leagueData);
                 } catch (initError) {
-                    console.error('Error initializing match players:', initError);
-                }
+                    // If we couldn't initialize match_players, use the league team data directly
+                    if (homeTeam && homeTeam.players) {
+                        const homeScores = homeTeam.players.map(player => ({
+                            player_id: player.id,
+                            player_name: formatPlayerName(player),
+                            first_name: player.first_name,
+                            last_name: player.last_name,
+                            email: player.email,
+                            handicap: player.handicap || 0,
+                            scores: {},
+                            is_substitute: false
+                        }));
+                        setHomeTeamScores(calculatePlayerPops(homeScores, awayTeam?.players || []));
+                    }
 
-                // If we couldn't initialize match_players, use the league team data directly
-                if (homeTeam && homeTeam.players) {
-                    const homeScores = homeTeam.players.map(player => ({
-                        player_id: player.id,
-                        player_name: formatPlayerName(player),
-                        first_name: player.first_name,
-                        last_name: player.last_name,
-                        email: player.email,
-                        handicap: player.handicap || 0,
-                        scores: {},
-                        is_substitute: false
-                    }));
-                    setHomeTeamScores(calculatePlayerPops(homeScores, awayTeam?.players || []));
-                }
-
-                if (awayTeam && awayTeam.players) {
-                    const awayScores = awayTeam.players.map(player => ({
-                        player_id: player.id,
-                        player_name: formatPlayerName(player),
-                        first_name: player.first_name,
-                        last_name: player.last_name,
-                        email: player.email,
-                        handicap: player.handicap || 0,
-                        scores: {},
-                        is_substitute: false
-                    }));
-                    setAwayTeamScores(calculatePlayerPops(awayScores, homeTeam?.players || []));
+                    if (awayTeam && awayTeam.players) {
+                        const awayScores = awayTeam.players.map(player => ({
+                            player_id: player.id,
+                            player_name: formatPlayerName(player),
+                            first_name: player.first_name,
+                            last_name: player.last_name,
+                            email: player.email,
+                            handicap: player.handicap || 0,
+                            scores: {},
+                            is_substitute: false
+                        }));
+                        setAwayTeamScores(calculatePlayerPops(awayScores, homeTeam?.players || []));
+                    }
                 }
             } else {
                 // Create player score objects for home team from match_players data
@@ -388,7 +331,6 @@ const MatchScoreEntry = () => {
                 fetchExistingScores(matchData.id);
             }
         } catch (error) {
-            console.error('Error initializing player scores:', error);
             setError('Failed to initialize player scores: ' + error.message);
         }
     };
@@ -406,15 +348,7 @@ const MatchScoreEntry = () => {
     // Update fetchExistingScores function to use handicaps from match_players
     const fetchExistingScores = async (matchId) => {
         try {
-            console.log(`Fetching scores for match ${matchId}`);
-            const response = await fetch(`${env.API_BASE_URL}/matches/${matchId}/scores`);
-            if (!response.ok) {
-                console.log(`No scores found for match ${matchId}, status: ${response.status}`);
-                return;
-            }
-
-            const data = await response.json();
-            console.log('Received score data:', data);
+            const data = await get(`/matches/${matchId}/scores`);
 
             // Create a map of player scores for easy lookup
             const playerScores = {};
@@ -428,8 +362,6 @@ const MatchScoreEntry = () => {
                     }
                     playerScores[score.player_id][score.hole_id] = score.strokes;
                 });
-
-                console.log('Organized player scores:', playerScores);
             }
 
             // Process player data with active players only
@@ -471,10 +403,6 @@ const MatchScoreEntry = () => {
                         };
                     });
 
-                console.log(`Got ${homePlayersData.length} home players and ${awayPlayersData.length} away players from API`);
-                console.log('Home players data with handicaps from match_players:', homePlayersData);
-                console.log('Away players data with handicaps from match_players:', awayPlayersData);
-
                 // Apply pops based on lowest handicap
                 setHomeTeamScores(calculatePlayerPops(homePlayersData, awayPlayersData));
                 setAwayTeamScores(calculatePlayerPops(awayPlayersData, homePlayersData));
@@ -483,13 +411,11 @@ const MatchScoreEntry = () => {
             // Force a recalculation of match results
             if (homeTeamScores.length > 0 && awayTeamScores.length > 0) {
                 setTimeout(() => {
-                    console.log('Forcing match results calculation with loaded scores');
                     calculateMatchResults();
                 }, 500);
             }
 
         } catch (error) {
-            console.error('Error fetching existing scores:', error);
             setError('Failed to load existing scores. Please try again.');
         }
     };
@@ -866,7 +792,6 @@ const MatchScoreEntry = () => {
 
             // Check if matchResults is available
             if (!matchResults) {
-                console.error("Match results not available");
                 throw new Error("Failed to calculate match results");
             }
 
@@ -981,26 +906,16 @@ const MatchScoreEntry = () => {
 
             console.log("Team summary:", teamSummary);
 
-            // Send scores and match results to the API
-            const response = await fetch(`${env.API_BASE_URL}/matches/${matchId}/scores`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    scores: allScores,
-                    match_results: matchResults,
-                    is_completed: true,
-                    is_update: isUpdate,
-                    substitute_players: substitutes,
-                    player_summaries: playerSummaries,
-                    ...teamSummary
-                }),
+            // Send scores and match results to the API using API service
+            await post(`/matches/${matchId}/scores`, {
+                scores: allScores,
+                match_results: matchResults,
+                is_completed: true,
+                is_update: isUpdate,
+                substitute_players: substitutes,
+                player_summaries: playerSummaries,
+                ...teamSummary
             });
-
-            if (!response.ok) {
-                throw new Error('Failed to save scores');
-            }
 
             setSuccessMessage(isUpdate ? 'Scores updated successfully!' : 'Scores saved successfully!');
 
@@ -1018,7 +933,6 @@ const MatchScoreEntry = () => {
             });
 
         } catch (error) {
-            console.error('Error saving scores:', error);
             setError('Failed to save scores. Please try again.');
         } finally {
             setSaving(false);
@@ -1422,27 +1336,14 @@ const MatchScoreEntry = () => {
                     // Round the handicap to the nearest whole number
                     const roundedHandicap = Math.round(parseFloat(substitute.handicap) || 0);
 
-                    // Create the new player in the database
-                    const response = await fetch(`${env.API_BASE_URL}/players`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            first_name: substitute.first_name,
-                            last_name: substitute.last_name || '',
-                            email: email,
-                            handicap: roundedHandicap, // Use rounded handicap
-                            team_id: null // Don't associate with any team
-                        })
+                    // Create the new player in the database using API service
+                    const savedPlayer = await post('/players', {
+                        first_name: substitute.first_name,
+                        last_name: substitute.last_name || '',
+                        email: email,
+                        handicap: roundedHandicap, // Use rounded handicap
+                        team_id: null // Don't associate with any team
                     });
-
-                    if (!response.ok) {
-                        throw new Error('Failed to save substitute player');
-                    }
-
-                    // Get the saved player data with ID
-                    const savedPlayer = await response.json();
 
                     // Update our substitute with the saved player data
                     substituteFinal = {
@@ -1452,9 +1353,7 @@ const MatchScoreEntry = () => {
                         is_substitute: true
                     };
 
-                    console.log('Created new player in database:', savedPlayer);
                 } catch (error) {
-                    console.error('Error saving substitute player:', error);
                     setError('Failed to save substitute player. Using temporary substitute instead.');
                     // Continue with the temporary substitute even if saving failed
                     return;
@@ -1467,24 +1366,14 @@ const MatchScoreEntry = () => {
             // Determine team ID
             const teamId = teamType === 'home' ? match.home_team_id : match.away_team_id;
 
-            // Update match_players table - add the substitute with rounded handicap
-            const updateMatchPlayersResponse = await fetch(`${env.API_BASE_URL}/matches/${match.id}/players/substitute`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    original_player_id: originalPlayer.player_id,
-                    substitute_player_id: substituteFinal.player_id,
-                    team_id: teamId,
-                    is_substitute: true,
-                    handicap: Math.round(parseFloat(substituteFinal.handicap) || 0) // Send the rounded handicap
-                }),
+            // Update match_players table - add the substitute with rounded handicap using API service
+            await post(`/matches/${match.id}/players/substitute`, {
+                original_player_id: originalPlayer.player_id,
+                substitute_player_id: substituteFinal.player_id,
+                team_id: teamId,
+                is_substitute: true,
+                handicap: Math.round(parseFloat(substituteFinal.handicap) || 0) // Send the rounded handicap
             });
-
-            if (!updateMatchPlayersResponse.ok) {
-                throw new Error('Failed to update match players record');
-            }
 
             // 2. Update the UI with the substitution
             // Copy current team scores

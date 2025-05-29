@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { useParams, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Typography,
     Box,
@@ -67,6 +67,7 @@ function LeagueManagement() {
     const { leagueId } = useParams();
     const location = useLocation();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
 
     // League data - try to use passed state or fetch if not available
     const [league, setLeague] = useState(location.state?.league || null);
@@ -146,6 +147,9 @@ function LeagueManagement() {
     const [mostImprovedPlayers, setMostImprovedPlayers] = useState([]);
     const [loadingMostImproved, setLoadingMostImproved] = useState(false);
 
+    // Add state to track if we've initialized the week selection
+    const [weekSelectionInitialized, setWeekSelectionInitialized] = useState(false);
+
     useEffect(() => {
         // If league data wasn't passed via navigation state, fetch it
         if (!league) {
@@ -173,32 +177,79 @@ function LeagueManagement() {
         }
     }, [activeTab, league?.id]);
 
-    // Add this useEffect to handle week changes and always fetch matches when the selected week changes
+    // Handle week selection initialization and URL synchronization
     useEffect(() => {
-        if (selectedWeekId && league?.id) {
-            console.log("Selected week changed, fetching matches for:", selectedWeekId);
-            fetchMatchesForWeek(selectedWeekId);
-        }
-    }, [selectedWeekId, league?.id]); // Only depend on selectedWeekId and league.id
+        if (weeks.length > 0 && !weekSelectionInitialized) {
+            let weekToSelect = null;
 
-    // Then update your existing location.state handler useEffect to avoid conflicts
+            // Priority 1: Week from URL parameter
+            const weekParam = searchParams.get('week');
+            if (weekParam) {
+                const weekNumber = parseInt(weekParam);
+                weekToSelect = weeks.find(w => w.week_number === weekNumber);
+
+                if (!weekToSelect) {
+                    // Week number not found, remove invalid parameter and fall back
+                    setSearchParams(prev => {
+                        const newParams = new URLSearchParams(prev);
+                        newParams.delete('week');
+                        return newParams;
+                    });
+                }
+            }
+
+            // Priority 2: Week from navigation state (one-time use)
+            if (!weekToSelect && location.state?.selectedWeekId) {
+                weekToSelect = weeks.find(w => w.id === location.state.selectedWeekId);
+
+                // Clear the location state after using it
+                window.history.replaceState({}, document.title);
+            }
+
+            // Priority 3: Most recent week (default)
+            if (!weekToSelect) {
+                weekToSelect = weeks.reduce((latest, current) =>
+                    (latest.week_number > current.week_number) ? latest : current
+                );
+            }
+
+            if (weekToSelect) {
+                setSelectedWeekId(weekToSelect.id);
+
+                // Update URL to reflect the selected week
+                setSearchParams(prev => {
+                    const newParams = new URLSearchParams(prev);
+                    newParams.set('week', weekToSelect.week_number.toString());
+                    return newParams;
+                });
+
+                // Fetch matches for the selected week
+                fetchMatchesForWeek(weekToSelect.id);
+            }
+
+            setWeekSelectionInitialized(true);
+        }
+    }, [weeks, weekSelectionInitialized, searchParams, location.state, setSearchParams]);
+
+    // Handle manual week changes and update URL
     useEffect(() => {
-        // Only handle the initial state from navigation
-        if (location.state?.selectedWeekId) {
-            const weekToSelect = location.state.selectedWeekId;
+        if (selectedWeekId && weekSelectionInitialized) {
+            const selectedWeek = weeks.find(w => w.id === selectedWeekId);
+            if (selectedWeek) {
+                // Update URL parameter
+                setSearchParams(prev => {
+                    const newParams = new URLSearchParams(prev);
+                    newParams.set('week', selectedWeek.week_number.toString());
+                    return newParams;
+                });
 
-            // Clear the location state
-            window.history.replaceState({}, document.title);
-
-            // Just set the selected week - the other useEffect will handle fetching
-            setSelectedWeekId(weekToSelect);
-        } else if (weeks.length > 0 && !selectedWeekId) {
-            // Default behavior - select first week if none is selected
-            setSelectedWeekId(weeks[0].id);
+                // Fetch matches for the week
+                fetchMatchesForWeek(selectedWeekId);
+            }
         }
-    }, [location.state, weeks, selectedWeekId]); // Remove league from dependencies
+    }, [selectedWeekId, weekSelectionInitialized, weeks, setSearchParams]);
 
-    // Add this useEffect
+    // Add this useEffect for player stats
     useEffect(() => {
         if (activeTab === 2 && league?.id) {
             fetchPlayerStats();
@@ -218,7 +269,7 @@ function LeagueManagement() {
             const data = await get(`/playerstats/league/${leagueId}/most-improved?limit=5`);
             setMostImprovedPlayers(data);
         } catch (error) {
-            console.error('Error fetching most improved players:', error);
+            // Handle error silently
         } finally {
             setLoadingMostImproved(false);
         }
@@ -232,7 +283,6 @@ function LeagueManagement() {
             setLeague(data);
             setLoading(false);
         } catch (error) {
-            console.error('Error fetching league details:', error);
             setError('Failed to load league details. Please try again later.');
             setLoading(false);
         }
@@ -242,36 +292,20 @@ function LeagueManagement() {
     const fetchWeeks = async () => {
         setLoadingMatches(true);
         try {
-            // Fetch weeks for this league
             const weeksData = await get(`/leagues/${leagueId}/weeks`);
             setWeeks(weeksData);
 
-            // If there are weeks, select one
-            if (weeksData && weeksData.length > 0) {
-                // If we had a selected week that still exists, keep it selected
-                const currentWeekExists = selectedWeekId && weeksData.some(w => w.id === selectedWeekId);
-
-                if (currentWeekExists) {
-                    // Keep current selection
-                    await fetchMatchesForWeek(selectedWeekId);
-                } else {
-                    // Otherwise select the latest week
-                    const latestWeek = weeksData.reduce((latest, current) =>
-                        (latest.week_number > current.week_number) ? latest : current
-                    );
-                    setSelectedWeekId(latestWeek.id);
-
-                    // Load matches for the selected week
-                    await fetchMatchesForWeek(latestWeek.id);
-                }
-            } else {
-                // No weeks left
+            // Reset week selection initialization when weeks change
+            if (weeksData.length === 0) {
                 setSelectedWeekId(null);
                 setMatches([]);
-                setLoadingMatches(false);
+                setWeekSelectionInitialized(true); // Mark as initialized even with no weeks
+            } else {
+                setWeekSelectionInitialized(false); // Allow re-initialization with new weeks
             }
         } catch (error) {
-            console.error('Error fetching weeks:', error);
+            // Handle error silently
+        } finally {
             setLoadingMatches(false);
         }
     };
@@ -280,17 +314,13 @@ function LeagueManagement() {
     const fetchMatchesForWeek = async (weekId) => {
         if (!weekId) return;
 
-        console.log("Fetching matches for week:", weekId);
         setLoadingMatches(true);
-        // Clear existing matches while loading
         setMatches([]);
 
         try {
             const matchesData = await get(`/matches/weeks/${weekId}/matches`);
 
-            // Ensure we have league data before enriching
             if (league?.teams && league?.courses) {
-                // Enrich the matches data with full team objects
                 const enrichedMatches = matchesData.map(match => {
                     const homeTeam = league.teams.find(team => team.id === match.home_team_id);
                     const awayTeam = league.teams.find(team => team.id === match.away_team_id);
@@ -309,7 +339,7 @@ function LeagueManagement() {
                 setMatches(matchesData);
             }
         } catch (error) {
-            console.error('Error fetching matches:', error);
+            // Handle error silently
         } finally {
             setLoadingMatches(false);
         }
@@ -320,12 +350,8 @@ function LeagueManagement() {
         setLoadingAllMatches(true);
         try {
             const data = await get(`/leagues/${leagueId}/leaderboard`);
-            console.log("Fetched leaderboard data:", data);
-
-            // The data is already sorted and calculated on the backend
             return data;
         } catch (error) {
-            console.error('Error fetching leaderboard:', error);
             return [];
         } finally {
             setLoadingAllMatches(false);
@@ -341,8 +367,6 @@ function LeagueManagement() {
             const data = await get(`/player-stats/league/${leagueId}/player-stats?minimum_rounds=1`);
             setPlayerStats(data);
         } catch (error) {
-            console.error('Error fetching player statistics:', error);
-            // If API endpoint doesn't exist yet, return empty array
             setPlayerStats([]);
         } finally {
             setLoadingPlayerStats(false);
@@ -355,7 +379,6 @@ function LeagueManagement() {
 
         setLoadingRankings(true);
         try {
-            // Fetch all rankings data using API service
             const [individualGrossData, individualNetData, teamGrossData, teamNetData] = await Promise.all([
                 get(`/player-stats/league/${leagueId}/top-scores?limit=5&score_type=gross`).catch(() => []),
                 get(`/player-stats/league/${leagueId}/top-scores?limit=5&score_type=net`).catch(() => []),
@@ -370,8 +393,6 @@ function LeagueManagement() {
                 topTeamNet: teamNetData
             });
         } catch (error) {
-            console.error('Error fetching rankings data:', error);
-            // If API endpoints don't exist yet, use empty arrays
             setRankingsData({
                 topIndividualGross: [],
                 topIndividualNet: [],
@@ -487,7 +508,9 @@ function LeagueManagement() {
     };
 
     const handleWeekChange = (event) => {
-        setSelectedWeekId(event.target.value);
+        const newWeekId = event.target.value;
+        setSelectedWeekId(newWeekId);
+        // URL update will be handled by the useEffect
     };
 
     const handleTabChange = (event, newValue) => {
@@ -889,16 +912,12 @@ function LeagueManagement() {
     // Update handleCreateWeek to use API service
     const handleCreateWeek = async () => {
         try {
-            // First create the week
             const weekData = await post(`/leagues/${leagueId}/weeks`, newWeek);
             const createdWeekId = weekData.id;
 
-            // If matchup generation is enabled and we have matchups to create
             if (generateMatchups && generatedMatchups.length > 0) {
                 for (const matchup of generatedMatchups) {
-                    // Skip creating actual matches for byes
                     if (matchup.is_bye) {
-                        console.log(`Team ${matchup.home_team_name} has a bye this week`);
                         continue;
                     }
 
@@ -912,24 +931,24 @@ function LeagueManagement() {
                 }
             }
 
-            // Refresh the weeks and show the newly created one
+            // Refresh the weeks list
             await fetchWeeks();
+
+            // Select the newly created week
             setSelectedWeekId(createdWeekId);
+
             handleCreateWeekClose();
 
-            // Reset the form with incremented week number and updated dates
             setNewWeek({
                 week_number: newWeek.week_number + 1,
                 start_date: format(addDays(parseISO(newWeek.end_date), 1), 'yyyy-MM-dd'),
                 end_date: format(addDays(parseISO(newWeek.end_date), 7), 'yyyy-MM-dd')
             });
 
-            // Reset the matchup generation state
             setGenerateMatchups(false);
             setGeneratedMatchups([]);
 
         } catch (error) {
-            console.error('Error creating week:', error);
             alert('Failed to create week. Please try again.');
         }
     };
@@ -944,24 +963,44 @@ function LeagueManagement() {
         setWeekToDelete(null);
     };
 
-    // Update handleDeleteWeek to use API service
+    // The handleDeleteWeek function you already have remains the same:
     const handleDeleteWeek = async () => {
         if (!weekToDelete) return;
 
         try {
-            // Delete the week
             await del(`/leagues/${leagueId}/weeks/${weekToDelete.id}`);
 
-            // Re-fetch the weeks list
+            // If we're deleting the currently selected week, we need to handle selection
+            const wasCurrentWeek = weekToDelete.id === selectedWeekId;
+
             await fetchWeeks();
+
+            // If we deleted the current week, let the system select a new one
+            if (wasCurrentWeek) {
+                setWeekSelectionInitialized(false);
+            }
+
             handleDeleteWeekClose();
         } catch (error) {
-            console.error('Error deleting week:', error);
             alert('Failed to delete week. Please try again.');
         }
     };
 
-    // Add/update formatDate function to properly handle dates from the API
+    // Helper function to get the current week object
+    const getCurrentWeek = () => {
+        return weeks.find(week => week.id === selectedWeekId);
+    };
+
+    // Helper function to check if a week is the most recent
+    const isMostRecentWeek = (week) => {
+        if (!weeks.length) return false;
+        const mostRecent = weeks.reduce((latest, current) =>
+            (latest.week_number > current.week_number) ? latest : current
+        );
+        return week.id === mostRecent.id;
+    };
+
+    // update formatDate function to handle dates from the API
     const formatDate = (dateString, formatPattern) => {
         if (!dateString) return '';
 
@@ -999,7 +1038,7 @@ function LeagueManagement() {
     }
 
     // Get the currently selected week object
-    const selectedWeek = weeks.find(week => week.id === selectedWeekId);
+    const selectedWeek = getCurrentWeek();
 
     return (
         <div>
@@ -1009,7 +1048,13 @@ function LeagueManagement() {
                 </Button>
                 <Button
                     startIcon={<PrintIcon />}
-                    onClick={() => navigate(`/leagues/${leagueId}/print`)}
+                    onClick={() => {
+                        // Include week parameter in print URL if available
+                        const printUrl = selectedWeek
+                            ? `/leagues/${leagueId}/print?week=${selectedWeek.week_number}`
+                            : `/leagues/${leagueId}/print`;
+                        navigate(printUrl);
+                    }}
                     variant="outlined"
                 >
                     Printer-Friendly View
@@ -1020,6 +1065,14 @@ function LeagueManagement() {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="h4" component="h1" gutterBottom>
                         {league.name}
+                        {selectedWeek && (
+                            <Chip
+                                size="small"
+                                label={`Week ${selectedWeek.week_number}${isMostRecentWeek(selectedWeek) ? ' (Latest)' : ''}`}
+                                color={isMostRecentWeek(selectedWeek) ? 'primary' : 'default'}
+                                sx={{ ml: 2 }}
+                            />
+                        )}
                     </Typography>
                 </Box>
 
@@ -1064,11 +1117,29 @@ function LeagueManagement() {
                                         onChange={handleWeekChange}
                                         disabled={weeks.length === 0}
                                     >
-                                        {weeks.map((week) => (
-                                            <MenuItem key={week.id} value={week.id}>
-                                                Week {week.week_number} ({formatDate(week.start_date, 'MMM d')} - {formatDate(week.end_date, 'MMM d')})
-                                            </MenuItem>
-                                        ))}
+                                        {weeks
+                                            .slice()
+                                            .sort((a, b) => b.week_number - a.week_number) // Sort by week number descending (most recent first)
+                                            .map((week) => {
+                                                const isRecent = isMostRecentWeek(week);
+                                                return (
+                                                    <MenuItem key={week.id} value={week.id}>
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                                                            <Typography>
+                                                                Week {week.week_number} ({formatDate(week.start_date, 'MMM d')} - {formatDate(week.end_date, 'MMM d')})
+                                                            </Typography>
+                                                            {isRecent && (
+                                                                <Chip
+                                                                    size="small"
+                                                                    label="Latest"
+                                                                    color="primary"
+                                                                    sx={{ ml: 1, height: 20 }}
+                                                                />
+                                                            )}
+                                                        </Box>
+                                                    </MenuItem>
+                                                );
+                                            })}
                                     </Select>
                                 </FormControl>
 
@@ -1103,9 +1174,14 @@ function LeagueManagement() {
                         {selectedWeek && (
                             <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Typography variant="h6">
-                                        Week {selectedWeek.week_number}
-                                    </Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                        <Typography variant="h6">
+                                            Week {selectedWeek.week_number}
+                                        </Typography>
+                                        {isMostRecentWeek(selectedWeek) && (
+                                            <Chip size="small" label="Latest Week" color="primary" />
+                                        )}
+                                    </Box>
                                     <Button
                                         variant="outlined"
                                         color="error"
@@ -1290,6 +1366,13 @@ function LeagueManagement() {
                                                                 </TableCell>
                                                             </TableRow>
                                                         ))}
+
+                                                        {/* Empty row for spacing */}
+                                                        {matchesByDate[date].length === 1 && (
+                                                            <TableRow>
+                                                                <TableCell colSpan={4} sx={{ height: '10px', border: 'none' }} />
+                                                            </TableRow>
+                                                        )}
                                                     </TableBody>
                                                 </Table>
                                             </TableContainer>
