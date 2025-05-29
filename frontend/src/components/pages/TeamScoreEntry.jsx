@@ -5,7 +5,7 @@ import {
     Container, TextField, Grid, Divider
 } from '@mui/material';
 import { Save as SaveIcon } from '@mui/icons-material';
-import env from '../../config/env';
+import { get, post } from '../../services/api'; // Import API service
 
 const TeamScoreEntry = () => {
     const { matchId, token } = useParams();
@@ -28,33 +28,16 @@ const TeamScoreEntry = () => {
             try {
                 setLoading(true);
 
-                // Validate token
-                const validateResponse = await fetch(`${env.API_BASE_URL}/matches/validate-token/${token}`);
-                if (!validateResponse.ok) {
-                    const error = await validateResponse.text();
-                    throw new Error(`Invalid access: ${error}`);
-                }
-
-                const validationData = await validateResponse.json();
+                // Validate token using API service
+                const validationData = await get(`/matches/validate-token/${token}`);
                 setTeamData(validationData);
 
-                // Fetch match details
-                const matchResponse = await fetch(`${env.API_BASE_URL}/matches/${matchId}`);
-                if (!matchResponse.ok) {
-                    throw new Error('Failed to load match details');
-                }
-
-                const matchData = await matchResponse.json();
+                // Fetch match details using API service
+                const matchData = await get(`/matches/${matchId}`);
                 setMatch(matchData);
 
-                // Fetch course and holes
-                const courseId = matchData.course_id;
-                const courseResponse = await fetch(`${env.API_BASE_URL}/courses/${courseId}`);
-                if (!courseResponse.ok) {
-                    throw new Error('Failed to load course details');
-                }
-
-                const courseData = await courseResponse.json();
+                // Fetch course and holes using API service
+                const courseData = await get(`/courses/${matchData.course_id}`);
                 setCourse(courseData);
                 setHoles(courseData.holes || []);
 
@@ -62,7 +45,6 @@ const TeamScoreEntry = () => {
                 await loadTeamScores(matchId, validationData.team_id);
 
             } catch (error) {
-                console.error('Error:', error);
                 setError(error.message);
             } finally {
                 setLoading(false);
@@ -72,18 +54,10 @@ const TeamScoreEntry = () => {
         validateToken();
     }, [matchId, token]);
 
-    // Load team scores
+    // Load team scores using API service
     const loadTeamScores = async (matchId, teamId) => {
         try {
-            const scoresResponse = await fetch(
-                `${env.API_BASE_URL}/matches/${matchId}/scores?team_id=${teamId}`
-            );
-
-            if (!scoresResponse.ok) {
-                throw new Error('Failed to load team scores');
-            }
-
-            const scoreData = await scoresResponse.json();
+            const scoreData = await get(`/matches/${matchId}/scores?team_id=${teamId}`);
 
             // Process player scores
             const playerScores = scoreData.match_players
@@ -114,7 +88,6 @@ const TeamScoreEntry = () => {
             setTeamScores(playerScores);
 
         } catch (error) {
-            console.error('Error loading team scores:', error);
             setError('Failed to load team scores');
         }
     };
@@ -151,26 +124,16 @@ const TeamScoreEntry = () => {
                     strokes: parseInt(value)
                 };
 
-                // Call API with just this one score
-                const response = await fetch(`${env.API_BASE_URL}/matches/${matchId}/team-scores?token=${token}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ scores: [scoreToSave] }),
+                // Call API with just this one score using API service
+                await post(`/matches/${matchId}/team-scores?token=${token}`, {
+                    scores: [scoreToSave]
                 });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || 'Failed to save score');
-                }
 
                 // Show subtle success indicator
                 setSuccessMessage('Score saved');
                 setTimeout(() => setSuccessMessage(null), 1500);
 
             } catch (error) {
-                console.error('Error auto-saving score:', error);
                 setError('Failed to save score: ' + error.message);
                 setTimeout(() => setError(null), 3000);
             } finally {
@@ -201,7 +164,7 @@ const TeamScoreEntry = () => {
         }
     };
 
-    // Save team scores
+    // Save team scores using API service
     const handleSaveScores = async () => {
         try {
             setSaving(true);
@@ -223,19 +186,10 @@ const TeamScoreEntry = () => {
                 });
             });
 
-            // Call API
-            const response = await fetch(`${env.API_BASE_URL}/matches/${matchId}/team-scores?token=${token}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ scores: allScores }),
+            // Call API using API service
+            await post(`/matches/${matchId}/team-scores?token=${token}`, {
+                scores: allScores
             });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Failed to save scores');
-            }
 
             setSuccessMessage('Your scores have been saved successfully!');
 
@@ -248,7 +202,6 @@ const TeamScoreEntry = () => {
             await loadTeamScores(matchId, teamData.team_id);
 
         } catch (error) {
-            console.error('Error saving scores:', error);
             setError('Failed to save scores: ' + error.message);
         } finally {
             setSaving(false);

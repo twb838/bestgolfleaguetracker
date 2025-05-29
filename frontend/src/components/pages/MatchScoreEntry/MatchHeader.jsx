@@ -16,7 +16,7 @@ import {
     Refresh as RefreshIcon
 } from '@mui/icons-material';
 import format from 'date-fns/format';
-import env from '../../../config/env';
+import { get, post } from '../../../services/api'; // Import API service
 
 const MatchHeader = ({
     match,
@@ -42,61 +42,40 @@ const MatchHeader = ({
         }
     }, [shareDialogOpen, match, hasCheckedExistingTokens]);
 
-    // Fetch existing tokens
+    // Fetch existing tokens using API service
     const fetchExistingTokens = async () => {
         try {
             setIsLoading(true);
             setShareError(null);
 
-            const response = await fetch(`${env.API_BASE_URL}/matches/${match.id}/access-tokens`);
-
-            if (!response.ok) {
-                // If no tokens exist, don't show an error - we'll generate new ones
-                if (response.status === 404) {
-                    setAccessTokens([]);
-                } else {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || 'Failed to fetch access tokens');
-                }
-            } else {
-                const tokens = await response.json();
-                setAccessTokens(tokens);
-            }
-
+            const tokens = await get(`/matches/${match.id}/access-tokens`);
+            setAccessTokens(tokens || []);
             setHasCheckedExistingTokens(true);
         } catch (error) {
-            console.error('Error fetching access tokens:', error);
-            setShareError('Error fetching existing links: ' + error.message);
-            setAccessTokens([]);
+            // If no tokens exist (404), don't show an error - we'll generate new ones
+            if (error.message.includes('404') || error.message.includes('Not Found')) {
+                setAccessTokens([]);
+            } else {
+                setShareError('Error fetching existing links: ' + error.message);
+                setAccessTokens([]);
+            }
+            setHasCheckedExistingTokens(true);
         } finally {
             setIsLoading(false);
         }
     };
 
-    // Generate and fetch access tokens
+    // Generate and fetch access tokens using API service
     const generateAccessTokens = async () => {
         try {
             setIsLoading(true);
             setShareError(null);
 
-            const response = await fetch(`${env.API_BASE_URL}/matches/${match.id}/access-tokens`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Failed to generate access tokens');
-            }
-
-            const tokens = await response.json();
-            setAccessTokens(tokens);
+            const tokens = await post(`/matches/${match.id}/access-tokens`, {});
+            setAccessTokens(tokens || []);
 
         } catch (error) {
-            console.error('Error generating access tokens:', error);
-            setShareError(error.message);
+            setShareError('Failed to generate access tokens: ' + error.message);
         } finally {
             setIsLoading(false);
         }
