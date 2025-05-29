@@ -1,5 +1,5 @@
 import React from 'react';
-import TopNavigation from '../navigation/TopNavigation';
+import TopNavigation from '../navigation/TopNavigation'; // Add this import
 import { useLocation } from 'react-router-dom';
 
 const MainLayout = ({ children }) => {

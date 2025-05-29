@@ -10,29 +10,30 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
-import env from '../../config/env';
+import { get } from '../../services/api'; // Import API service
 
 function Tournaments() {
     const [tournaments, setTournaments] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const navigate = useNavigate();
 
     useEffect(() => {
         fetchTournaments();
     }, []);
 
+    // Update fetchTournaments to use API service
     const fetchTournaments = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`${env.API_BASE_URL}/tournaments`);
-            if (response.ok) {
-                const data = await response.json();
-                setTournaments(data);
-            } else {
-                console.error('Failed to fetch tournaments');
-            }
+            setError(null);
+            console.log('Fetching tournaments...');
+
+            const data = await get('/tournaments');
+            setTournaments(data);
         } catch (error) {
             console.error('Error fetching tournaments:', error);
+            setError(error.message || 'Failed to fetch tournaments');
         } finally {
             setLoading(false);
         }
@@ -72,6 +73,11 @@ function Tournaments() {
         }
     };
 
+    // Add retry function for better UX
+    const handleRetry = () => {
+        fetchTournaments();
+    };
+
     return (
         <div>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -91,6 +97,29 @@ function Tournaments() {
                 <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
                     <CircularProgress />
                 </Box>
+            ) : error ? (
+                <Paper sx={{ p: 4, textAlign: 'center' }}>
+                    <Typography variant="h6" color="error" paragraph>
+                        Error Loading Tournaments
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary" paragraph>
+                        {error}
+                    </Typography>
+                    <Button
+                        variant="contained"
+                        onClick={handleRetry}
+                        sx={{ mr: 2 }}
+                    >
+                        Try Again
+                    </Button>
+                    <Button
+                        variant="outlined"
+                        startIcon={<AddIcon />}
+                        onClick={handleCreateTournament}
+                    >
+                        Create Tournament
+                    </Button>
+                </Paper>
             ) : tournaments.length > 0 ? (
                 <Grid container spacing={3}>
                     {tournaments.map((tournament) => (
@@ -100,10 +129,12 @@ function Tournaments() {
                                     height: '100%',
                                     display: 'flex',
                                     flexDirection: 'column',
+                                    cursor: 'pointer',
                                     '&:hover': {
                                         boxShadow: 6
                                     }
                                 }}
+                                onClick={() => handleOpenTournament(tournament.id)}
                             >
                                 <CardContent sx={{ flexGrow: 1 }}>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
@@ -123,7 +154,7 @@ function Tournaments() {
                                     </Box>
 
                                     <Typography variant="body2" color="text.secondary" gutterBottom>
-                                        Format: {tournament.format}
+                                        Format: {tournament.format || 'Not specified'}
                                     </Typography>
 
                                     <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -145,14 +176,43 @@ function Tournaments() {
                                             {tournament.description}
                                         </Typography>
                                     )}
+
+                                    {/* Show additional info if available */}
+                                    {tournament.entry_fee && (
+                                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                            Entry Fee: ${tournament.entry_fee}
+                                        </Typography>
+                                    )}
+
+                                    {tournament.max_participants && (
+                                        <Typography variant="body2" color="text.secondary">
+                                            Max Participants: {tournament.max_participants}
+                                        </Typography>
+                                    )}
                                 </CardContent>
                                 <CardActions>
                                     <Button
                                         size="small"
-                                        onClick={() => handleOpenTournament(tournament.id)}
+                                        onClick={(e) => {
+                                            e.stopPropagation(); // Prevent card click
+                                            handleOpenTournament(tournament.id);
+                                        }}
                                     >
                                         Manage
                                     </Button>
+
+                                    {/* You can add more action buttons here if needed */}
+                                    <Tooltip title="View Details">
+                                        <IconButton
+                                            size="small"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleOpenTournament(tournament.id);
+                                            }}
+                                        >
+                                            <TrophyIcon fontSize="small" />
+                                        </IconButton>
+                                    </Tooltip>
                                 </CardActions>
                             </Card>
                         </Grid>

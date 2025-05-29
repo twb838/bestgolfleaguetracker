@@ -11,14 +11,16 @@ from app.models.league import League
 from app.models.team import Team
 from app.models.week import Week
 from app.models.course import Course
+from app.models.user import User
+from app.api.deps import get_current_active_user
 
-router = APIRouter(prefix="/playerstats", tags=["playerstats"])
+router = APIRouter()
 
 @router.get("/top-gross-scores", response_model=List[Dict[str, Any]])
 def get_top_gross_scores(
     limit: int = 10,
     league_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
     Get the top N lowest gross scores across all players
@@ -69,7 +71,7 @@ def get_top_gross_scores(
 def get_top_net_scores(
     limit: int = 10,
     league_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
     Get the top N lowest net scores across all players
@@ -122,7 +124,7 @@ def get_top_net_scores(
 def get_player_average(
     player_id: int,
     league_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
     Calculate average scores for a specific player
@@ -208,7 +210,7 @@ def get_player_average(
 def get_league_player_stats(
     league_id: int, 
     min_rounds: int = 1,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
     Get comprehensive stats for all players in a league
@@ -300,7 +302,7 @@ def get_top_player_scores(
     league_id: int,
     score_type: str = "gross",
     limit: int = 5,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
     Get top individual scores for a league (either gross or net)
@@ -353,7 +355,7 @@ def get_top_player_scores(
 def get_most_improved_players(
     league_id: int,
     limit: int = 10,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
     Get the most improved players in a league.

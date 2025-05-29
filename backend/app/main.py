@@ -10,7 +10,7 @@ from app.db.base import init_db
 import app.db.init_models  # This import ensures all models are loaded
 
 # Import all routers
-from app.api.endpoints import teams, courses, leagues, weeks, matches, players, player_stats, team_stats, tournaments
+from app.api.endpoints import teams, courses, leagues, weeks, matches, players, player_stats, team_stats, tournaments, auth, users
 
 app = FastAPI(title="Golf Tracker API")
 
@@ -29,16 +29,18 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# Register all API routers
-app.include_router(teams.router)
-app.include_router(courses.router)
-app.include_router(leagues.router)
-app.include_router(weeks.router)
-app.include_router(matches.router)
-app.include_router(players.router)  
-app.include_router(player_stats.router)  # Assuming you have a player_stats router
-app.include_router(team_stats.router)  # Assuming you have a player_stats router
-app.include_router(tournaments.router)
+# Register all API routers with /api prefix
+app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
+app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(teams.router, prefix="/api/teams", tags=["teams"])
+app.include_router(courses.router, prefix="/api/courses", tags=["courses"])
+app.include_router(leagues.router, prefix="/api/leagues", tags=["leagues"])
+app.include_router(weeks.router, prefix="/api/weeks", tags=["weeks"])
+app.include_router(matches.router, prefix="/api/matches", tags=["matches"])
+app.include_router(players.router, prefix="/api/players", tags=["players"])
+app.include_router(player_stats.router, prefix="/api/player-stats", tags=["player-stats"])
+app.include_router(team_stats.router, prefix="/api/team-stats", tags=["team-stats"])
+app.include_router(tournaments.router, prefix="/api/tournaments", tags=["tournaments"])
 
 @app.on_event("startup")
 def startup_event():
@@ -47,4 +49,8 @@ def startup_event():
 @app.get("/")
 def read_root():
     return {"message": "Welcome to Golf Tracker API"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
 

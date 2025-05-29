@@ -29,7 +29,7 @@ import {
     Delete as DeleteIcon,
     Edit as EditIcon
 } from '@mui/icons-material';
-import env from '../../config/env';
+import { get, post, put, del } from '../../services/api'; // Import API service
 
 function Courses() {
     const [courses, setCourses] = useState([]);
@@ -56,10 +56,11 @@ function Courses() {
         fetchCourses();
     }, []);
 
+    // Update fetchCourses to use API service
     const fetchCourses = async () => {
         try {
-            const response = await fetch(env.API_ENDPOINTS.COURSES);
-            const data = await response.json();
+            console.log('Fetching courses...');
+            const data = await get('/courses');
             setCourses(data);
         } catch (error) {
             console.error('Error fetching courses:', error);
@@ -161,6 +162,7 @@ function Courses() {
         return true;
     };
 
+    // Update handleAddCourse to use API service
     const handleAddCourse = async () => {
         if (!validateCourse()) {
             return;
@@ -177,20 +179,7 @@ function Courses() {
         };
 
         try {
-            const response = await fetch(env.API_ENDPOINTS.COURSES, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(courseToSubmit),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error('Server error:', errorData);
-                setFormError(errorData.detail || 'Error creating course');
-                return;
-            }
+            await post('/courses', courseToSubmit);
 
             setOpen(false);
             setNewCourse({
@@ -206,27 +195,21 @@ function Courses() {
             fetchCourses();
         } catch (error) {
             console.error('Error adding course:', error);
-            setFormError('Network error. Please try again.');
+            setFormError(error.message || 'Error creating course');
         }
     };
 
+    // Update handleDeleteCourse to use API service
     const handleDeleteCourse = async () => {
         try {
-            const response = await fetch(`${env.API_ENDPOINTS.COURSES}/${courseToDelete.id}`, {
-                method: 'DELETE',
-            });
+            await del(`/courses/${courseToDelete.id}`);
 
-            if (response.ok) {
-                setDeleteDialogOpen(false);
-                setCourseToDelete(null);
-                fetchCourses();
-            } else {
-                const errorData = await response.json();
-                setDeleteError(errorData.detail || 'Error deleting course');
-            }
+            setDeleteDialogOpen(false);
+            setCourseToDelete(null);
+            fetchCourses();
         } catch (error) {
             console.error('Error deleting course:', error);
-            setDeleteError('Network error. Please try again.');
+            setDeleteError(error.message || 'Error deleting course');
         }
     };
 
@@ -390,6 +373,7 @@ function Courses() {
         });
     };
 
+    // Update handleEditSubmit to use API service
     const handleEditSubmit = async () => {
         if (!validateEditCourse()) {
             return;
@@ -430,28 +414,14 @@ function Courses() {
             // Log what we're actually sending
             console.log('Submitting course update:', JSON.stringify(courseToSubmit, null, 2));
 
-            const response = await fetch(`${env.API_ENDPOINTS.COURSES}/${editCourse.id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(courseToSubmit),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error('Error updating course:', errorData);
-                setEditError(errorData.detail || 'Error updating course');
-                return;
-            }
+            // Use API service instead of direct fetch
+            await put(`/courses/${editCourse.id}`, courseToSubmit);
 
             // Then, delete any holes that were removed
             if (deletedHoleIds.length > 0) {
-                // Delete each hole individually
+                // Delete each hole individually using API service
                 await Promise.all(deletedHoleIds.map(holeId =>
-                    fetch(`${env.API_ENDPOINTS.COURSES}/holes/${holeId}`, {
-                        method: 'DELETE',
-                    })
+                    del(`/courses/holes/${holeId}`)
                 ));
             }
 
@@ -462,7 +432,7 @@ function Courses() {
             fetchCourses();
         } catch (error) {
             console.error('Error updating course:', error);
-            setEditError('Network error. Please try again.');
+            setEditError(error.message || 'Network error. Please try again.');
         }
     };
 

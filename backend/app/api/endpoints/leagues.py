@@ -19,9 +19,11 @@ from app.schemas.league import (
 )
 from app.schemas.match import MatchResponse  # Import MatchResponse
 from app.schemas.week import WeekCreate, WeekResponse
+from app.api.deps import get_current_active_user
+from app.models.user import User
 
 # Make sure prefix matches what frontend is requesting
-router = APIRouter(prefix="/leagues", tags=["leagues"])
+router = APIRouter()
 
 @router.post("/", response_model=LeagueResponse, status_code=status.HTTP_201_CREATED)
 def create_league(league: LeagueCreate, db: Session = Depends(get_db)):
@@ -51,7 +53,7 @@ def create_league(league: LeagueCreate, db: Session = Depends(get_db)):
     return db_league
 
 @router.get("/", response_model=List[LeagueResponse])
-def read_leagues(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_leagues(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     leagues = db.query(League).offset(skip).limit(limit).all()
     return leagues
 
@@ -63,7 +65,7 @@ def read_league(league_id: int, db: Session = Depends(get_db)):
     return db_league
 
 @router.put("/{league_id}", response_model=LeagueResponse)
-def update_league(league_id: int, league_update: LeagueUpdate, db: Session = Depends(get_db)):
+def update_league(league_id: int, league_update: LeagueUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     db_league = db.query(League).filter(League.id == league_id).first()
     if db_league is None:
         raise HTTPException(status_code=404, detail="League not found")
@@ -91,7 +93,7 @@ def update_league(league_id: int, league_update: LeagueUpdate, db: Session = Dep
     return db_league
 
 @router.delete("/{league_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_league(league_id: int, db: Session = Depends(get_db)):
+def delete_league(league_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     db_league = db.query(League).filter(League.id == league_id).first()
     if db_league is None:
         raise HTTPException(status_code=404, detail="League not found")

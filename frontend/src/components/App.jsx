@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import ProtectedRoute from './ProtectedRoute';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import Profile from './pages/Profile';
+
 import {
     AppBar, Toolbar, Typography, Button, Container, Box,
-    IconButton, Menu, MenuItem, useMediaQuery, useTheme
+    IconButton, Menu, MenuItem, useMediaQuery, useTheme,
+    Avatar, Divider
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import HomeIcon from '@mui/icons-material/Home';
@@ -10,13 +17,14 @@ import PersonIcon from '@mui/icons-material/Person';
 import GroupIcon from '@mui/icons-material/Group';
 import GolfCourseIcon from '@mui/icons-material/GolfCourse';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import LogoutIcon from '@mui/icons-material/Logout';
 import './App.css';
 
 // Import pages
 import Teams from './pages/Teams';
 import Courses from './pages/Courses';
 import Leagues from './pages/Leagues';
-import Dashboard from './pages/Dashboard';
 import LeagueManagement from './pages/LeagueManagement';
 import MatchScoreEntry from './pages/MatchScoreEntry';
 import Players from './pages/Players';
@@ -32,9 +40,13 @@ const AppLayout = ({ children }) => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const [mobileMenuAnchor, setMobileMenuAnchor] = useState(null);
+    const [userMenuAnchor, setUserMenuAnchor] = useState(null);
 
-    // Check if current route should use minimal layout
+    const { user, logout, isAuthenticated } = useAuth();
+
+    // Check if current route should use minimal layout or is login page
     const isMinimalLayout = location.pathname.includes('/score-entry/');
+    const isLoginPage = location.pathname === '/login';
 
     const handleOpenMobileMenu = (event) => {
         setMobileMenuAnchor(event.currentTarget);
@@ -44,7 +56,19 @@ const AppLayout = ({ children }) => {
         setMobileMenuAnchor(null);
     };
 
-    // Update the navItems array to include Tournaments
+    const handleOpenUserMenu = (event) => {
+        setUserMenuAnchor(event.currentTarget);
+    };
+
+    const handleCloseUserMenu = () => {
+        setUserMenuAnchor(null);
+    };
+
+    const handleLogout = () => {
+        handleCloseUserMenu();
+        logout();
+    };
+
     const navItems = [
         { name: 'Dashboard', path: '/', icon: <HomeIcon fontSize="small" /> },
         { name: 'Players', path: '/players', icon: <PersonIcon fontSize="small" /> },
@@ -54,8 +78,8 @@ const AppLayout = ({ children }) => {
         { name: 'Tournaments', path: '/tournaments', icon: <EmojiEventsIcon fontSize="small" /> },
     ];
 
-    // If minimal layout, only render children without navigation
-    if (isMinimalLayout) {
+    // If minimal layout or login page, only render children without navigation
+    if (isMinimalLayout || isLoginPage) {
         return (
             <div className="App">
                 {children}
@@ -136,6 +160,69 @@ const AppLayout = ({ children }) => {
                             ))}
                         </Box>
                     )}
+
+                    {/* User Profile Menu */}
+                    {isAuthenticated && (
+                        <>
+                            <IconButton
+                                onClick={handleOpenUserMenu}
+                                color="inherit"
+                                size="small"
+                                sx={{ ml: 1 }}
+                            >
+                                {user?.first_name ? (
+                                    <Avatar
+                                        sx={{
+                                            bgcolor: 'secondary.main',
+                                            width: 32,
+                                            height: 32,
+                                            fontSize: '0.875rem'
+                                        }}
+                                    >
+                                        {user.first_name.charAt(0).toUpperCase()}
+                                        {user.last_name ? user.last_name.charAt(0).toUpperCase() : ''}
+                                    </Avatar>
+                                ) : (
+                                    <AccountCircleIcon />
+                                )}
+                            </IconButton>
+                            <Menu
+                                anchorEl={userMenuAnchor}
+                                open={Boolean(userMenuAnchor)}
+                                onClose={handleCloseUserMenu}
+                                onClick={handleCloseUserMenu}
+                                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+                            >
+                                <MenuItem disabled>
+                                    <Typography variant="body2" color="text.secondary">
+                                        Signed in as <strong>{user?.username}</strong>
+                                    </Typography>
+                                </MenuItem>
+                                <Divider />
+                                <MenuItem component={Link} to="/profile">
+                                    <PersonIcon fontSize="small" sx={{ mr: 1 }} />
+                                    Profile
+                                </MenuItem>
+                                <MenuItem onClick={handleLogout}>
+                                    <LogoutIcon fontSize="small" sx={{ mr: 1 }} />
+                                    Logout
+                                </MenuItem>
+                            </Menu>
+                        </>
+                    )}
+
+                    {/* Login button for unauthenticated users */}
+                    {!isAuthenticated && (
+                        <Button
+                            color="inherit"
+                            component={Link}
+                            to="/login"
+                            size="small"
+                        >
+                            Login
+                        </Button>
+                    )}
                 </Toolbar>
             </AppBar>
 
@@ -148,24 +235,82 @@ const AppLayout = ({ children }) => {
 
 function App() {
     return (
-        <Router>
-            <AppLayout>
-                <Routes>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/players" element={<Players />} />
-                    <Route path="/teams" element={<Teams />} />
-                    <Route path="/courses" element={<Courses />} />
-                    <Route path="/leagues" element={<Leagues />} />
-                    <Route path="/leagues/:leagueId" element={<LeagueManagement />} />
-                    <Route path="/leagues/:leagueId/print" element={<PrinterFriendlyLeagueSummary />} />
-                    <Route path="/matches/:matchId/scores" element={<MatchScoreEntry />} />
-                    <Route path="/score-entry/:matchId/team/:token" element={<TeamScoreEntry />} />
-                    <Route path="/tournaments" element={<Tournaments />} />
-                    <Route path="/tournaments/create" element={<TournamentCreationWizard />} />
-                    <Route path="/tournaments/:tournamentId" element={<TournamentManagement />} />
-                </Routes>
-            </AppLayout>
-        </Router>
+        <AuthProvider>
+            <Router>
+                <AppLayout>
+                    <Routes>
+                        {/* Public Routes */}
+                        <Route path="/login" element={<Login />} />
+
+                        {/* Protected Routes */}
+                        <Route path="/" element={
+                            <ProtectedRoute>
+                                <Dashboard />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/profile" element={
+                            <ProtectedRoute>
+                                <Profile />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/players" element={
+                            <ProtectedRoute>
+                                <Players />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/teams" element={
+                            <ProtectedRoute>
+                                <Teams />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/courses" element={
+                            <ProtectedRoute>
+                                <Courses />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/leagues" element={
+                            <ProtectedRoute>
+                                <Leagues />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/leagues/:leagueId" element={
+                            <ProtectedRoute>
+                                <LeagueManagement />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/leagues/:leagueId/print" element={
+                            <ProtectedRoute>
+                                <PrinterFriendlyLeagueSummary />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/matches/:matchId/scores" element={
+                            <ProtectedRoute>
+                                <MatchScoreEntry />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/score-entry/:matchId/team/:token" element={<TeamScoreEntry />} />
+                        <Route path="/tournaments" element={
+                            <ProtectedRoute>
+                                <Tournaments />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/tournaments/create" element={
+                            <ProtectedRoute>
+                                <TournamentCreationWizard />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/tournaments/:tournamentId" element={
+                            <ProtectedRoute>
+                                <TournamentManagement />
+                            </ProtectedRoute>
+                        } />
+
+                        {/* Catch all */}
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                </AppLayout>
+            </Router>
+        </AuthProvider>
     );
 }
 

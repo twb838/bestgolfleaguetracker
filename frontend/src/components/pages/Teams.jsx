@@ -23,7 +23,7 @@ import {
     Delete as DeleteIcon,
     Edit as EditIcon
 } from '@mui/icons-material';
-import env from '../../config/env';
+import { get, post, put, del } from '../../services/api'; // Import API service
 import debounce from 'lodash/debounce';
 
 function Teams() {
@@ -48,10 +48,11 @@ function Teams() {
         fetchTeams();
     }, []);
 
+    // Update fetchTeams to use API service
     const fetchTeams = async () => {
         try {
-            const response = await fetch(env.API_ENDPOINTS.TEAMS);
-            const data = await response.json();
+            console.log('Fetching teams...');
+            const data = await get('/teams');
             setTeams(data);
         } catch (error) {
             console.error('Error fetching teams:', error);
@@ -77,23 +78,12 @@ function Teams() {
         return Object.keys(errors).length === 0;
     };
 
+    // Update checkExistingEmail to use API service
     const checkExistingEmail = useCallback(async (email, index) => {
         if (!email || email.trim() === '') return false;
 
         try {
-            const response = await fetch(`${env.API_ENDPOINTS.TEAMS}/check-email?email=${encodeURIComponent(email)}`);
-
-            if (response.status === 422) {
-                setEmailErrors(prev => ({ ...prev, [index]: "Invalid email format" }));
-                return true;
-            }
-
-            if (!response.ok) {
-                console.error('Error checking email:', response.statusText);
-                return false;
-            }
-
-            const data = await response.json();
+            const data = await get(`/teams/check-email?email=${encodeURIComponent(email)}`);
 
             if (data.exists) {
                 setEmailErrors(prev => ({ ...prev, [index]: "Email already registered" }));
@@ -108,6 +98,10 @@ function Teams() {
             }
         } catch (error) {
             console.error('Error checking email:', error);
+            if (error.message.includes('422')) {
+                setEmailErrors(prev => ({ ...prev, [index]: "Invalid email format" }));
+                return true;
+            }
             return false;
         }
     }, []);
@@ -149,6 +143,7 @@ function Teams() {
         }
     };
 
+    // Update handleAddTeam to use API service
     const handleAddTeam = async () => {
         setFormError('');
 
@@ -169,30 +164,19 @@ function Teams() {
         }
 
         try {
-            const response = await fetch(env.API_ENDPOINTS.TEAMS, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(newTeam),
-            });
+            await post('/teams', newTeam);
 
-            if (response.ok) {
-                setOpen(false);
-                setNewTeam({
-                    name: '',
-                    players: [{ first_name: '', last_name: '', email: '', handicap: '' }]
-                });
-                setEmailErrors({});
-                setFormError('');
-                fetchTeams();
-            } else {
-                const errorData = await response.json();
-                setFormError(errorData.detail || 'Error creating team');
-            }
+            setOpen(false);
+            setNewTeam({
+                name: '',
+                players: [{ first_name: '', last_name: '', email: '', handicap: '' }]
+            });
+            setEmailErrors({});
+            setFormError('');
+            fetchTeams();
         } catch (error) {
             console.error('Error adding team:', error);
-            setFormError('Network error. Please try again.');
+            setFormError(error.message || 'Error creating team');
         }
     };
 
@@ -204,23 +188,17 @@ function Teams() {
         );
     };
 
+    // Update handleDeleteTeam to use API service
     const handleDeleteTeam = async () => {
         try {
-            const response = await fetch(`${env.API_ENDPOINTS.TEAMS}/${teamToDelete.id}`, {
-                method: 'DELETE',
-            });
+            await del(`/teams/${teamToDelete.id}`);
 
-            if (response.ok) {
-                setDeleteDialogOpen(false);
-                setTeamToDelete(null);
-                fetchTeams();
-            } else {
-                const errorData = await response.json();
-                setDeleteError(errorData.detail || 'Error deleting team');
-            }
+            setDeleteDialogOpen(false);
+            setTeamToDelete(null);
+            fetchTeams();
         } catch (error) {
             console.error('Error deleting team:', error);
-            setDeleteError('Network error. Please try again.');
+            setDeleteError(error.message || 'Error deleting team');
         }
     };
 
@@ -269,6 +247,7 @@ function Teams() {
         }
     };
 
+    // Update handleEditSubmit to use API service
     const handleEditSubmit = async () => {
         setEditError('');
 
@@ -288,46 +267,26 @@ function Teams() {
         }
 
         try {
-            const teamResponse = await fetch(`${env.API_ENDPOINTS.TEAMS}/${editTeam.id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ name: editTeam.name }),
-            });
+            // Update team name
+            await put(`/teams/${editTeam.id}`, { name: editTeam.name });
 
-            if (!teamResponse.ok) {
-                const errorData = await teamResponse.json();
-                setEditError(errorData.detail || 'Error updating team');
-                return;
-            }
-
+            // Update existing players and add new players
             for (const player of editTeam.players) {
                 if (player.id) {
-                    await fetch(`${env.API_ENDPOINTS.TEAMS}/players/${player.id}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            first_name: player.first_name,
-                            last_name: player.last_name,
-                            email: player.email,
-                            handicap: player.handicap
-                        }),
+                    // Update existing player
+                    await put(`/teams/players/${player.id}`, {
+                        first_name: player.first_name,
+                        last_name: player.last_name,
+                        email: player.email,
+                        handicap: player.handicap
                     });
                 } else {
-                    await fetch(`${env.API_ENDPOINTS.TEAMS}/${editTeam.id}/players`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            first_name: player.first_name,
-                            last_name: player.last_name,
-                            email: player.email,
-                            handicap: player.handicap
-                        }),
+                    // Add new player
+                    await post(`/teams/${editTeam.id}/players`, {
+                        first_name: player.first_name,
+                        last_name: player.last_name,
+                        email: player.email,
+                        handicap: player.handicap
                     });
                 }
             }
@@ -337,7 +296,7 @@ function Teams() {
             fetchTeams();
         } catch (error) {
             console.error('Error updating team:', error);
-            setEditError('Network error. Please try again.');
+            setEditError(error.message || 'Error updating team');
         }
     };
 
@@ -433,6 +392,7 @@ function Teams() {
                 )}
             </Paper>
 
+            {/* Add Team Dialog */}
             <Dialog
                 open={open}
                 onClose={() => setOpen(false)}
@@ -537,6 +497,7 @@ function Teams() {
                 </DialogActions>
             </Dialog>
 
+            {/* Delete Team Dialog */}
             <Dialog
                 open={deleteDialogOpen}
                 onClose={() => setDeleteDialogOpen(false)}
@@ -566,6 +527,7 @@ function Teams() {
                 </DialogActions>
             </Dialog>
 
+            {/* Edit Team Dialog */}
             <Dialog
                 open={editOpen}
                 onClose={() => setEditOpen(false)}

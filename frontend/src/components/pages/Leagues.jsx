@@ -32,7 +32,7 @@ import {
     GolfCourse as CourseIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import env from '../../config/env';
+import { get, post, put, del } from '../../services/api'; // Import API service
 
 function Leagues() {
     const navigate = useNavigate();
@@ -71,34 +71,33 @@ function Leagues() {
         fetchCourses();
     }, []);
 
+    // Update fetchLeagues to use API service
     const fetchLeagues = async () => {
         try {
-            const response = await fetch(env.API_ENDPOINTS.LEAGUES);
-            if (response.ok) {
-                const data = await response.json();
-                setLeagues(data);
-            } else {
-                console.error('Failed to fetch leagues');
-            }
+            console.log('Fetching leagues...');
+            const data = await get('/leagues');
+            setLeagues(data);
         } catch (error) {
             console.error('Error fetching leagues:', error);
         }
     };
 
+    // Update fetchTeams to use API service
     const fetchTeams = async () => {
         try {
-            const response = await fetch(env.API_ENDPOINTS.TEAMS);
-            const data = await response.json();
+            console.log('Fetching teams...');
+            const data = await get('/teams');
             setTeams(data);
         } catch (error) {
             console.error('Error fetching teams:', error);
         }
     };
 
+    // Update fetchCourses to use API service
     const fetchCourses = async () => {
         try {
-            const response = await fetch(env.API_ENDPOINTS.COURSES);
-            const data = await response.json();
+            console.log('Fetching courses...');
+            const data = await get('/courses');
             setCourses(data);
         } catch (error) {
             console.error('Error fetching courses:', error);
@@ -128,6 +127,7 @@ function Leagues() {
         return true;
     };
 
+    // Update handleAddLeague to use API service
     const handleAddLeague = async () => {
         if (!validateForm()) {
             return;
@@ -142,31 +142,20 @@ function Leagues() {
                 course_ids: newLeague.courses.map(courseId => courseId)
             };
 
-            const response = await fetch(env.API_ENDPOINTS.LEAGUES, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(leagueToSubmit),
-            });
+            await post('/leagues', leagueToSubmit);
 
-            if (response.ok) {
-                setOpen(false);
-                setNewLeague({
-                    name: '',
-                    description: '',
-                    teams: [],
-                    courses: []
-                });
-                setFormError('');
-                fetchLeagues();
-            } else {
-                const errorData = await response.json();
-                setFormError(errorData.detail || 'Error creating league');
-            }
+            setOpen(false);
+            setNewLeague({
+                name: '',
+                description: '',
+                teams: [],
+                courses: []
+            });
+            setFormError('');
+            fetchLeagues();
         } catch (error) {
             console.error('Error adding league:', error);
-            setFormError('Network error. Please try again.');
+            setFormError(error.message || 'Error creating league');
         }
     };
 
@@ -223,6 +212,22 @@ function Leagues() {
         setNewLeague({
             ...newLeague,
             teams: []
+        });
+    };
+
+    // Add functions to handle selecting/deselecting all courses
+    const handleSelectAllCourses = () => {
+        const allCourseIds = courses.map(course => course.id);
+        setNewLeague({
+            ...newLeague,
+            courses: allCourseIds
+        });
+    };
+
+    const handleDeselectAllCourses = () => {
+        setNewLeague({
+            ...newLeague,
+            courses: []
         });
     };
 
@@ -298,6 +303,7 @@ function Leagues() {
         return true;
     };
 
+    // Update handleEditSubmit to use API service
     const handleEditSubmit = async () => {
         if (!validateEditForm()) {
             return;
@@ -312,32 +318,21 @@ function Leagues() {
                 course_ids: editLeague.courses
             };
 
-            const response = await fetch(`${env.API_ENDPOINTS.LEAGUES}/${editLeague.id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(leagueToSubmit),
-            });
+            await put(`/leagues/${editLeague.id}`, leagueToSubmit);
 
-            if (response.ok) {
-                setEditOpen(false);
-                setEditLeague({
-                    id: null,
-                    name: '',
-                    description: '',
-                    teams: [],
-                    courses: []
-                });
-                setEditError('');
-                fetchLeagues();
-            } else {
-                const errorData = await response.json();
-                setEditError(errorData.detail || 'Error updating league');
-            }
+            setEditOpen(false);
+            setEditLeague({
+                id: null,
+                name: '',
+                description: '',
+                teams: [],
+                courses: []
+            });
+            setEditError('');
+            fetchLeagues();
         } catch (error) {
             console.error('Error updating league:', error);
-            setEditError('Network error. Please try again.');
+            setEditError(error.message || 'Error updating league');
         }
     };
 
@@ -348,21 +343,16 @@ function Leagues() {
         setDeleteDialogOpen(true);
     };
 
+    // Update handleDeleteLeague to use API service
     const handleDeleteLeague = async () => {
         if (!leagueToDelete) return;
 
         try {
-            const response = await fetch(`${env.API_ENDPOINTS.LEAGUES}/${leagueToDelete.id}`, {
-                method: 'DELETE'
-            });
+            await del(`/leagues/${leagueToDelete.id}`);
 
-            if (response.ok) {
-                setDeleteDialogOpen(false);
-                setLeagueToDelete(null);
-                fetchLeagues();
-            } else {
-                console.error('Failed to delete league');
-            }
+            setDeleteDialogOpen(false);
+            setLeagueToDelete(null);
+            fetchLeagues();
         } catch (error) {
             console.error('Error deleting league:', error);
         }
@@ -513,9 +503,28 @@ function Leagues() {
                     />
 
                     {/* Teams Selection */}
-                    <Typography variant="h6" sx={{ mb: 1 }}>
-                        Teams
-                    </Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                        <Typography variant="h6">
+                            Teams
+                        </Typography>
+                        <Box>
+                            <Button
+                                size="small"
+                                onClick={handleSelectAllTeams}
+                                disabled={teams.length === 0}
+                                sx={{ mr: 1 }}
+                            >
+                                Select All
+                            </Button>
+                            <Button
+                                size="small"
+                                onClick={handleDeselectAllTeams}
+                                disabled={newLeague.teams.length === 0}
+                            >
+                                Deselect All
+                            </Button>
+                        </Box>
+                    </Box>
 
                     {teams.length > 0 ? (
                         <Paper variant="outlined" sx={{ mb: 3, maxHeight: 200, overflow: 'auto' }}>
@@ -545,9 +554,28 @@ function Leagues() {
                     )}
 
                     {/* Courses Selection */}
-                    <Typography variant="h6" sx={{ mb: 1 }}>
-                        Courses
-                    </Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                        <Typography variant="h6">
+                            Courses
+                        </Typography>
+                        <Box>
+                            <Button
+                                size="small"
+                                onClick={handleSelectAllCourses}
+                                disabled={courses.length === 0}
+                                sx={{ mr: 1 }}
+                            >
+                                Select All
+                            </Button>
+                            <Button
+                                size="small"
+                                onClick={handleDeselectAllCourses}
+                                disabled={newLeague.courses.length === 0}
+                            >
+                                Deselect All
+                            </Button>
+                        </Box>
+                    </Box>
 
                     {courses.length > 0 ? (
                         <Paper variant="outlined" sx={{ mb: 2, maxHeight: 200, overflow: 'auto' }}>

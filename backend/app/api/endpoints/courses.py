@@ -6,13 +6,15 @@ from sqlalchemy import func
 from app.db.base import get_db
 from app.models.course import Course
 from app.models.hole import Hole
+from app.models.user import User
+from app.api.deps import get_current_active_user
 from app.schemas.course import CourseCreate, CourseUpdate, CourseResponse
 from app.schemas.hole import HoleCreate, HoleResponse, HoleUpdate
 
-router = APIRouter(prefix="/courses", tags=["courses"])
+router = APIRouter()
 
 @router.post("/", response_model=CourseResponse, status_code=status.HTTP_201_CREATED)
-def create_course(course: CourseCreate, db: Session = Depends(get_db)):
+def create_course(course: CourseCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     # First create the course
     db_course = Course(name=course.name)
     db.add(db_course)
@@ -37,19 +39,19 @@ def create_course(course: CourseCreate, db: Session = Depends(get_db)):
     return db_course
 
 @router.get("/", response_model=List[CourseResponse])
-def read_courses(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_courses(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     courses = db.query(Course).offset(skip).limit(limit).all()
     return courses
 
 @router.get("/{course_id}", response_model=CourseResponse)
-def read_course(course_id: int, db: Session = Depends(get_db)):
+def read_course(course_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     db_course = db.query(Course).filter(Course.id == course_id).first()
     if db_course is None:
         raise HTTPException(status_code=404, detail="Course not found")
     return db_course
 
 @router.put("/{course_id}", response_model=CourseResponse)
-def update_course(course_id: int, course_update: CourseUpdate, db: Session = Depends(get_db)):
+def update_course(course_id: int, course_update: CourseUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     db_course = db.query(Course).filter(Course.id == course_id).first()
     if not db_course:
         raise HTTPException(status_code=404, detail="Course not found")
@@ -84,7 +86,7 @@ def update_course(course_id: int, course_update: CourseUpdate, db: Session = Dep
     return db_course
 
 @router.delete("/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_course(course_id: int, db: Session = Depends(get_db)):
+def delete_course(course_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     db_course = db.query(Course).filter(Course.id == course_id).first()
     if not db_course:
         raise HTTPException(status_code=404, detail="Course not found")
@@ -98,7 +100,7 @@ def delete_course(course_id: int, db: Session = Depends(get_db)):
 def update_hole(
     hole_id: int, 
     hole_data: HoleUpdate, 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
     Update a hole's information
@@ -125,7 +127,7 @@ def update_hole(
 @router.delete("/holes/{hole_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_hole(
     hole_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
     Delete a hole by ID
@@ -148,7 +150,7 @@ def delete_hole(
 @router.get("/{course_id}/stats", response_model=Dict)
 def get_course_stats(
     course_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
     Get statistical information about a golf course

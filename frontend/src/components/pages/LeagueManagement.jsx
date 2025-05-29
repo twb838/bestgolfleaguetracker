@@ -61,7 +61,7 @@ import {
     TrendingUp as TrendingUpIcon
 } from '@mui/icons-material';
 import { format, parseISO, addDays } from 'date-fns';
-import env from '../../config/env';
+import { get, post, put, del } from '../../services/api'; // Import API service
 
 function LeagueManagement() {
     const { leagueId } = useParams();
@@ -211,15 +211,11 @@ function LeagueManagement() {
         }
     }, [activeTab, league?.id]);
 
-    // Add function to fetch most improved players
+    // Update fetchMostImprovedPlayers to use API service
     const fetchMostImprovedPlayers = async () => {
         setLoadingMostImproved(true);
         try {
-            const response = await fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/most-improved?limit=5`);
-            if (!response.ok) {
-                throw new Error('Failed to fetch most improved players');
-            }
-            const data = await response.json();
+            const data = await get(`/playerstats/league/${leagueId}/most-improved?limit=5`);
             setMostImprovedPlayers(data);
         } catch (error) {
             console.error('Error fetching most improved players:', error);
@@ -228,16 +224,11 @@ function LeagueManagement() {
         }
     };
 
+    // Update fetchLeagueDetails to use API service
     const fetchLeagueDetails = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`${env.API_BASE_URL}/leagues/${leagueId}`);
-
-            if (!response.ok) {
-                throw new Error('League not found');
-            }
-
-            const data = await response.json();
+            const data = await get(`/leagues/${leagueId}`);
             setLeague(data);
             setLoading(false);
         } catch (error) {
@@ -247,17 +238,12 @@ function LeagueManagement() {
         }
     };
 
-    // Modify your fetchWeeks function to handle proper selection after deletion
+    // Update fetchWeeks to use API service
     const fetchWeeks = async () => {
         setLoadingMatches(true);
         try {
             // Fetch weeks for this league
-            const weeksResponse = await fetch(`${env.API_BASE_URL}/leagues/${leagueId}/weeks`);
-            if (!weeksResponse.ok) {
-                throw new Error('Failed to fetch weeks');
-            }
-
-            const weeksData = await weeksResponse.json();
+            const weeksData = await get(`/leagues/${leagueId}/weeks`);
             setWeeks(weeksData);
 
             // If there are weeks, select one
@@ -290,7 +276,7 @@ function LeagueManagement() {
         }
     };
 
-    // Also ensure the fetchMatchesForWeek function resets the matches state before loading
+    // Update fetchMatchesForWeek to use API service
     const fetchMatchesForWeek = async (weekId) => {
         if (!weekId) return;
 
@@ -300,12 +286,7 @@ function LeagueManagement() {
         setMatches([]);
 
         try {
-            const matchesResponse = await fetch(`${env.API_BASE_URL}/matches/weeks/${weekId}/matches`);
-            if (!matchesResponse.ok) {
-                throw new Error('Failed to fetch matches');
-            }
-
-            const matchesData = await matchesResponse.json();
+            const matchesData = await get(`/matches/weeks/${weekId}/matches`);
 
             // Ensure we have league data before enriching
             if (league?.teams && league?.courses) {
@@ -334,15 +315,11 @@ function LeagueManagement() {
         }
     };
 
-    // Function to fetch leaderboard data
+    // Update fetchLeagueLeaderboard to use API service
     const fetchLeagueLeaderboard = async () => {
         setLoadingAllMatches(true);
         try {
-            const response = await fetch(`${env.API_BASE_URL}/leagues/${leagueId}/leaderboard`);
-            if (!response.ok) {
-                throw new Error('Failed to fetch leaderboard data');
-            }
-            const data = await response.json();
+            const data = await get(`/leagues/${leagueId}/leaderboard`);
             console.log("Fetched leaderboard data:", data);
 
             // The data is already sorted and calculated on the backend
@@ -355,17 +332,13 @@ function LeagueManagement() {
         }
     };
 
-    // Add this function with your other data fetching functions
+    // Update fetchPlayerStats to use API service
     const fetchPlayerStats = async () => {
         if (!league?.id) return;
 
         setLoadingPlayerStats(true);
         try {
-            const response = await fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/player-stats?minimum_rounds=1`);
-            if (!response.ok) {
-                throw new Error('Failed to fetch player statistics');
-            }
-            const data = await response.json();
+            const data = await get(`/player-stats/league/${leagueId}/player-stats?minimum_rounds=1`);
             setPlayerStats(data);
         } catch (error) {
             console.error('Error fetching player statistics:', error);
@@ -376,26 +349,18 @@ function LeagueManagement() {
         }
     };
 
-    // Add with your other data fetching functions
+    // Update fetchRankingsData to use API service
     const fetchRankingsData = async () => {
         if (!league?.id) return;
 
         setLoadingRankings(true);
         try {
-            // Fetch individual gross scores
-            const individualGrossResponse = await fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/top-scores?limit=5&score_type=gross`);
-            // Fetch individual net scores
-            const individualNetResponse = await fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/top-scores?limit=5&score_type=net`);
-            // Fetch team gross scores
-            const teamGrossResponse = await fetch(`${env.API_BASE_URL}/teamstats/league/${leagueId}/top-scores?limit=5&score_type=gross`);
-            // Fetch team net scores
-            const teamNetResponse = await fetch(`${env.API_BASE_URL}/teamstats/league/${leagueId}/top-scores?limit=5&score_type=net`);
-
+            // Fetch all rankings data using API service
             const [individualGrossData, individualNetData, teamGrossData, teamNetData] = await Promise.all([
-                individualGrossResponse.ok ? individualGrossResponse.json() : [],
-                individualNetResponse.ok ? individualNetResponse.json() : [],
-                teamGrossResponse.ok ? teamGrossResponse.json() : [],
-                teamNetResponse.ok ? teamNetResponse.json() : []
+                get(`/player-stats/league/${leagueId}/top-scores?limit=5&score_type=gross`).catch(() => []),
+                get(`/player-stats/league/${leagueId}/top-scores?limit=5&score_type=net`).catch(() => []),
+                get(`/team-stats/league/${leagueId}/top-scores?limit=5&score_type=gross`).catch(() => []),
+                get(`/team-stats/league/${leagueId}/top-scores?limit=5&score_type=net`).catch(() => [])
             ]);
 
             setRankingsData({
@@ -564,6 +529,7 @@ function LeagueManagement() {
         });
     };
 
+    // Update handleCreateMatch to use API service
     const handleCreateMatch = async () => {
         try {
             if (!selectedWeekId) {
@@ -574,39 +540,15 @@ function LeagueManagement() {
             // Show that we're saving
             console.log("Creating match...");
 
-            const response = await fetch(`${env.API_BASE_URL}/matches`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    ...newMatch,
-                    week_id: selectedWeekId
-                }),
+            await post('/matches', {
+                ...newMatch,
+                week_id: selectedWeekId
             });
 
             // First, close the dialog regardless of success to improve UX
             handleCreateMatchClose();
 
-            // Try to read the response
-            let responseData;
-            try {
-                // This might fail if the response isn't valid JSON
-                responseData = await response.json();
-            } catch (parseError) {
-                console.error("Response parsing error:", parseError);
-                // Continue execution even if parsing fails
-            }
-
-            // Check if match creation was successful
-            if (!response.ok) {
-                throw new Error(
-                    responseData?.detail ||
-                    `Server error: ${response.status} ${response.statusText}`
-                );
-            }
-
-            console.log("Match created successfully:", responseData);
+            console.log("Match created successfully");
 
             // Refresh the matches list after a short delay to ensure DB consistency
             setTimeout(() => {
@@ -622,15 +564,13 @@ function LeagueManagement() {
             });
 
         } catch (error) {
-            //console.error('Error creating match:', error); TODO: Come back and find out why this is failing
+            console.error('Error creating match:', error);
 
             // Even if there's an error, try to refresh the matches
             // since you mentioned the match is actually being created
             setTimeout(() => {
                 fetchMatchesForWeek(selectedWeekId);
             }, 500);
-
-            //alert(`Note: Match might have been created, but there was an error: ${error.message}`);
         }
     };
 
@@ -717,6 +657,7 @@ function LeagueManagement() {
         }
     };
 
+    // Update generatePossibleMatchups to use API service
     const generatePossibleMatchups = async (selectedTeamIds, courseId, matchDate) => {
         if (!selectedTeamIds || selectedTeamIds.length < 2) {
             setGeneratedMatchups([]);
@@ -726,11 +667,7 @@ function LeagueManagement() {
         try {
             // First, fetch ALL historical matches for these teams across all weeks
             setMatchupWarning(null);
-            const historicalMatchesResponse = await fetch(`${env.API_BASE_URL}/leagues/${leagueId}/matches`);
-            if (!historicalMatchesResponse.ok) {
-                throw new Error('Failed to fetch historical matches');
-            }
-            const historicalMatches = await historicalMatchesResponse.json();
+            const historicalMatches = await get(`/leagues/${leagueId}/matches`);
 
             // Get the selected teams from the league teams
             const selectedTeams = league.teams.filter(team => selectedTeamIds.includes(team.id));
@@ -949,23 +886,11 @@ function LeagueManagement() {
         setGeneratedMatchups(matchups);
     };
 
+    // Update handleCreateWeek to use API service
     const handleCreateWeek = async () => {
         try {
             // First create the week
-            const weekResponse = await fetch(`${env.API_BASE_URL}/leagues/${leagueId}/weeks`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(newWeek),
-            });
-
-            if (!weekResponse.ok) {
-                throw new Error('Failed to create week');
-            }
-
-            // Get the created week ID
-            const weekData = await weekResponse.json();
+            const weekData = await post(`/leagues/${leagueId}/weeks`, newWeek);
             const createdWeekId = weekData.id;
 
             // If matchup generation is enabled and we have matchups to create
@@ -977,18 +902,12 @@ function LeagueManagement() {
                         continue;
                     }
 
-                    await fetch(`${env.API_BASE_URL}/matches`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            home_team_id: matchup.home_team_id,
-                            away_team_id: matchup.away_team_id,
-                            course_id: matchup.course_id,
-                            match_date: matchup.match_date,
-                            week_id: createdWeekId
-                        }),
+                    await post('/matches', {
+                        home_team_id: matchup.home_team_id,
+                        away_team_id: matchup.away_team_id,
+                        course_id: matchup.course_id,
+                        match_date: matchup.match_date,
+                        week_id: createdWeekId
                     });
                 }
             }
@@ -1025,18 +944,13 @@ function LeagueManagement() {
         setWeekToDelete(null);
     };
 
+    // Update handleDeleteWeek to use API service
     const handleDeleteWeek = async () => {
         if (!weekToDelete) return;
 
         try {
             // Delete the week
-            const response = await fetch(`${env.API_BASE_URL}/leagues/${leagueId}/weeks/${weekToDelete.id}`, {
-                method: 'DELETE',
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to delete week');
-            }
+            await del(`/leagues/${leagueId}/weeks/${weekToDelete.id}`);
 
             // Re-fetch the weeks list
             await fetchWeeks();
@@ -1048,7 +962,6 @@ function LeagueManagement() {
     };
 
     // Add/update formatDate function to properly handle dates from the API
-
     const formatDate = (dateString, formatPattern) => {
         if (!dateString) return '';
 

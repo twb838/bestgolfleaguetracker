@@ -12,16 +12,19 @@ from app.models.match_player import MatchPlayer
 from app.models.match import Match
 from app.models.week import Week
 from app.models.course import Course
+from app.models.user import User
 from app.schemas.player import PlayerCreate, PlayerUpdate, PlayerResponse
+from app.api.deps import get_current_active_user
 
-router = APIRouter(prefix="/players", tags=["players"])
+router = APIRouter()
 
 @router.get("", response_model=List[PlayerResponse])
 def get_players(
     db: Session = Depends(get_db),
     skip: int = 0,
     limit: int = 100,
-    team_id: Optional[int] = None
+    team_id: Optional[int] = None, 
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Retrieve all players.
@@ -37,7 +40,7 @@ def get_players(
     return players
 
 @router.post("", response_model=PlayerResponse, status_code=status.HTTP_201_CREATED)
-def create_player(player_in: PlayerCreate, db: Session = Depends(get_db)):
+def create_player(player_in: PlayerCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Create a new player."""
     # Check if email already exists
     db_player = db.query(Player).filter(Player.email == player_in.email).first()
@@ -61,7 +64,7 @@ def create_player(player_in: PlayerCreate, db: Session = Depends(get_db)):
     return db_player
 
 @router.get("/{player_id}", response_model=PlayerResponse)
-def get_player(player_id: int, db: Session = Depends(get_db)):
+def get_player(player_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Get player by ID."""
     player = db.query(Player).filter(Player.id == player_id).first()
     if not player:
@@ -105,7 +108,7 @@ def update_player(
     return player
 
 @router.delete("/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_player(player_id: int, db: Session = Depends(get_db)):
+def delete_player(player_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Delete a player."""
     player = db.query(Player).filter(Player.id == player_id).first()
     if not player:
@@ -122,7 +125,7 @@ def delete_player(player_id: int, db: Session = Depends(get_db)):
 def update_league_player_handicaps(
     league_id: int, 
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
     Update handicaps for all eligible players in a league.

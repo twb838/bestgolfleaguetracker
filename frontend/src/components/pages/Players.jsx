@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { get, post, put, del } from '../../services/api'; // Import API service
 import {
     Box,
     Typography,
@@ -59,20 +60,13 @@ const Players = () => {
         setLoading(true);
         setError(null);
         try {
-            // Fetch players
-            const playersResponse = await fetch(`${env.API_BASE_URL}/players`);
-            if (!playersResponse.ok) {
-                throw new Error(`Failed to fetch players: ${playersResponse.status}`);
-            }
-            const playersData = await playersResponse.json();
+            console.log('Fetching players and teams...');
+
+            // Use API service instead of direct fetch
+            const playersData = await get('/players');
             setPlayers(playersData);
 
-            // Fetch teams
-            const teamsResponse = await fetch(`${env.API_BASE_URL}/teams`);
-            if (!teamsResponse.ok) {
-                throw new Error(`Failed to fetch teams: ${teamsResponse.status}`);
-            }
-            const teamsData = await teamsResponse.json();
+            const teamsData = await get('/teams');
             setTeams(teamsData);
         } catch (err) {
             console.error('Error fetching data:', err);
@@ -140,28 +134,19 @@ const Players = () => {
 
     const handleSavePlayer = async () => {
         try {
-            const method = isEditing ? 'PUT' : 'POST';
-            const url = isEditing
-                ? `${env.API_BASE_URL}/players/${currentPlayer.id}`
-                : `${env.API_BASE_URL}/players`;
-
             // Handle empty team_id
             const playerData = { ...currentPlayer };
             if (playerData.team_id === '') {
                 playerData.team_id = null;
             }
 
-            const response = await fetch(url, {
-                method,
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(playerData)
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || `Failed to ${isEditing ? 'update' : 'create'} player`);
+            let result;
+            if (isEditing) {
+                // Use put method from API service
+                result = await put(`/players/${currentPlayer.id}`, playerData);
+            } else {
+                // Use post method from API service
+                result = await post('/players', playerData);
             }
 
             setSuccessMessage(`Player ${isEditing ? 'updated' : 'created'} successfully!`);
@@ -179,13 +164,8 @@ const Players = () => {
         }
 
         try {
-            const response = await fetch(`${env.API_BASE_URL}/players/${playerId}`, {
-                method: 'DELETE'
-            });
-
-            if (!response.ok) {
-                throw new Error(`Failed to delete player: ${response.status}`);
-            }
+            // Use del method from API service
+            await del(`/players/${playerId}`);
 
             setSuccessMessage('Player deleted successfully!');
             fetchData();

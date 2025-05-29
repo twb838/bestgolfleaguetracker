@@ -5,6 +5,8 @@ import secrets
 from datetime import datetime, timedelta
 
 from app.db.base import get_db
+from app.models.user import User
+from app.api.deps import get_current_active_user
 from app.models.match import Match, MatchAccessToken
 from app.models.week import Week
 from app.models.team import Team
@@ -16,10 +18,10 @@ from app.models.match_player import MatchPlayer
 from app.schemas.match import MatchCreate, MatchResponse, MatchUpdate
 from app import schemas
 
-router = APIRouter(prefix="/matches", tags=["matches"])
+router = APIRouter()
 
 @router.post("/", response_model=MatchResponse, status_code=status.HTTP_201_CREATED)
-def create_match(match: MatchCreate, db: Session = Depends(get_db)):
+def create_match(match: MatchCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     # Verify week exists
     week = db.query(Week).filter(Week.id == match.week_id).first()
     if not week:
@@ -96,7 +98,7 @@ def create_match(match: MatchCreate, db: Session = Depends(get_db)):
     return db_match
 
 @router.get("/weeks/{week_id}/matches")
-def get_matches_by_week(week_id: int, db: Session = Depends(get_db)):
+def get_matches_by_week(week_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     # Verify week exists
     week = db.query(Week).filter(Week.id == week_id).first()
     if not week:
@@ -135,7 +137,7 @@ def get_matches_by_week(week_id: int, db: Session = Depends(get_db)):
     return match_responses
 
 @router.get("/{match_id}", response_model=MatchResponse)
-def get_match(match_id: int, db: Session = Depends(get_db)):
+def get_match(match_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     match = db.query(Match).filter(Match.id == match_id).first()
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
@@ -157,7 +159,7 @@ def get_match(match_id: int, db: Session = Depends(get_db)):
     return response
 
 @router.put("/{match_id}", response_model=MatchResponse)
-def update_match(match_id: int, match: MatchUpdate, db: Session = Depends(get_db)):
+def update_match(match_id: int, match: MatchUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     db_match = db.query(Match).filter(Match.id == match_id).first()
     if not db_match:
         raise HTTPException(status_code=404, detail="Match not found")
@@ -171,7 +173,7 @@ def update_match(match_id: int, match: MatchUpdate, db: Session = Depends(get_db
     return db_match
 
 @router.delete("/{match_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_match(match_id: int, db: Session = Depends(get_db)):
+def delete_match(match_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     db_match = db.query(Match).filter(Match.id == match_id).first()
     if not db_match:
         raise HTTPException(status_code=404, detail="Match not found")
@@ -181,7 +183,7 @@ def delete_match(match_id: int, db: Session = Depends(get_db)):
     return None
 
 @router.get("/{match_id}/scores")
-def get_match_scores(match_id: int, db: Session = Depends(get_db)):
+def get_match_scores(match_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Get all player scores for a specific match with detailed information"""
     try:
         # Verify match exists
@@ -223,7 +225,7 @@ def get_match_scores(match_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{match_id}/scores")
-def save_match_scores(match_id: int, data: dict, db: Session = Depends(get_db)):
+def save_match_scores(match_id: int, data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Save or update scores for a match with proper player tracking and statistics"""
     try:
         # Verify match exists
@@ -353,7 +355,7 @@ def save_match_scores(match_id: int, data: dict, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error saving scores: {str(e)}")
 
 @router.get("/{match_id}/players")
-def get_match_players(match_id: int, db: Session = Depends(get_db)):
+def get_match_players(match_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Get all players for a specific match from the match_players table"""
     try:
         # Verify match exists
@@ -397,7 +399,7 @@ def get_match_players(match_id: int, db: Session = Depends(get_db)):
 def substitute_match_player(
     match_id: int, 
     data: dict, 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """Record a player substitution in the match_players table"""
     try:
@@ -476,7 +478,7 @@ def substitute_match_player(
 @router.post("/{match_id}/access-tokens")
 def generate_match_access_tokens(
     match_id: int, 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """Generate unique access tokens for both teams in a match"""
     try:
@@ -532,7 +534,7 @@ def generate_match_access_tokens(
 @router.get("/{match_id}/access-tokens")
 def get_match_access_tokens(
     match_id: int, 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """Get existing access tokens for a match"""
     try:
@@ -568,7 +570,7 @@ def get_match_access_tokens(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/validate-token/{token}")
-def validate_access_token(token: str, db: Session = Depends(get_db)):
+def validate_access_token(token: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Validate a team access token and return match and team info"""
     try:
         # Find the token
@@ -603,7 +605,7 @@ def save_team_scores(
     match_id: int, 
     token: str = Query(...), 
     data: dict = Body(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """Save scores for a specific team using their access token"""
     try:

@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional
 
 from app.db.session import get_db
+from app.api.deps import get_current_active_user
+from app.models.user import User
 from app.models.match_player import MatchPlayer
 from app.models.match import Match
 from app.models.player import Player
@@ -12,12 +14,12 @@ from app.models.team import Team
 from app.models.week import Week
 from app.models.course import Course
 
-router = APIRouter(prefix="/teamstats", tags=["teamstats"])
+router = APIRouter()
 
 @router.get("/league/{league_id}", response_model=List[Dict[str, Any]])
 def get_league_team_stats(
     league_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
     Get comprehensive team statistics for a league
@@ -173,7 +175,7 @@ def get_top_team_scores(
     league_id: int,
     score_type: str = "gross",
     limit: int = 5,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
     Get top team scores for a league (either gross or net)

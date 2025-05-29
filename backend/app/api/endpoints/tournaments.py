@@ -10,14 +10,16 @@ from app.models.hole import Hole
 from app.models.tournament import Tournament, TournamentFlight, TournamentParticipant, ParticipantType
 from app.models.player import Player
 from app.models.team import Team
+from app.models.user import User
+from app.api.deps import get_current_active_user
 from app.schemas.tournament import TournamentCreate, TournamentOut, TournamentUpdate, FlightCreate
 from app.schemas.course import CourseResponse
 from app.schemas.player import PlayerResponse
 
-router = APIRouter(prefix="/tournaments", tags=["tournaments"])
+router = APIRouter()
 
 @router.post("/", response_model=TournamentOut)
-def create_tournament(tournament: TournamentCreate, db: Session = Depends(get_db)):
+def create_tournament(tournament: TournamentCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     # Create tournament logic
     new_tournament = Tournament(
         name=tournament.name,
@@ -127,13 +129,13 @@ def create_tournament(tournament: TournamentCreate, db: Session = Depends(get_db
     return new_tournament
     
 @router.get("/", response_model=List[TournamentOut])
-def get_tournaments(db: Session = Depends(get_db)):
+def get_tournaments(db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     # Get all tournaments
     tournaments = db.query(Tournament).all()
     return tournaments
     
 @router.get("/{tournament_id}", response_model=TournamentOut)
-def get_tournament(tournament_id: int, db: Session = Depends(get_db)):
+def get_tournament(tournament_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     # Get single tournament with all related data
     tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
     if not tournament:
