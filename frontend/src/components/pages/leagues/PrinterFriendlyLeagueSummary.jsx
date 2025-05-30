@@ -22,7 +22,7 @@ import {
     Print as PrintIcon
 } from '@mui/icons-material';
 import { format, parseISO } from 'date-fns';
-import env from '../../../config/env';
+import { get } from '../../../services/api';
 
 const PrinterFriendlyLeagueSummary = () => {
     const { leagueId } = useParams();
@@ -58,19 +58,11 @@ const PrinterFriendlyLeagueSummary = () => {
             setLoading(true);
             try {
                 // Fetch league details
-                const leagueResponse = await fetch(`${env.API_BASE_URL}/leagues/${leagueId}`);
-                if (!leagueResponse.ok) {
-                    throw new Error('League not found');
-                }
-                const leagueData = await leagueResponse.json();
+                const leagueData = await get(`/leagues/${leagueId}`);
                 setLeague(leagueData);
 
                 // Fetch weeks
-                const weeksResponse = await fetch(`${env.API_BASE_URL}/leagues/${leagueId}/weeks`);
-                if (!weeksResponse.ok) {
-                    throw new Error('Failed to fetch weeks');
-                }
-                const weeksData = await weeksResponse.json();
+                const weeksData = await get(`/leagues/${leagueId}/weeks`);
                 setWeeks(weeksData);
 
                 // Find most recent week
@@ -85,17 +77,21 @@ const PrinterFriendlyLeagueSummary = () => {
                 }
 
                 // Fetch leaderboard data
-                const leaderboardResponse = await fetch(`${env.API_BASE_URL}/leagues/${leagueId}/leaderboard`);
-                if (leaderboardResponse.ok) {
-                    const leaderboardData = await leaderboardResponse.json();
+                try {
+                    const leaderboardData = await get(`/leagues/${leagueId}/leaderboard`);
                     setLeaderboardData(leaderboardData);
+                } catch (error) {
+                    console.error('Error fetching leaderboard:', error);
+                    setLeaderboardData([]);
                 }
 
                 // Fetch player stats
-                const playerStatsResponse = await fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/player-stats?minimum_rounds=1`);
-                if (playerStatsResponse.ok) {
-                    const playerStatsData = await playerStatsResponse.json();
+                try {
+                    const playerStatsData = await get(`/player-stats/league/${leagueId}/player-stats?minimum_rounds=1`);
                     setPlayerStats(playerStatsData);
+                } catch (error) {
+                    console.error('Error fetching player stats:', error);
+                    setPlayerStats([]);
                 }
 
                 // Fetch rankings data
@@ -140,12 +136,7 @@ const PrinterFriendlyLeagueSummary = () => {
         if (!weekId) return;
 
         try {
-            const matchesResponse = await fetch(`${env.API_BASE_URL}/matches/weeks/${weekId}/matches`);
-            if (!matchesResponse.ok) {
-                throw new Error('Failed to fetch matches');
-            }
-
-            const matchesData = await matchesResponse.json();
+            const matchesData = await get(`/matches/weeks/${weekId}/matches`);
 
             // Enrich the matches data with team and course details
             if (leagueData?.teams && leagueData?.courses) {
@@ -168,18 +159,14 @@ const PrinterFriendlyLeagueSummary = () => {
             }
         } catch (error) {
             console.error('Error fetching matches:', error);
+            setMatches([]);
         }
     };
 
     const fetchMakeupMatches = async () => {
         try {
             // Fetch all matches for the league
-            const response = await fetch(`${env.API_BASE_URL}/leagues/${leagueId}/matches`);
-            if (!response.ok) {
-                throw new Error('Failed to fetch league matches');
-            }
-
-            const allMatches = await response.json();
+            const allMatches = await get(`/leagues/${leagueId}/matches`);
 
             // Find the current date
             const currentDate = new Date();
@@ -245,6 +232,7 @@ const PrinterFriendlyLeagueSummary = () => {
             }
         } catch (error) {
             console.error('Error fetching makeup matches:', error);
+            setMakeupMatches([]);
         }
     };
 
@@ -252,12 +240,7 @@ const PrinterFriendlyLeagueSummary = () => {
         if (!weekId) return;
 
         try {
-            const matchesResponse = await fetch(`${env.API_BASE_URL}/matches/weeks/${weekId}/matches`);
-            if (!matchesResponse.ok) {
-                throw new Error('Failed to fetch previous week matches');
-            }
-
-            const matchesData = await matchesResponse.json();
+            const matchesData = await get(`/matches/weeks/${weekId}/matches`);
 
             // Only include completed matches with results
             const completedMatches = matchesData.filter(match => match.is_completed);
@@ -283,25 +266,18 @@ const PrinterFriendlyLeagueSummary = () => {
             }
         } catch (error) {
             console.error('Error fetching previous week matches:', error);
+            setPreviousWeekMatches([]);
         }
     };
 
     const fetchRankingsData = async () => {
         try {
             // Fetch all ranking data in parallel
-            const [individualGrossResponse, individualNetResponse, teamGrossResponse, teamNetResponse] =
-                await Promise.all([
-                    fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/top-scores?limit=5&score_type=gross`),
-                    fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/top-scores?limit=5&score_type=net`),
-                    fetch(`${env.API_BASE_URL}/teamstats/league/${leagueId}/top-scores?limit=5&score_type=gross`),
-                    fetch(`${env.API_BASE_URL}/teamstats/league/${leagueId}/top-scores?limit=5&score_type=net`)
-                ]);
-
             const [individualGrossData, individualNetData, teamGrossData, teamNetData] = await Promise.all([
-                individualGrossResponse.ok ? individualGrossResponse.json() : [],
-                individualNetResponse.ok ? individualNetResponse.json() : [],
-                teamGrossResponse.ok ? teamGrossResponse.json() : [],
-                teamNetResponse.ok ? teamNetResponse.json() : []
+                get(`/player-stats/league/${leagueId}/top-scores?limit=5&score_type=gross`).catch(() => []),
+                get(`/player-stats/league/${leagueId}/top-scores?limit=5&score_type=net`).catch(() => []),
+                get(`/team-stats/league/${leagueId}/top-scores?limit=5&score_type=gross`).catch(() => []),
+                get(`/team-stats/league/${leagueId}/top-scores?limit=5&score_type=net`).catch(() => [])
             ]);
 
             setRankingsData({
@@ -323,14 +299,11 @@ const PrinterFriendlyLeagueSummary = () => {
 
     const fetchMostImprovedPlayers = async () => {
         try {
-            const response = await fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/most-improved?limit=5`);
-            if (!response.ok) {
-                throw new Error('Failed to fetch most improved players');
-            }
-            const data = await response.json();
+            const data = await get(`/player-stats/league/${leagueId}/most-improved?limit=5`);
             setMostImprovedPlayers(data);
         } catch (error) {
             console.error('Error fetching most improved players:', error);
+            setMostImprovedPlayers([]);
         }
     };
 
@@ -339,14 +312,9 @@ const PrinterFriendlyLeagueSummary = () => {
 
         try {
             // Fetch top gross and net scores from last week
-            const [grossResponse, netResponse] = await Promise.all([
-                fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/top-scores?limit=3&score_type=gross&week_id=${weekId}`),
-                fetch(`${env.API_BASE_URL}/playerstats/league/${leagueId}/top-scores?limit=3&score_type=net&week_id=${weekId}`)
-            ]);
-
             const [grossData, netData] = await Promise.all([
-                grossResponse.ok ? grossResponse.json() : [],
-                netResponse.ok ? netResponse.json() : []
+                get(`/player-stats/league/${leagueId}/top-scores?limit=3&score_type=gross&week_id=${weekId}`).catch(() => []),
+                get(`/player-stats/league/${leagueId}/top-scores?limit=3&score_type=net&week_id=${weekId}`).catch(() => [])
             ]);
 
             setPreviousWeekTopScores({
@@ -355,6 +323,10 @@ const PrinterFriendlyLeagueSummary = () => {
             });
         } catch (error) {
             console.error('Error fetching previous week top scores:', error);
+            setPreviousWeekTopScores({
+                topGross: [],
+                topNet: []
+            });
         }
     };
 
