@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Any, Optional
 import os
+import secrets
 
 from jose import jwt
 from passlib.context import CryptContext
@@ -8,8 +9,21 @@ from passlib.context import CryptContext
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ALGORITHM = "HS256"
-# Use environment variable or a strong default
-SECRET_KEY = os.getenv("SECRET_KEY", "your-super-secret-key-change-this-in-production-make-it-long-and-random")
+
+# Generate a secure secret key if not provided
+def get_secret_key() -> str:
+    """Get secret key from environment or generate a secure one"""
+    secret_key = os.getenv("SECRET_KEY")
+    
+    if not secret_key:
+        # Generate a secure random key if none is provided
+        secret_key = secrets.token_urlsafe(32)
+        print("WARNING: No SECRET_KEY found in environment. Generated a temporary one.")
+        print("Please set SECRET_KEY in your environment variables for production!")
+    
+    return secret_key
+
+SECRET_KEY = get_secret_key()
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
 def create_access_token(subject: Any, expires_delta: Optional[timedelta] = None) -> str:
