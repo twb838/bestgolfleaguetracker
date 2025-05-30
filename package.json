@@ -1,0 +1,17 @@
+{
+    "scripts": {
+        "test:e2e": "playwright test",
+        "test:e2e:ui": "playwright test --ui",
+        "test:e2e:debug": "playwright test --debug",
+        "test:e2e:dashboard": "playwright test tests/e2e/dashboard.spec.js --headed",
+        "test:e2e:dashboard-ui": "playwright test tests/e2e/dashboard.spec.js --ui",
+        "test:e2e:dashboard-debug": "playwright test tests/e2e/dashboard.spec.js --debug"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.52.0",
+        "@testing-library/jest-dom": "^6.6.3",
+        "@testing-library/react": "^16.3.0",
+        "@vitejs/plugin-react": "^4.5.0",
+        "vitest": "^3.1.4"
+    }
+}

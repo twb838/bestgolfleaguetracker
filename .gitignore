@@ -44,6 +44,14 @@ htmlcov/
 /frontend/build
 /frontend/dist
 
+# Test Results
+/test-results/
+/playwright-report/
+/playwright/.cache/
+*.png
+*.mp4
+*.webm
+
 # IDEs and editors
 /.idea
 .project
