@@ -64,6 +64,7 @@ import {
 import { format, parseISO, addDays } from 'date-fns';
 import { get, post, put, del } from '../../../services/api'; // Import API service
 import Rankings from './Rankings';
+import PlayerStats from './PlayerStats';
 
 function LeagueManagement() {
     const { leagueId } = useParams();
@@ -126,14 +127,6 @@ function LeagueManagement() {
     const [sortConfig, setSortConfig] = useState({
         key: 'win_percentage',
         direction: 'desc'
-    });
-
-    // Add with your other state declarations
-    const [playerStats, setPlayerStats] = useState([]);
-    const [loadingPlayerStats, setLoadingPlayerStats] = useState(false);
-    const [playerStatsSortConfig, setPlayerStatsSortConfig] = useState({
-        key: 'average_score',
-        direction: 'asc'
     });
 
     // Add state to track if we've initialized the week selection
@@ -238,13 +231,6 @@ function LeagueManagement() {
         }
     }, [selectedWeekId, weekSelectionInitialized, weeks, setSearchParams]);
 
-    // Add this useEffect for player stats
-    useEffect(() => {
-        if (activeTab === 2 && league?.id) {
-            fetchPlayerStats();
-        }
-    }, [activeTab, league?.id]);
-
     // Update fetchLeagueDetails to use API service
     const fetchLeagueDetails = async () => {
         setLoading(true);
@@ -328,20 +314,6 @@ function LeagueManagement() {
         }
     };
 
-    // Update fetchPlayerStats to use API service
-    const fetchPlayerStats = async () => {
-        if (!league?.id) return;
-
-        setLoadingPlayerStats(true);
-        try {
-            const data = await get(`/player-stats/league/${leagueId}/player-stats?minimum_rounds=1`);
-            setPlayerStats(data);
-        } catch (error) {
-            setPlayerStats([]);
-        } finally {
-            setLoadingPlayerStats(false);
-        }
-    };
 
     // Add this sort function before your return statement
     const handleSort = (key) => {
@@ -402,49 +374,6 @@ function LeagueManagement() {
             : <ArrowDownwardIcon fontSize="small" sx={{ fontSize: 16, ml: 0.5, verticalAlign: 'middle' }} />;
     };
 
-    // Add this function with your other utility functions
-    const handlePlayerStatsSort = (key) => {
-        let direction = 'asc';
-        if (playerStatsSortConfig.key === key && playerStatsSortConfig.direction === 'asc') {
-            direction = 'desc';
-        }
-        setPlayerStatsSortConfig({ key, direction });
-    };
-
-    const getSortedPlayerStats = () => {
-        if (!playerStats || playerStats.length === 0) return [];
-
-        const sortableData = [...playerStats];
-
-        sortableData.sort((a, b) => {
-            // Handle null values
-            if (a[playerStatsSortConfig.key] === null && b[playerStatsSortConfig.key] === null) return 0;
-            if (a[playerStatsSortConfig.key] === null) return 1;
-            if (b[playerStatsSortConfig.key] === null) return -1;
-
-            // String sorting for name
-            if (playerStatsSortConfig.key === 'player_name') {
-                return playerStatsSortConfig.direction === 'asc'
-                    ? a.player_name.localeCompare(b.player_name)
-                    : b.player_name.localeCompare(a.player_name);
-            }
-
-            // Number sorting for everything else
-            return playerStatsSortConfig.direction === 'asc'
-                ? a[playerStatsSortConfig.key] - b[playerStatsSortConfig.key]
-                : b[playerStatsSortConfig.key] - a[playerStatsSortConfig.key];
-        });
-
-        return sortableData;
-    };
-
-    // Reuse your existing getSortArrow function for player stats
-    const getPlayerStatsSortArrow = (key) => {
-        if (playerStatsSortConfig.key !== key) return null;
-        return playerStatsSortConfig.direction === 'asc'
-            ? <ArrowUpwardIcon fontSize="small" sx={{ fontSize: 16, ml: 0.5, verticalAlign: 'middle' }} />
-            : <ArrowDownwardIcon fontSize="small" sx={{ fontSize: 16, ml: 0.5, verticalAlign: 'middle' }} />;
-    };
 
     const handleWeekChange = (event) => {
         const newWeekId = event.target.value;
@@ -1477,108 +1406,7 @@ function LeagueManagement() {
                 )}
 
                 {activeTab === 2 && (
-                    <Box>
-                        <Typography variant="h6" gutterBottom>
-                            Player Statistics
-                        </Typography>
-                        {loadingPlayerStats ? (
-                            <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
-                                <CircularProgress />
-                            </Box>
-                        ) : playerStats && playerStats.length > 0 ? (
-                            <Box>
-                                <TableContainer component={Paper} sx={{ mt: 2, overflow: 'auto' }}>
-                                    <Table size="small">
-                                        <TableHead>
-                                            <TableRow sx={{ backgroundColor: 'primary.main' }}>
-                                                <TableCell
-                                                    sx={{ color: 'white', fontWeight: 'bold', padding: '6px 8px', cursor: 'pointer' }}
-                                                    onClick={() => handlePlayerStatsSort('player_name')}
-                                                >
-                                                    Player {getPlayerStatsSortArrow('player_name')}
-                                                </TableCell>
-                                                <TableCell
-                                                    align="center"
-                                                    sx={{ color: 'white', fontWeight: 'bold', padding: '6px 8px', cursor: 'pointer' }}
-                                                    onClick={() => handlePlayerStatsSort('rounds_played')}
-                                                >
-                                                    Rounds {getPlayerStatsSortArrow('rounds_played')}
-                                                </TableCell>
-                                                <TableCell
-                                                    align="center"
-                                                    sx={{ color: 'white', fontWeight: 'bold', padding: '6px 8px', cursor: 'pointer' }}
-                                                    onClick={() => handlePlayerStatsSort('avg_gross_score')}
-                                                >
-                                                    Avg Score {getPlayerStatsSortArrow('avg_gross_score')}
-                                                </TableCell>
-                                                <TableCell
-                                                    align="center"
-                                                    sx={{ color: 'white', fontWeight: 'bold', padding: '6px 8px', cursor: 'pointer' }}
-                                                    onClick={() => handlePlayerStatsSort('lowest_gross_score')}
-                                                >
-                                                    Best Score {getPlayerStatsSortArrow('lowest_gross_score')}
-                                                </TableCell>
-                                                <TableCell
-                                                    align="center"
-                                                    sx={{ color: 'white', fontWeight: 'bold', padding: '6px 8px', cursor: 'pointer' }}
-                                                    onClick={() => handlePlayerStatsSort('avg_net_score')}
-                                                >
-                                                    Avg Net {getPlayerStatsSortArrow('avg_net_score')}
-                                                </TableCell>
-                                                <TableCell
-                                                    align="center"
-                                                    sx={{ color: 'white', fontWeight: 'bold', padding: '6px 8px', cursor: 'pointer' }}
-                                                    onClick={() => handlePlayerStatsSort('lowest_net_score')}
-                                                >
-                                                    Low Net {getPlayerStatsSortArrow('lowest_net_score')}
-                                                </TableCell>
-                                            </TableRow>
-                                        </TableHead>
-                                        <TableBody>
-                                            {getSortedPlayerStats().map((player) => (
-                                                <TableRow
-                                                    key={player.player_id}
-                                                    sx={{
-                                                        '&:nth-of-type(odd)': { bgcolor: 'action.hover' },
-                                                        '&:hover': { bgcolor: 'action.selected' }
-                                                    }}
-                                                >
-                                                    <TableCell sx={{ fontWeight: 'bold', padding: '6px 8px' }}>
-                                                        {player.player_name}
-                                                    </TableCell>
-                                                    <TableCell align="center" sx={{ padding: '6px 8px' }}>
-                                                        {player.rounds_played}
-                                                    </TableCell>
-                                                    <TableCell align="center" sx={{ padding: '6px 8px' }}>
-                                                        {player.avg_gross_score ? player.avg_gross_score.toFixed(1) : '—'}
-                                                    </TableCell>
-                                                    <TableCell align="center" sx={{ padding: '6px 8px' }}>
-                                                        {player.lowest_gross_score || '—'}
-                                                    </TableCell>
-                                                    <TableCell align="center" sx={{ padding: '6px 8px' }}>
-                                                        {player.avg_net_score ? player.avg_net_score.toFixed(1) : '—'}
-                                                    </TableCell>
-                                                    <TableCell align="center" sx={{ padding: '6px 8px' }}>
-                                                        {player.lowest_net_score ? player.lowest_net_score.toFixed(1) : '—'}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </TableContainer>
-                            </Box>
-                        ) : (
-                            <Box sx={{ textAlign: 'center', py: 4 }}>
-                                <DangerousIcon color="action" sx={{ fontSize: 40, opacity: 0.5, mb: 2 }} />
-                                <Typography variant="body1" color="text.secondary">
-                                    No player statistics available yet.
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                                    Stats will appear once players have completed rounds.
-                                </Typography>
-                            </Box>
-                        )}
-                    </Box>
+                    <PlayerStats league={league} />
                 )}
 
                 {activeTab === 3 && (
