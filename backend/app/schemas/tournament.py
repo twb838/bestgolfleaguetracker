@@ -34,9 +34,6 @@ class TournamentParticipantBase(BaseModel):
     team_id: Optional[int] = None
     flight_id: Optional[int] = None
 
-class TournamentParticipantCreate(TournamentParticipantBase):
-    pass
-
 class TournamentParticipantOut(TournamentParticipantBase):
     id: int
     tournament_id: int
@@ -44,6 +41,23 @@ class TournamentParticipantOut(TournamentParticipantBase):
     
     class Config:
         orm_mode = True
+
+class TournamentParticipantResponse(BaseModel):
+    id: int
+    player_id: int
+    player_name: str
+    handicap: Optional[float] = None
+    team_id: Optional[int] = None
+    team_name: Optional[str] = None
+    flight_id: Optional[int] = None
+    flight_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class TournamentParticipantCreate(BaseModel):
+    player_name: str
+    handicap: Optional[float] = 0
 
 # Tournament schemas
 class TournamentBase(BaseModel):

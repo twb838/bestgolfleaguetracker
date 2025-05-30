@@ -33,6 +33,7 @@ import PrinterFriendlyLeagueSummary from './pages/leagues/PrinterFriendlyLeagueS
 import Tournaments from './pages/tournaments/Tournaments';
 import TournamentManagement from './pages/tournaments/TournamentManagement';
 import TournamentCreationWizard from './pages/tournaments/TournamentCreationWizard';
+import Scorecard from './pages/tournaments/Scorecard';
 import LeagueSettings from './pages/leagues/LeagueSettings';
 
 
@@ -306,6 +307,7 @@ function App() {
                                 <TournamentManagement />
                             </ProtectedRoute>
                         } />
+                        <Route path="/tournaments/:tournamentId/scorecard" element={<Scorecard />} />
                         <Route path="/leagues/:leagueId/settings" element={<LeagueSettings />} />
 
                         {/* Catch all */}

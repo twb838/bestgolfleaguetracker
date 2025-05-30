@@ -8,7 +8,8 @@ import {
     Event as EventIcon,
     Groups as GroupsIcon,
     GolfCourse as GolfCourseIcon,
-    Leaderboard as LeaderboardIcon
+    Leaderboard as LeaderboardIcon,
+    ScoreboardOutlined as ScorecardIcon
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format, parseISO, addDays } from 'date-fns';
@@ -211,10 +212,11 @@ function TournamentManagement() {
                     textColor="primary"
                     indicatorColor="primary"
                 >
-                    <Tab icon={<LeaderboardIcon />} label="Leaderboard" />
-                    <Tab icon={<EventIcon />} label="Schedule" />
+                    <Tab icon={<EventIcon />} label="Overview" />
                     <Tab icon={<GroupsIcon />} label="Participants" />
                     <Tab icon={<GolfCourseIcon />} label="Courses" />
+                    <Tab icon={<ScorecardIcon />} label="Scorecards" />
+                    <Tab icon={<LeaderboardIcon />} label="Leaderboard" />
                 </Tabs>
             </Paper>
 
@@ -222,38 +224,15 @@ function TournamentManagement() {
                 {activeTab === 0 && (
                     <Box>
                         <Typography variant="h6" gutterBottom>
-                            Tournament Leaderboard
+                            Tournament Overview
                         </Typography>
                         <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
-                            Leaderboard will appear once the tournament starts and scores are entered.
+                            Overview content will be available here.
                         </Typography>
                     </Box>
                 )}
 
                 {activeTab === 1 && (
-                    <Box>
-                        <Typography variant="h6" gutterBottom>
-                            Tournament Schedule
-                        </Typography>
-                        <Box sx={{ mt: 2 }}>
-                            {Array.from({ length: tournament.number_of_days }).map((_, index) => {
-                                const date = addDays(new Date(tournament.start_date), index);
-                                return (
-                                    <Paper key={index} sx={{ p: 2, mb: 2, border: '1px solid', borderColor: 'divider' }}>
-                                        <Typography variant="subtitle1">
-                                            Day {index + 1} - {format(date, 'EEEE, MMMM d, yyyy')}
-                                        </Typography>
-                                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                                            Assign courses and tee times for this day
-                                        </Typography>
-                                    </Paper>
-                                );
-                            })}
-                        </Box>
-                    </Box>
-                )}
-
-                {activeTab === 2 && (
                     <Box>
                         <Typography variant="h6" gutterBottom>
                             Tournament Participants
@@ -264,13 +243,49 @@ function TournamentManagement() {
                     </Box>
                 )}
 
-                {activeTab === 3 && (
+                {activeTab === 2 && (
                     <Box>
                         <Typography variant="h6" gutterBottom>
                             Tournament Courses
                         </Typography>
                         <Typography variant="body1">
                             {tournament.courses?.length || 0} courses assigned
+                        </Typography>
+                    </Box>
+                )}
+
+                {activeTab === 3 && (
+                    <Box>
+                        <Typography variant="h6" gutterBottom>
+                            Scorecard Entry
+                        </Typography>
+                        <Paper sx={{ p: 3, textAlign: 'center' }}>
+                            <ScorecardIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
+                            <Typography variant="h6" gutterBottom>
+                                Enter Player Scores
+                            </Typography>
+                            <Typography variant="body1" color="text.secondary" paragraph>
+                                Record scores for each participant, hole by hole, for each day of the tournament.
+                            </Typography>
+                            <Button
+                                variant="contained"
+                                size="large"
+                                startIcon={<ScorecardIcon />}
+                                onClick={() => navigate(`/tournaments/${tournamentId}/scorecard`)}
+                            >
+                                Open Scorecard Entry
+                            </Button>
+                        </Paper>
+                    </Box>
+                )}
+
+                {activeTab === 4 && (
+                    <Box>
+                        <Typography variant="h6" gutterBottom>
+                            Tournament Leaderboard
+                        </Typography>
+                        <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
+                            Leaderboard will appear once the tournament starts and scores are entered.
                         </Typography>
                     </Box>
                 )}
