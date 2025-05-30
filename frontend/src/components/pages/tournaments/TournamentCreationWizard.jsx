@@ -12,6 +12,9 @@ import {
     Add as AddIcon,
     Remove as RemoveIcon,
     EmojiEvents as TrophyIcon,
+    FlightTakeoff as FlightIcon,
+    Group as GroupIcon,
+    Timer as TimerIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { format, addDays, parseISO } from 'date-fns';
@@ -47,18 +50,20 @@ function TournamentCreationWizard() {
         format: 'stroke_play',
         scoring_type: 'gross',
         number_of_days: 1,
+        // Updated flight options
+        flight_method: 'none', // 'none', 'pre_handicap', 'post_scores'
         number_of_flights: 0,
-        use_flights: false,
+        auto_flight_size: 16, // Target size for auto-created flights
         courses: [],
-        individual_participants: [], // Ensure this is initialized as an empty array
-        teams: [], // Ensure this is initialized as an empty array
+        individual_participants: [],
+        teams: [],
         handicap_allowance: 100,
         participant_type: 'individual',
         team_size: 0
     });
 
-    // Flight state
-    const [flights, setFlights] = useState([
+    // Flight state for pre-handicap flights
+    const [preFlights, setPreFlights] = useState([
         { name: 'Flight A', min_handicap: 0, max_handicap: 9 },
         { name: 'Flight B', min_handicap: 10, max_handicap: 18 },
         { name: 'Flight C', min_handicap: 19, max_handicap: 36 }
@@ -80,7 +85,6 @@ function TournamentCreationWizard() {
                 setFetchingData(true);
                 setFetchError(null);
 
-                // Fetch all data in parallel
                 const [coursesData, playersData, teamsData] = await Promise.all([
                     get('/courses'),
                     get('/players'),
@@ -106,7 +110,6 @@ function TournamentCreationWizard() {
         const { name, value } = event.target;
 
         if (name === 'number_of_days') {
-            // Update end date based on number of days
             const numDays = parseInt(value, 10);
             const startDate = new Date(tournamentData.start_date);
             const endDate = addDays(startDate, numDays - 1);
@@ -117,7 +120,6 @@ function TournamentCreationWizard() {
                 end_date: format(endDate, 'yyyy-MM-dd')
             });
         } else if (name === 'start_date') {
-            // Update end date based on start date change
             const startDate = new Date(value);
             const endDate = addDays(startDate, tournamentData.number_of_days - 1);
 
@@ -126,12 +128,26 @@ function TournamentCreationWizard() {
                 [name]: value,
                 end_date: format(endDate, 'yyyy-MM-dd')
             });
-        } else if (name === 'use_flights') {
+        } else if (name === 'flight_method') {
+            // Reset flight-related data when method changes
+            let updates = {
+                flight_method: value,
+                number_of_flights: value === 'none' ? 0 : (value === 'pre_handicap' ? 3 : 0)
+            };
+
             setTournamentData({
                 ...tournamentData,
-                use_flights: event.target.checked,
-                number_of_flights: event.target.checked ? 3 : 0
+                ...updates
             });
+
+            // Reset pre-flights to default if switching to pre-handicap method
+            if (value === 'pre_handicap') {
+                setPreFlights([
+                    { name: 'Flight A', min_handicap: 0, max_handicap: 9 },
+                    { name: 'Flight B', min_handicap: 10, max_handicap: 18 },
+                    { name: 'Flight C', min_handicap: 19, max_handicap: 36 }
+                ]);
+            }
         } else {
             setTournamentData({
                 ...tournamentData,
@@ -140,41 +156,41 @@ function TournamentCreationWizard() {
         }
     };
 
-    // Handle flight changes
-    const handleFlightChange = (index, field, value) => {
-        const newFlights = [...flights];
+    // Handle pre-flight changes
+    const handlePreFlightChange = (index, field, value) => {
+        const newFlights = [...preFlights];
         newFlights[index] = {
             ...newFlights[index],
             [field]: value
         };
-        setFlights(newFlights);
+        setPreFlights(newFlights);
     };
 
-    // Add a flight
-    const addFlight = () => {
-        if (flights.length < 5) { // Limit to 5 flights
-            const lastFlight = flights[flights.length - 1];
+    // Add a pre-flight
+    const addPreFlight = () => {
+        if (preFlights.length < 6) {
+            const lastFlight = preFlights[preFlights.length - 1];
             const newMaxHandicap = Math.min(lastFlight.max_handicap + 9, 36);
-            setFlights([
-                ...flights,
+            setPreFlights([
+                ...preFlights,
                 {
-                    name: `Flight ${String.fromCharCode(65 + flights.length)}`, // A, B, C, etc.
+                    name: `Flight ${String.fromCharCode(65 + preFlights.length)}`,
                     min_handicap: lastFlight.max_handicap + 1,
                     max_handicap: newMaxHandicap
                 }
             ]);
             setTournamentData({
                 ...tournamentData,
-                number_of_flights: flights.length + 1
+                number_of_flights: preFlights.length + 1
             });
         }
     };
 
-    // Remove a flight
-    const removeFlight = (index) => {
-        if (flights.length > 1) {
-            const newFlights = flights.filter((_, i) => i !== index);
-            setFlights(newFlights);
+    // Remove a pre-flight
+    const removePreFlight = (index) => {
+        if (preFlights.length > 1) {
+            const newFlights = preFlights.filter((_, i) => i !== index);
+            setPreFlights(newFlights);
             setTournamentData({
                 ...tournamentData,
                 number_of_flights: newFlights.length
@@ -220,10 +236,11 @@ function TournamentCreationWizard() {
     const handleCreateTournament = async () => {
         setLoading(true);
         try {
-            // Prepare tournament data with flights if enabled
+            // Prepare tournament data based on flight method
             const tournamentPayload = {
                 ...tournamentData,
-                flights: tournamentData.use_flights ? flights : []
+                // Only include pre-flights if using pre-handicap method
+                flights: tournamentData.flight_method === 'pre_handicap' ? preFlights : []
             };
 
             const data = await post('/tournaments', tournamentPayload);
@@ -414,38 +431,93 @@ function TournamentCreationWizard() {
                             )}
                         </Grid>
 
+                        {/* Updated Flight Management Section */}
                         <Grid item xs={12}>
                             <Divider sx={{ my: 2 }} />
-                            <FormControlLabel
-                                control={
-                                    <Checkbox
-                                        checked={tournamentData.use_flights}
-                                        onChange={handleInputChange}
-                                        name="use_flights"
-                                    />
-                                }
-                                label={<Typography variant="subtitle1">Use Flights</Typography>}
-                            />
+                            <Typography variant="h6" gutterBottom>
+                                Flight Management
+                            </Typography>
 
-                            {tournamentData.use_flights && (
-                                <Box sx={{ mt: 2 }}>
+                            <FormControl component="fieldset">
+                                <FormLabel component="legend">Flight Method</FormLabel>
+                                <RadioGroup
+                                    name="flight_method"
+                                    value={tournamentData.flight_method}
+                                    onChange={handleInputChange}
+                                >
+                                    <FormControlLabel
+                                        value="none"
+                                        control={<Radio />}
+                                        label={
+                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                <GroupIcon sx={{ mr: 1 }} />
+                                                <Box>
+                                                    <Typography variant="body2" fontWeight="medium">
+                                                        No Flights
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        All participants compete together
+                                                    </Typography>
+                                                </Box>
+                                            </Box>
+                                        }
+                                    />
+                                    <FormControlLabel
+                                        value="pre_handicap"
+                                        control={<Radio />}
+                                        label={
+                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                <FlightIcon sx={{ mr: 1 }} />
+                                                <Box>
+                                                    <Typography variant="body2" fontWeight="medium">
+                                                        Pre-Flight by Handicap
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        Create flights based on existing handicaps before tournament starts
+                                                    </Typography>
+                                                </Box>
+                                            </Box>
+                                        }
+                                    />
+                                    <FormControlLabel
+                                        value="post_scores"
+                                        control={<Radio />}
+                                        label={
+                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                <TimerIcon sx={{ mr: 1 }} />
+                                                <Box>
+                                                    <Typography variant="body2" fontWeight="medium">
+                                                        Create Flights After First Round
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        Create flights based on scores from the first round
+                                                    </Typography>
+                                                </Box>
+                                            </Box>
+                                        }
+                                    />
+                                </RadioGroup>
+                            </FormControl>
+
+                            {/* Pre-Handicap Flight Configuration */}
+                            {tournamentData.flight_method === 'pre_handicap' && (
+                                <Box sx={{ mt: 3 }}>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                                        <Typography variant="subtitle2">
-                                            Configure Flights ({flights.length})
+                                        <Typography variant="subtitle1">
+                                            Configure Handicap-Based Flights ({preFlights.length})
                                         </Typography>
-                                        <Box>
-                                            <Button
-                                                startIcon={<AddIcon />}
-                                                onClick={addFlight}
-                                                disabled={flights.length >= 5}
-                                                size="small"
-                                            >
-                                                Add Flight
-                                            </Button>
-                                        </Box>
+                                        <Button
+                                            startIcon={<AddIcon />}
+                                            onClick={addPreFlight}
+                                            disabled={preFlights.length >= 6}
+                                            size="small"
+                                            variant="outlined"
+                                        >
+                                            Add Flight
+                                        </Button>
                                     </Box>
 
-                                    {flights.map((flight, index) => (
+                                    {preFlights.map((flight, index) => (
                                         <Paper key={index} sx={{ p: 2, mb: 2, backgroundColor: 'background.paper' }}>
                                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                 <Typography variant="subtitle2">
@@ -453,8 +525,8 @@ function TournamentCreationWizard() {
                                                 </Typography>
                                                 <IconButton
                                                     size="small"
-                                                    onClick={() => removeFlight(index)}
-                                                    disabled={flights.length <= 1}
+                                                    onClick={() => removePreFlight(index)}
+                                                    disabled={preFlights.length <= 1}
                                                 >
                                                     <RemoveIcon fontSize="small" />
                                                 </IconButton>
@@ -465,7 +537,7 @@ function TournamentCreationWizard() {
                                                         fullWidth
                                                         label="Flight Name"
                                                         value={flight.name}
-                                                        onChange={(e) => handleFlightChange(index, 'name', e.target.value)}
+                                                        onChange={(e) => handlePreFlightChange(index, 'name', e.target.value)}
                                                         size="small"
                                                     />
                                                 </Grid>
@@ -475,7 +547,7 @@ function TournamentCreationWizard() {
                                                         label="Min Handicap"
                                                         type="number"
                                                         value={flight.min_handicap}
-                                                        onChange={(e) => handleFlightChange(index, 'min_handicap', parseInt(e.target.value, 10))}
+                                                        onChange={(e) => handlePreFlightChange(index, 'min_handicap', parseInt(e.target.value, 10))}
                                                         size="small"
                                                         InputProps={{ inputProps: { min: 0, max: 36 } }}
                                                     />
@@ -486,7 +558,7 @@ function TournamentCreationWizard() {
                                                         label="Max Handicap"
                                                         type="number"
                                                         value={flight.max_handicap}
-                                                        onChange={(e) => handleFlightChange(index, 'max_handicap', parseInt(e.target.value, 10))}
+                                                        onChange={(e) => handlePreFlightChange(index, 'max_handicap', parseInt(e.target.value, 10))}
                                                         size="small"
                                                         InputProps={{ inputProps: { min: 0, max: 36 } }}
                                                     />
@@ -494,6 +566,32 @@ function TournamentCreationWizard() {
                                             </Grid>
                                         </Paper>
                                     ))}
+                                </Box>
+                            )}
+
+                            {/* Post-Scores Flight Configuration */}
+                            {tournamentData.flight_method === 'post_scores' && (
+                                <Box sx={{ mt: 3 }}>
+                                    <Alert severity="info" sx={{ mb: 2 }}>
+                                        <Typography variant="subtitle2" gutterBottom>
+                                            Flights will be created after the first round
+                                        </Typography>
+                                        <Typography variant="body2">
+                                            Participants will be automatically divided into flights based on their first-round scores.
+                                            You can manually adjust flights before subsequent rounds.
+                                        </Typography>
+                                    </Alert>
+
+                                    <TextField
+                                        label="Target Flight Size"
+                                        name="auto_flight_size"
+                                        type="number"
+                                        value={tournamentData.auto_flight_size}
+                                        onChange={handleInputChange}
+                                        InputProps={{ inputProps: { min: 8, max: 24 } }}
+                                        helperText="Approximate number of players per flight (system will adjust based on total participants)"
+                                        sx={{ maxWidth: 300 }}
+                                    />
                                 </Box>
                             )}
                         </Grid>
@@ -677,6 +775,7 @@ function TournamentCreationWizard() {
                                             {players.map((player) => (
                                                 <MenuItem key={player.id} value={player.id}>
                                                     {player.first_name} {player.last_name}
+                                                    {player.handicap !== null && ` (HCP: ${player.handicap})`}
                                                 </MenuItem>
                                             ))}
                                         </Select>
@@ -818,14 +917,19 @@ function TournamentCreationWizard() {
                                             {tournamentData.scoring_type !== 'gross' && ` (${tournamentData.handicap_allowance}% handicap allowance)`}
                                         </Typography>
                                     </Grid>
-                                    {tournamentData.use_flights && (
-                                        <Grid item xs={12}>
-                                            <Typography variant="subtitle2">Flights</Typography>
-                                            <Typography variant="body1" gutterBottom>
-                                                {flights.length} flights configured
-                                            </Typography>
+
+                                    {/* Flight Method Review */}
+                                    <Grid item xs={12}>
+                                        <Typography variant="subtitle2">Flight Method</Typography>
+                                        <Typography variant="body1" gutterBottom>
+                                            {tournamentData.flight_method === 'none' && 'No flights - all participants compete together'}
+                                            {tournamentData.flight_method === 'pre_handicap' && `Pre-flight by handicap (${preFlights.length} flights configured)`}
+                                            {tournamentData.flight_method === 'post_scores' && `Flights will be created after first round (target size: ${tournamentData.auto_flight_size} players)`}
+                                        </Typography>
+
+                                        {tournamentData.flight_method === 'pre_handicap' && (
                                             <Grid container spacing={1} sx={{ mt: 1 }}>
-                                                {flights.map((flight, index) => (
+                                                {preFlights.map((flight, index) => (
                                                     <Grid item xs={6} sm={4} md={3} key={index}>
                                                         <Chip
                                                             label={`${flight.name} (${flight.min_handicap}-${flight.max_handicap})`}
@@ -834,8 +938,9 @@ function TournamentCreationWizard() {
                                                     </Grid>
                                                 ))}
                                             </Grid>
-                                        </Grid>
-                                    )}
+                                        )}
+                                    </Grid>
+
                                     <Grid item xs={12} sm={6}>
                                         <Typography variant="subtitle2">Participant Type</Typography>
                                         <Typography variant="body1" gutterBottom>
