@@ -18,7 +18,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { format, addDays, parseISO } from 'date-fns';
-import env from '../../config/env';
+import { get, post } from '../../../services/api';
 
 // Create a date formatting utility
 const formatDate = (dateString, formatPattern) => {
@@ -35,6 +35,8 @@ function TournamentCreationWizard() {
     const navigate = useNavigate();
     const [activeStep, setActiveStep] = useState(0);
     const [loading, setLoading] = useState(false);
+    const [fetchingData, setFetchingData] = useState(true);
+    const [fetchError, setFetchError] = useState(null);
     const [courses, setCourses] = useState([]);
     const [players, setPlayers] = useState([]);
     const [teams, setTeams] = useState([]);
@@ -78,28 +80,24 @@ function TournamentCreationWizard() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Fetch courses
-                const coursesResponse = await fetch(`${env.API_BASE_URL}/courses`);
-                if (coursesResponse.ok) {
-                    const coursesData = await coursesResponse.json();
-                    setCourses(coursesData);
-                }
+                setFetchingData(true);
+                setFetchError(null);
 
-                // Fetch players
-                const playersResponse = await fetch(`${env.API_BASE_URL}/players`);
-                if (playersResponse.ok) {
-                    const playersData = await playersResponse.json();
-                    setPlayers(playersData);
-                }
+                // Fetch all data in parallel
+                const [coursesData, playersData, teamsData] = await Promise.all([
+                    get('/courses'),
+                    get('/players'),
+                    get('/teams')
+                ]);
 
-                // Fetch teams
-                const teamsResponse = await fetch(`${env.API_BASE_URL}/teams`);
-                if (teamsResponse.ok) {
-                    const teamsData = await teamsResponse.json();
-                    setTeams(teamsData);
-                }
+                setCourses(coursesData);
+                setPlayers(playersData);
+                setTeams(teamsData);
             } catch (error) {
                 console.error('Error fetching data:', error);
+                setFetchError(error.message || 'Failed to fetch required data');
+            } finally {
+                setFetchingData(false);
             }
         };
 
@@ -231,24 +229,11 @@ function TournamentCreationWizard() {
                 flights: tournamentData.use_flights ? flights : []
             };
 
-            const response = await fetch(`${env.API_BASE_URL}/tournaments`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(tournamentPayload)
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                navigate(`/tournaments/${data.id}`);
-            } else {
-                console.error('Failed to create tournament');
-                // Handle error
-            }
+            const data = await post('/tournaments', tournamentPayload);
+            navigate(`/tournaments/${data.id}`);
         } catch (error) {
             console.error('Error creating tournament:', error);
-            // Handle error
+            setFetchError(error.message || 'Failed to create tournament');
         } finally {
             setLoading(false);
         }
@@ -258,6 +243,47 @@ function TournamentCreationWizard() {
     const handleCancel = () => {
         navigate('/tournaments');
     };
+
+    // Show loading state while fetching initial data
+    if (fetchingData) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
+                <Box sx={{ textAlign: 'center' }}>
+                    <CircularProgress sx={{ mb: 2 }} />
+                    <Typography variant="body1">Loading tournament data...</Typography>
+                </Box>
+            </Box>
+        );
+    }
+
+    // Show error state if initial data fetch failed
+    if (fetchError && !courses.length && !players.length && !teams.length) {
+        return (
+            <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                    <Button
+                        startIcon={<ArrowBackIcon />}
+                        onClick={handleCancel}
+                        sx={{ mr: 2 }}
+                    >
+                        Back to Tournaments
+                    </Button>
+                    <Typography variant="h4" component="h1">
+                        Create Tournament
+                    </Typography>
+                </Box>
+
+                <Paper sx={{ p: 3, textAlign: 'center' }}>
+                    <Alert severity="error" sx={{ mb: 2 }}>
+                        {fetchError}
+                    </Alert>
+                    <Button variant="contained" onClick={() => window.location.reload()}>
+                        Retry
+                    </Button>
+                </Paper>
+            </Box>
+        );
+    }
 
     // Render step content based on active step
     const getStepContent = (step) => {
@@ -867,6 +893,12 @@ function TournamentCreationWizard() {
                                         Please complete all required fields before creating the tournament.
                                     </Alert>
                                 )}
+
+                            {fetchError && (
+                                <Alert severity="error" sx={{ mt: 2 }}>
+                                    {fetchError}
+                                </Alert>
+                            )}
 
                         </Grid>
                     </Grid>

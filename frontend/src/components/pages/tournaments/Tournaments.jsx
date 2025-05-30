@@ -10,7 +10,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
-import { get } from '../../services/api'; // Import API service
+import { get } from '../../../services/api'; // Import API service
 
 function Tournaments() {
     const [tournaments, setTournaments] = useState([]);

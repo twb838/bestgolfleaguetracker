@@ -16,7 +16,7 @@ import {
     Refresh as RefreshIcon
 } from '@mui/icons-material';
 import format from 'date-fns/format';
-import { get, post } from '../../../services/api'; // Import API service
+import { get, post } from '../../../../services/api'; // Import API service
 
 const MatchHeader = ({
     match,

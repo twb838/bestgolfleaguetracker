@@ -17,7 +17,7 @@ import {
 } from '@mui/icons-material';
 
 import MatchHeader from './MatchScoreEntry/MatchHeader';
-import { get, post, put, del } from '../../services/api'; // Import API service
+import { get, post, put, del } from '../../../services/api'; // Import API service
 
 // Add this function to sort holes by handicap for pop application
 

@@ -58,10 +58,11 @@ import {
     EmojiEventsOutlined as TrophyOutlineIcon,
     Leaderboard as LeaderboardIcon,
     PrintOutlined as PrintIcon,
-    TrendingUp as TrendingUpIcon
+    TrendingUp as TrendingUpIcon,
+    Settings as SettingsIcon
 } from '@mui/icons-material';
 import { format, parseISO, addDays } from 'date-fns';
-import { get, post, put, del } from '../../services/api'; // Import API service
+import { get, post, put, del } from '../../../services/api'; // Import API service
 
 function LeagueManagement() {
     const { leagueId } = useParams();
@@ -1046,33 +1047,44 @@ function LeagueManagement() {
                 <Button startIcon={<ArrowBackIcon />} onClick={handleBackClick}>
                     Back to Leagues
                 </Button>
-                <Button
-                    startIcon={<PrintIcon />}
-                    onClick={() => {
-                        // Include week parameter in print URL if available
-                        const printUrl = selectedWeek
-                            ? `/leagues/${leagueId}/print?week=${selectedWeek.week_number}`
-                            : `/leagues/${leagueId}/print`;
-                        navigate(printUrl);
-                    }}
-                    variant="outlined"
-                >
-                    Printer-Friendly View
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                        onClick={() => navigate(`/leagues/${leagueId}/settings`)}
+                        variant="outlined"
+                        sx={{
+                            minWidth: '48px',
+                            width: '48px',
+                            height: '48px',
+                            padding: 0
+                        }}
+                    >
+                        <SettingsIcon />
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            // Include week parameter in print URL if available
+                            const printUrl = selectedWeek
+                                ? `/leagues/${leagueId}/print?week=${selectedWeek.week_number}`
+                                : `/leagues/${leagueId}/print`;
+                            navigate(printUrl);
+                        }}
+                        variant="outlined"
+                        sx={{
+                            minWidth: '48px',
+                            width: '48px',
+                            height: '48px',
+                            padding: 0
+                        }}
+                    >
+                        <PrintIcon />
+                    </Button>
+                </Box>
             </Box>
 
             <Box sx={{ mb: 4 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Typography variant="h4" component="h1" gutterBottom>
                         {league.name}
-                        {selectedWeek && (
-                            <Chip
-                                size="small"
-                                label={`Week ${selectedWeek.week_number}${isMostRecentWeek(selectedWeek) ? ' (Latest)' : ''}`}
-                                color={isMostRecentWeek(selectedWeek) ? 'primary' : 'default'}
-                                sx={{ ml: 2 }}
-                            />
-                        )}
                     </Typography>
                 </Box>
 
@@ -1128,14 +1140,6 @@ function LeagueManagement() {
                                                             <Typography>
                                                                 Week {week.week_number} ({formatDate(week.start_date, 'MMM d')} - {formatDate(week.end_date, 'MMM d')})
                                                             </Typography>
-                                                            {isRecent && (
-                                                                <Chip
-                                                                    size="small"
-                                                                    label="Latest"
-                                                                    color="primary"
-                                                                    sx={{ ml: 1, height: 20 }}
-                                                                />
-                                                            )}
                                                         </Box>
                                                     </MenuItem>
                                                 );
@@ -1178,9 +1182,6 @@ function LeagueManagement() {
                                         <Typography variant="h6">
                                             Week {selectedWeek.week_number}
                                         </Typography>
-                                        {isMostRecentWeek(selectedWeek) && (
-                                            <Chip size="small" label="Latest Week" color="primary" />
-                                        )}
                                     </Box>
                                     <Button
                                         variant="outlined"

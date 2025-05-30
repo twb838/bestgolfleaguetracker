@@ -24,15 +24,17 @@ import './App.css';
 // Import pages
 import Teams from './pages/Teams';
 import Courses from './pages/Courses';
-import Leagues from './pages/Leagues';
-import LeagueManagement from './pages/LeagueManagement';
-import MatchScoreEntry from './pages/MatchScoreEntry';
+import Leagues from './pages/leagues/Leagues';
+import LeagueManagement from './pages/leagues/LeagueManagement';
+import MatchScoreEntry from './pages/leagues/MatchScoreEntry';
 import Players from './pages/Players';
-import TeamScoreEntry from './pages/TeamScoreEntry';
-import PrinterFriendlyLeagueSummary from './pages/PrinterFriendlyLeagueSummary';
-import Tournaments from './pages/Tournaments';
-import TournamentManagement from './pages/TournamentManagement';
-import TournamentCreationWizard from './pages/TournamentCreationWizard';
+import TeamScoreEntry from './pages/leagues/TeamScoreEntry';
+import PrinterFriendlyLeagueSummary from './pages/leagues/PrinterFriendlyLeagueSummary';
+import Tournaments from './pages/tournaments/Tournaments';
+import TournamentManagement from './pages/tournaments/TournamentManagement';
+import TournamentCreationWizard from './pages/tournaments/TournamentCreationWizard';
+import LeagueSettings from './pages/leagues/LeagueSettings';
+
 
 // Create a layout wrapper component
 const AppLayout = ({ children }) => {
@@ -304,6 +306,7 @@ function App() {
                                 <TournamentManagement />
                             </ProtectedRoute>
                         } />
+                        <Route path="/leagues/:leagueId/settings" element={<LeagueSettings />} />
 
                         {/* Catch all */}
                         <Route path="*" element={<Navigate to="/" replace />} />

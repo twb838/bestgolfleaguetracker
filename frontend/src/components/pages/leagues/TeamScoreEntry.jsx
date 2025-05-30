@@ -5,7 +5,7 @@ import {
     Container, TextField, Grid, Divider
 } from '@mui/material';
 import { Save as SaveIcon } from '@mui/icons-material';
-import { get, post } from '../../services/api'; // Import API service
+import { get, post } from '../../../services/api'; // Import API service
 
 const TeamScoreEntry = () => {
     const { matchId, token } = useParams();

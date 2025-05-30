@@ -32,7 +32,7 @@ import {
     GolfCourse as CourseIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { get, post, put, del } from '../../services/api'; // Import API service
+import { get, post, put, del } from '../../../services/api'; // Import API service
 
 function Leagues() {
     const navigate = useNavigate();

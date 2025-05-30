@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Typography, Button, Box, Paper, Grid, CircularProgress,
-    Tabs, Tab, Chip
+    Tabs, Tab, Chip, Alert
 } from '@mui/material';
 import {
     ArrowBack as ArrowBackIcon,
@@ -13,7 +13,7 @@ import {
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format, parseISO, addDays } from 'date-fns';
-import env from '../../config/env';
+import { get } from '../../../services/api';
 
 // Create a date formatting utility
 const formatDate = (dateString, formatPattern) => {
@@ -31,6 +31,7 @@ function TournamentManagement() {
     const navigate = useNavigate();
 
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [tournament, setTournament] = useState(null);
     const [activeTab, setActiveTab] = useState(0);
 
@@ -41,15 +42,13 @@ function TournamentManagement() {
     const fetchTournament = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`${env.API_BASE_URL}/tournaments/${tournamentId}`);
-            if (response.ok) {
-                const data = await response.json();
-                setTournament(data);
-            } else {
-                console.error('Failed to fetch tournament details');
-            }
+            setError(null);
+
+            const data = await get(`/tournaments/${tournamentId}`);
+            setTournament(data);
         } catch (error) {
             console.error('Error fetching tournament:', error);
+            setError(error.message || 'Failed to fetch tournament details');
         } finally {
             setLoading(false);
         }
@@ -61,6 +60,10 @@ function TournamentManagement() {
 
     const handleBackClick = () => {
         navigate('/tournaments');
+    };
+
+    const handleRetry = () => {
+        fetchTournament();
     };
 
     // Get status chip for tournament
@@ -84,6 +87,43 @@ function TournamentManagement() {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
                 <CircularProgress />
+            </Box>
+        );
+    }
+
+    if (error) {
+        return (
+            <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                    <Button
+                        startIcon={<ArrowBackIcon />}
+                        onClick={handleBackClick}
+                        sx={{ mr: 2 }}
+                    >
+                        Back to Tournaments
+                    </Button>
+                    <Typography variant="h4" component="h1">
+                        Tournament Management
+                    </Typography>
+                </Box>
+                <Paper sx={{ p: 3, textAlign: 'center' }}>
+                    <Alert severity="error" sx={{ mb: 2 }}>
+                        {error}
+                    </Alert>
+                    <Button
+                        variant="contained"
+                        onClick={handleRetry}
+                        sx={{ mr: 2 }}
+                    >
+                        Retry
+                    </Button>
+                    <Button
+                        variant="outlined"
+                        onClick={handleBackClick}
+                    >
+                        Back to Tournaments
+                    </Button>
+                </Paper>
             </Box>
         );
     }

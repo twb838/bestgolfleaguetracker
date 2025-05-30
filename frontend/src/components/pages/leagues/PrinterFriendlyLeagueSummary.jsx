@@ -22,7 +22,7 @@ import {
     Print as PrintIcon
 } from '@mui/icons-material';
 import { format, parseISO } from 'date-fns';
-import env from '../../config/env';
+import env from '../../../config/env';
 
 const PrinterFriendlyLeagueSummary = () => {
     const { leagueId } = useParams();
