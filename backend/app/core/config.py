@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     DB_USER: str = "user"
     DB_PASSWORD: str = "password"
     DB_NAME: str = "database"
+    SECRET_KEY: str = "your_secret_key"
     
     class Config:
         env_file = ".env"

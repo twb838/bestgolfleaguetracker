@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     DB_HOST: str = "localhost"
     DB_PORT: str = "3306"
     DB_NAME: str = "golf_db"
+    SECRET_KEY: str = "your_secret_key"
 
     model_config = SettingsConfigDict(
         env_file=".env",
