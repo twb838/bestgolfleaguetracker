@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import {
     Typography,
@@ -28,14 +28,8 @@ const Rankings = ({ league }) => {
     });
     const [loadingRankings, setLoadingRankings] = useState(false);
 
-    useEffect(() => {
-        if (league?.id) {
-            fetchRankingsData();
-        }
-    }, [league?.id]);
-
-    // Update fetchRankingsData to use API service
-    const fetchRankingsData = async () => {
+    // Update fetchRankingsData to use API service and useCallback
+    const fetchRankingsData = useCallback(async () => {
         if (!league?.id) return;
 
         setLoadingRankings(true);
@@ -63,7 +57,13 @@ const Rankings = ({ league }) => {
         } finally {
             setLoadingRankings(false);
         }
-    };
+    }, [league?.id, leagueId]);
+
+    useEffect(() => {
+        if (league?.id) {
+            fetchRankingsData();
+        }
+    }, [league?.id, fetchRankingsData]);
 
     // Date formatting utility
     const formatDate = (dateString, formatPattern) => {

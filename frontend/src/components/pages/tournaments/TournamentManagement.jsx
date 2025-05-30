@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Typography, Button, Box, Paper, Grid, CircularProgress,
+    Typography, Button, Box, Paper, CircularProgress,
     Tabs, Tab, Chip, Alert
 } from '@mui/material';
 import {
     ArrowBack as ArrowBackIcon,
     Event as EventIcon,
-    EmojiEvents as TrophyIcon,
     Groups as GroupsIcon,
     GolfCourse as GolfCourseIcon,
     Leaderboard as LeaderboardIcon
@@ -35,11 +34,7 @@ function TournamentManagement() {
     const [tournament, setTournament] = useState(null);
     const [activeTab, setActiveTab] = useState(0);
 
-    useEffect(() => {
-        fetchTournament();
-    }, [tournamentId]);
-
-    const fetchTournament = async () => {
+    const fetchTournament = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
@@ -52,7 +47,11 @@ function TournamentManagement() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [tournamentId]);
+
+    useEffect(() => {
+        fetchTournament();
+    }, [fetchTournament]);
 
     const handleTabChange = (event, newValue) => {
         setActiveTab(newValue);

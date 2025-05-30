@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import {
     Box, Paper, Typography, Button, Alert, CircularProgress,
-    Container, TextField, Grid, Divider
+    Container, TextField, Grid
 } from '@mui/material';
 import { Save as SaveIcon } from '@mui/icons-material';
 import { get, post } from '../../../services/api'; // Import API service
@@ -110,7 +110,6 @@ const TeamScoreEntry = () => {
         // If the value is valid (not empty), auto-save and move to next field
         if (value !== '') {
             // Identify current hole and player
-            const currentHole = holes.find(h => h.id === holeId);
             const currentHoleIndex = holes.findIndex(h => h.id === holeId);
 
             // Auto-save this score

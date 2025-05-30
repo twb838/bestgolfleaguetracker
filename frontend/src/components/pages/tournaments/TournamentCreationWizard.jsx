@@ -2,19 +2,16 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Typography, Stepper, Step, StepLabel, Button, Paper,
     TextField, FormControl, InputLabel, Select, MenuItem,
-    FormControlLabel, Checkbox, FormGroup, Radio, RadioGroup,
+    FormControlLabel, Checkbox, Radio, RadioGroup,
     FormLabel, Grid, Divider, Alert, Chip, IconButton,
     CircularProgress, Table, TableBody, TableCell, TableContainer,
-    TableHead, TableRow, List, ListItem
+    TableHead, TableRow
 } from '@mui/material';
 import {
     ArrowBack as ArrowBackIcon,
-    Event as EventIcon,
     Add as AddIcon,
     Remove as RemoveIcon,
     EmojiEvents as TrophyIcon,
-    Check as CheckIcon,
-    Groups as GroupsIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { format, addDays, parseISO } from 'date-fns';
