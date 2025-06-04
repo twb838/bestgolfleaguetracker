@@ -131,6 +131,9 @@ function LeagueManagement() {
     // Add state to track if we've initialized the week selection
     const [weekSelectionInitialized, setWeekSelectionInitialized] = useState(false);
 
+    // Add this state variable with your other state declarations
+    const [shuffleCount, setShuffleCount] = useState(0);
+
     useEffect(() => {
         // If league data wasn't passed via navigation state, fetch it
         if (!league) {
@@ -433,6 +436,7 @@ function LeagueManagement() {
 
     const handleGenerateMatchupsChange = (event) => {
         setGenerateMatchups(event.target.checked);
+        setShuffleCount(0); // Reset shuffle count
 
         // If enabled, set default values
         if (event.target.checked) {
@@ -448,7 +452,7 @@ function LeagueManagement() {
             });
 
             if (allTeamIds.length > 0) {
-                generatePossibleMatchups(allTeamIds, defaultCourse, newWeek.start_date);
+                generatePossibleMatchups(allTeamIds, defaultCourse, newWeek.start_date, 0);
             }
         } else {
             setGeneratedMatchups([]);
@@ -459,6 +463,8 @@ function LeagueManagement() {
         const { name, value } = e.target;
 
         if (name === "selectedTeams") {
+            // Reset shuffle count when teams change
+            setShuffleCount(0);
             // For multiple select
             setMatchupConfig({
                 ...matchupConfig,
@@ -469,9 +475,12 @@ function LeagueManagement() {
             generatePossibleMatchups(
                 Array.isArray(value) ? value : [value],
                 matchupConfig.selectedCourse,
-                matchupConfig.matchDate
+                matchupConfig.matchDate,
+                0 // Reset shuffle seed
             );
         } else {
+            // Reset shuffle count when other settings change
+            setShuffleCount(0);
             setMatchupConfig({
                 ...matchupConfig,
                 [name]: value
@@ -482,163 +491,114 @@ function LeagueManagement() {
                 generatePossibleMatchups(
                     matchupConfig.selectedTeams,
                     name === "selectedCourse" ? value : matchupConfig.selectedCourse,
-                    name === "matchDate" ? value : matchupConfig.matchDate
+                    name === "matchDate" ? value : matchupConfig.matchDate,
+                    0 // Reset shuffle seed
                 );
             }
         }
     };
 
-    // Update generatePossibleMatchups to use API service
-    const generatePossibleMatchups = async (selectedTeamIds, courseId, matchDate) => {
+    // Add this function to reshuffle matchups
+    const reshuffleMatchups = () => {
+        if (matchupConfig.selectedTeams && matchupConfig.selectedTeams.length >= 2) {
+            setShuffleCount(prev => prev + 1); // Force re-generation with different seed
+            generatePossibleMatchups(
+                matchupConfig.selectedTeams,
+                matchupConfig.selectedCourse,
+                matchupConfig.matchDate,
+                shuffleCount + 1 // Pass shuffle count as seed
+            );
+        }
+    };
+
+    // Update the generatePossibleMatchups function to accept a shuffle seed
+    const generatePossibleMatchups = async (selectedTeamIds, courseId, matchDate, shuffleSeed = 0) => {
         if (!selectedTeamIds || selectedTeamIds.length < 2) {
             setGeneratedMatchups([]);
             return;
         }
 
         try {
-            // First, fetch ALL historical matches for these teams across all weeks
             setMatchupWarning(null);
+
+            // Fetch historical matches for these teams
             const historicalMatches = await get(`/leagues/${leagueId}/matches`);
 
-            // Get the selected teams from the league teams
             const selectedTeams = league.teams.filter(team => selectedTeamIds.includes(team.id));
             const selectedCourse = league.courses.find(course => course.id === courseId);
 
-            // Create a matchup history tracking structure - key is teamA-teamB (sorted), value is count
+            // Build matchup history - track how many times each pair has played
             const matchupHistory = new Map();
-
-            // Also track the weeks where teams played each other
             const matchupDetails = new Map();
 
-            // Process historical matches to build matchup history
+            // Process historical matches
             historicalMatches.forEach(match => {
-                // Create a unique key for each team pairing regardless of home/away
                 const teamIds = [match.home_team_id, match.away_team_id].sort();
                 if (!selectedTeamIds.includes(teamIds[0]) || !selectedTeamIds.includes(teamIds[1])) {
-                    return; // Skip matches that don't include our selected teams
+                    return;
                 }
 
                 const pairingKey = teamIds.join('-');
+                matchupHistory.set(pairingKey, (matchupHistory.get(pairingKey) || 0) + 1);
 
-                // Track count of matchups
-                if (!matchupHistory.has(pairingKey)) {
-                    matchupHistory.set(pairingKey, 1);
-                    matchupDetails.set(pairingKey, [{
-                        week_id: match.week_id,
-                        match_date: match.match_date
-                    }]);
-                } else {
-                    matchupHistory.set(pairingKey, matchupHistory.get(pairingKey) + 1);
-                    matchupDetails.get(pairingKey).push({
-                        week_id: match.week_id,
-                        match_date: match.match_date
-                    });
+                if (!matchupDetails.has(pairingKey)) {
+                    matchupDetails.set(pairingKey, []);
                 }
+                matchupDetails.get(pairingKey).push({
+                    week_id: match.week_id,
+                    match_date: match.match_date
+                });
             });
 
-            console.log("Matchup history:", matchupHistory);
+            console.log("Matchup history:", Object.fromEntries(matchupHistory));
 
-            // Determine if we have an odd number of teams
-            const hasOddTeams = selectedTeams.length % 2 !== 0;
+            // Handle odd number of teams with randomization
             let byeTeam = null;
+            let teamsForPairing = [...selectedTeams];
 
-            // If odd number of teams, we'll need to give one a bye
-            if (hasOddTeams) {
-                // Find the team that has had the fewest byes
-                // This would ideally be tracked in your database
-                // For now, just pick the last team
-                byeTeam = selectedTeams.pop();
+            if (teamsForPairing.length % 2 !== 0) {
+                // Randomize bye team selection based on shuffle seed
+                const seededRandom = createSeededRandom(shuffleSeed);
+                const byeIndex = Math.floor(seededRandom() * teamsForPairing.length);
+                byeTeam = teamsForPairing.splice(byeIndex, 1)[0];
             }
 
-            // Create all possible pairings ranked by how many times they've played
-            const possiblePairings = [];
-            for (let i = 0; i < selectedTeams.length; i++) {
-                for (let j = i + 1; j < selectedTeams.length; j++) {
-                    const team1 = selectedTeams[i];
-                    const team2 = selectedTeams[j];
-                    const pairingKey = [team1.id, team2.id].sort().join('-');
-                    const matchupCount = matchupHistory.get(pairingKey) || 0;
-                    const matchupInfo = matchupDetails.get(pairingKey) || [];
+            // Generate optimal pairings using improved algorithm with randomization
+            const optimalPairings = findOptimalPairings(teamsForPairing, matchupHistory, shuffleSeed);
 
-                    possiblePairings.push({
-                        team1,
-                        team2,
-                        pairingKey,
-                        matchupCount,
-                        matchupInfo
-                    });
-                }
-            }
-
-            // Sort pairings by the number of times they've played (ascending)
-            possiblePairings.sort((a, b) => a.matchupCount - b.matchupCount);
-
-            // Use a greedy algorithm to select pairings
+            // Convert to matchup format
             const matchups = [];
-            const usedTeams = new Set();
-            let hasDuplicatePairings = false;
+            let hasAnyDuplicates = false;
 
-            // First, try to use teams that haven't played each other at all
-            for (const pairing of possiblePairings) {
-                if (!usedTeams.has(pairing.team1.id) && !usedTeams.has(pairing.team2.id)) {
-                    const isDuplicate = pairing.matchupCount > 0;
+            optimalPairings.forEach(pairing => {
+                const pairingKey = [pairing.team1.id, pairing.team2.id].sort().join('-');
+                const previousMatchups = matchupHistory.get(pairingKey) || 0;
+                const isDuplicate = previousMatchups > 0;
 
-                    matchups.push({
-                        home_team_id: pairing.team1.id,
-                        home_team_name: pairing.team1.name,
-                        away_team_id: pairing.team2.id,
-                        away_team_name: pairing.team2.name,
-                        course_id: courseId,
-                        course_name: selectedCourse ? selectedCourse.name : 'Not selected',
-                        match_date: matchDate,
-                        previous_matchups: pairing.matchupCount,
-                        is_duplicate: isDuplicate,
-                        matchup_history: pairing.matchupInfo,
-                    });
-
-                    usedTeams.add(pairing.team1.id);
-                    usedTeams.add(pairing.team2.id);
-
-                    if (isDuplicate) {
-                        hasDuplicatePairings = true;
-                    }
+                if (isDuplicate) {
+                    hasAnyDuplicates = true;
                 }
-            }
 
-            // If there are unused teams, pair them even if they've played before
-            const unusedTeams = selectedTeams.filter(team => !usedTeams.has(team.id));
-            if (unusedTeams.length > 0) {
-                // Pair remaining teams optimally
-                for (let i = 0; i < unusedTeams.length; i += 2) {
-                    if (i + 1 < unusedTeams.length) {
-                        const team1 = unusedTeams[i];
-                        const team2 = unusedTeams[i + 1];
-                        const pairingKey = [team1.id, team2.id].sort().join('-');
-                        const matchupCount = matchupHistory.get(pairingKey) || 0;
-                        const matchupInfo = matchupDetails.get(pairingKey) || [];
+                // Randomize home/away assignment
+                const seededRandom = createSeededRandom(shuffleSeed + pairing.team1.id + pairing.team2.id);
+                const homeFirst = seededRandom() > 0.5;
 
-                        matchups.push({
-                            home_team_id: team1.id,
-                            home_team_name: team1.name,
-                            away_team_id: team2.id,
-                            away_team_name: team2.name,
-                            course_id: courseId,
-                            course_name: selectedCourse ? selectedCourse.name : 'Not selected',
-                            match_date: matchDate,
-                            previous_matchups: matchupCount,
-                            is_duplicate: matchupCount > 0,
-                            matchup_history: matchupInfo,
-                            is_forced: true // This indicates we had to force this pairing
-                        });
+                matchups.push({
+                    home_team_id: homeFirst ? pairing.team1.id : pairing.team2.id,
+                    home_team_name: homeFirst ? pairing.team1.name : pairing.team2.name,
+                    away_team_id: homeFirst ? pairing.team2.id : pairing.team1.id,
+                    away_team_name: homeFirst ? pairing.team2.name : pairing.team1.name,
+                    course_id: courseId,
+                    course_name: selectedCourse ? selectedCourse.name : 'Not selected',
+                    match_date: matchDate,
+                    previous_matchups: previousMatchups,
+                    is_duplicate: isDuplicate,
+                    matchup_history: matchupDetails.get(pairingKey) || [],
+                    starting_hole: null // Will be assigned by backend
+                });
+            });
 
-                        if (matchupCount > 0) {
-                            hasDuplicatePairings = true;
-                        }
-                    }
-                }
-            }
-
-            // If there was a bye team, add it to the generated data
+            // Add bye team if exists
             if (byeTeam) {
                 matchups.push({
                     home_team_id: byeTeam.id,
@@ -648,59 +608,220 @@ function LeagueManagement() {
                     course_id: null,
                     course_name: "N/A - Bye Week",
                     match_date: matchDate,
-                    is_bye: true
+                    is_bye: true,
+                    previous_matchups: 0,
+                    is_duplicate: false,
+                    matchup_history: []
                 });
             }
 
             setGeneratedMatchups(matchups);
 
-            // Set warning message if needed
-            if (hasDuplicatePairings) {
-                setMatchupWarning(
-                    "Some teams will play against each other more than once because not all matchups can be unique. " +
-                    "Duplicate matchups are highlighted."
-                );
+            // Analyze the results and provide feedback
+            const uniqueMatchups = matchups.filter(m => !m.is_duplicate && !m.is_bye).length;
+            const duplicateMatchups = matchups.filter(m => m.is_duplicate).length;
+
+            if (hasAnyDuplicates) {
+                if (duplicateMatchups < matchups.length / 2) {
+                    setMatchupWarning(
+                        `${duplicateMatchups} out of ${matchups.length - (byeTeam ? 1 : 0)} matchups are repeats. ` +
+                        `This is optimal given the match history. Try reshuffling for different home/away assignments.`
+                    );
+                } else {
+                    setMatchupWarning(
+                        `${duplicateMatchups} out of ${matchups.length - (byeTeam ? 1 : 0)} matchups are repeats. ` +
+                        `Consider rotating different teams or try reshuffling for alternative pairings.`
+                    );
+                }
+            } else if (uniqueMatchups > 0) {
+                if (shuffleSeed > 0) {
+                    setMatchupWarning(`All unique matchups found! (Shuffle #${shuffleSeed})`);
+                } else {
+                    setMatchupWarning(null);
+                }
             }
+
         } catch (error) {
             console.error("Error generating matchups:", error);
-            setMatchupWarning("Error fetching match history. Matches may not be optimally paired.");
-
-            // Fall back to basic matchup generation without historical data
-            basicMatchupGeneration(selectedTeamIds, courseId, matchDate);
+            setMatchupWarning("Error fetching match history. Using basic pairing algorithm.");
+            basicMatchupGeneration(selectedTeamIds, courseId, matchDate, shuffleSeed);
         }
     };
 
-    // Fallback method if API call fails
-    const basicMatchupGeneration = (selectedTeamIds, courseId, matchDate) => {
-        // Similar to original implementation, but without historical data
-        const selectedTeams = league.teams.filter(team => selectedTeamIds.includes(team.id));
-        const selectedCourse = league.courses.find(course => course.id === courseId);
+    // Add seeded random number generator for consistent randomization
+    const createSeededRandom = (seed) => {
+        let currentSeed = seed;
+        return function () {
+            currentSeed = (currentSeed * 9301 + 49297) % 233280;
+            return currentSeed / 233280;
+        };
+    };
 
-        // Create simple pairings
-        const matchups = [];
-        const hasOddTeams = selectedTeams.length % 2 !== 0;
-        let byeTeam = null;
+    // Update the findOptimalPairings function to include randomization
+    const findOptimalPairings = (teams, matchupHistory, shuffleSeed = 0) => {
+        const n = teams.length;
+        if (n === 0) return [];
 
-        if (hasOddTeams) {
-            byeTeam = selectedTeams.pop();
+        // For small numbers of teams, we can use exact algorithms with randomization
+        if (n <= 8) {
+            return findOptimalPairingsExact(teams, matchupHistory, shuffleSeed);
+        } else {
+            // For larger numbers, use a greedy approach with optimization and randomization
+            return findOptimalPairingsGreedy(teams, matchupHistory, shuffleSeed);
+        }
+    };
+
+    // Update exact algorithm to include randomization among equally good solutions
+    const findOptimalPairingsExact = (teams, matchupHistory, shuffleSeed = 0) => {
+        if (teams.length === 0) return [];
+        if (teams.length === 2) {
+            return [{ team1: teams[0], team2: teams[1] }];
         }
 
-        // Simple pairing algorithm
-        for (let i = 0; i < selectedTeams.length; i += 2) {
-            if (i + 1 < selectedTeams.length) {
-                matchups.push({
-                    home_team_id: selectedTeams[i].id,
-                    home_team_name: selectedTeams[i].name,
-                    away_team_id: selectedTeams[i + 1].id,
-                    away_team_name: selectedTeams[i + 1].name,
-                    course_id: courseId,
-                    course_name: selectedCourse ? selectedCourse.name : 'Not selected',
-                    match_date: matchDate
+        // Generate all possible ways to pair the teams
+        const allPairings = generateAllPairings(teams);
+
+        // Score each complete pairing set and group by score
+        const pairingsByScore = new Map();
+        let bestScore = Infinity;
+
+        allPairings.forEach(pairingSet => {
+            const score = scorePairingSet(pairingSet, matchupHistory);
+            if (score < bestScore) {
+                bestScore = score;
+            }
+
+            if (!pairingsByScore.has(score)) {
+                pairingsByScore.set(score, []);
+            }
+            pairingsByScore.get(score).push(pairingSet);
+        });
+
+        // Get all pairings with the best score
+        const bestPairings = pairingsByScore.get(bestScore) || [];
+
+        if (bestPairings.length === 0) return [];
+
+        // Randomly select from the best options using seeded random
+        const seededRandom = createSeededRandom(shuffleSeed);
+        const randomIndex = Math.floor(seededRandom() * bestPairings.length);
+
+        return bestPairings[randomIndex];
+    };
+
+    // Update greedy algorithm to include more randomization
+    const findOptimalPairingsGreedy = (teams, matchupHistory, shuffleSeed = 0) => {
+        // Create all possible pairings with their scores
+        const possiblePairings = [];
+
+        for (let i = 0; i < teams.length; i++) {
+            for (let j = i + 1; j < teams.length; j++) {
+                const team1 = teams[i];
+                const team2 = teams[j];
+                const pairingKey = [team1.id, team2.id].sort().join('-');
+                const previousMatchups = matchupHistory.get(pairingKey) || 0;
+
+                possiblePairings.push({
+                    team1,
+                    team2,
+                    pairingKey,
+                    score: previousMatchups,
+                    used: false
                 });
             }
         }
 
-        // Add bye team
+        // Group pairings by score (number of previous matchups)
+        const pairingsByScore = possiblePairings.reduce((groups, pairing) => {
+            const score = pairing.score;
+            if (!groups[score]) {
+                groups[score] = [];
+            }
+            groups[score].push(pairing);
+            return groups;
+        }, {});
+
+        // Sort score groups (prefer lower scores = fewer previous matchups)
+        const sortedScores = Object.keys(pairingsByScore).map(Number).sort((a, b) => a - b);
+
+        // Use randomized selection within each score group
+        const seededRandom = createSeededRandom(shuffleSeed);
+        const result = [];
+        const usedTeams = new Set();
+        const targetPairings = teams.length / 2;
+
+        for (const score of sortedScores) {
+            if (result.length >= targetPairings) break;
+
+            // Shuffle pairings within this score group
+            const pairingsInGroup = [...pairingsByScore[score]];
+            shuffleArraySeeded(pairingsInGroup, seededRandom);
+
+            for (const pairing of pairingsInGroup) {
+                if (result.length >= targetPairings) break;
+
+                if (!usedTeams.has(pairing.team1.id) && !usedTeams.has(pairing.team2.id)) {
+                    result.push(pairing);
+                    usedTeams.add(pairing.team1.id);
+                    usedTeams.add(pairing.team2.id);
+                }
+            }
+        }
+
+        return result;
+    };
+
+    // Helper function to shuffle array with seeded random
+    const shuffleArraySeeded = (array, seededRandom) => {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(seededRandom() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    };
+
+    // Update basic generation to include randomization
+    const basicMatchupGeneration = (selectedTeamIds, courseId, matchDate, shuffleSeed = 0) => {
+        const selectedTeams = league.teams.filter(team => selectedTeamIds.includes(team.id));
+        const selectedCourse = league.courses.find(course => course.id === courseId);
+
+        const matchups = [];
+        let byeTeam = null;
+
+        // Create a copy for manipulation
+        let teamsToShuffle = [...selectedTeams];
+
+        // Handle odd teams with randomization
+        if (teamsToShuffle.length % 2 !== 0) {
+            const seededRandom = createSeededRandom(shuffleSeed);
+            const byeIndex = Math.floor(seededRandom() * teamsToShuffle.length);
+            byeTeam = teamsToShuffle.splice(byeIndex, 1)[0];
+        }
+
+        // Shuffle teams using seeded random
+        const seededRandom = createSeededRandom(shuffleSeed + 100);
+        shuffleArraySeeded(teamsToShuffle, seededRandom);
+
+        for (let i = 0; i < teamsToShuffle.length; i += 2) {
+            if (i + 1 < teamsToShuffle.length) {
+                // Randomize home/away assignment
+                const homeAwayRandom = createSeededRandom(shuffleSeed + i);
+                const homeFirst = homeAwayRandom() > 0.5;
+
+                matchups.push({
+                    home_team_id: homeFirst ? teamsToShuffle[i].id : teamsToShuffle[i + 1].id,
+                    home_team_name: homeFirst ? teamsToShuffle[i].name : teamsToShuffle[i + 1].name,
+                    away_team_id: homeFirst ? teamsToShuffle[i + 1].id : teamsToShuffle[i].id,
+                    away_team_name: homeFirst ? teamsToShuffle[i + 1].name : teamsToShuffle[i].name,
+                    course_id: courseId,
+                    course_name: selectedCourse ? selectedCourse.name : 'Not selected',
+                    match_date: matchDate,
+                    previous_matchups: 0, // Unknown in fallback mode
+                    is_duplicate: false,
+                    matchup_history: []
+                });
+            }
+        }
+
         if (byeTeam) {
             matchups.push({
                 home_team_id: byeTeam.id,
@@ -710,11 +831,16 @@ function LeagueManagement() {
                 course_id: null,
                 course_name: "N/A - Bye Week",
                 match_date: matchDate,
-                is_bye: true
+                is_bye: true,
+                previous_matchups: 0,
+                is_duplicate: false,
+                matchup_history: []
             });
         }
 
         setGeneratedMatchups(matchups);
+        const suffix = shuffleSeed > 0 ? ` (Shuffle #${shuffleSeed})` : "";
+        setMatchupWarning(`Using basic pairing - match history not available.${suffix}`);
     };
 
     // Update handleCreateWeek to use API service
@@ -806,6 +932,38 @@ function LeagueManagement() {
             (latest.week_number > current.week_number) ? latest : current
         );
         return week.id === mostRecent.id;
+    };
+
+    // Helper function to generate all possible pairings
+    const generateAllPairings = (teams) => {
+        if (teams.length === 0) return [[]];
+        if (teams.length === 2) return [[{ team1: teams[0], team2: teams[1] }]];
+
+        const result = [];
+        const firstTeam = teams[0];
+
+        for (let i = 1; i < teams.length; i++) {
+            const partner = teams[i];
+            const remainingTeams = teams.filter((_, index) => index !== 0 && index !== i);
+            const subPairings = generateAllPairings(remainingTeams);
+
+            subPairings.forEach(subPairing => {
+                result.push([{ team1: firstTeam, team2: partner }, ...subPairing]);
+            });
+        }
+
+        return result;
+    };
+
+    // Helper function to score a pairing set
+    const scorePairingSet = (pairingSet, matchupHistory) => {
+        let totalScore = 0;
+        pairingSet.forEach(pairing => {
+            const pairingKey = [pairing.team1.id, pairing.team2.id].sort().join('-');
+            const previousMatchups = matchupHistory.get(pairingKey) || 0;
+            totalScore += previousMatchups;
+        });
+        return totalScore;
     };
 
     // update formatDate function to handle dates from the API
@@ -1494,12 +1652,25 @@ function LeagueManagement() {
 
                                         {generatedMatchups.length > 0 && (
                                             <Box sx={{ mt: 3 }}>
-                                                <Typography variant="subtitle1" gutterBottom>
-                                                    {generatedMatchups.length} Matchups will be created:
-                                                </Typography>
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                                    <Typography variant="subtitle1">
+                                                        {generatedMatchups.length} Matchups will be created:
+                                                    </Typography>
+                                                    <Button
+                                                        variant="outlined"
+                                                        size="small"
+                                                        onClick={reshuffleMatchups}
+                                                        sx={{ minWidth: 120 }}
+                                                    >
+                                                        🎲 Reshuffle
+                                                    </Button>
+                                                </Box>
 
                                                 {matchupWarning && (
-                                                    <Alert severity="warning" sx={{ mb: 2 }}>
+                                                    <Alert
+                                                        severity={matchupWarning.includes('All unique') ? "success" : "warning"}
+                                                        sx={{ mb: 2 }}
+                                                    >
                                                         {matchupWarning}
                                                     </Alert>
                                                 )}
@@ -1518,7 +1689,7 @@ function LeagueManagement() {
                                                         <TableBody>
                                                             {generatedMatchups.map((matchup, index) => (
                                                                 <TableRow
-                                                                    key={index}
+                                                                    key={`${matchup.home_team_id}-${matchup.away_team_id}-${index}`} // Include index to force re-render on shuffle
                                                                     sx={{
                                                                         ...(matchup.is_duplicate && {
                                                                             bgcolor: 'rgba(255, 152, 0, 0.08)', // Light orange background for duplicates
@@ -1537,14 +1708,9 @@ function LeagueManagement() {
                                                                                 size="small"
                                                                                 label={`Played ${matchup.previous_matchups}x`}
                                                                                 color="warning"
-                                                                                title={`These teams previously played on ${matchup.matchup_history ?
-                                                                                    matchup.matchup_history
-                                                                                        .map(m => formatDate(m.match_date, 'MMM d'))
-                                                                                        .join(', ') : 'unknown dates'
-                                                                                    }`}
                                                                             />
                                                                         ) : (
-                                                                            <Chip size="small" label="New Matchup" color="success" />
+                                                                            <Chip size="small" label="New" color="success" />
                                                                         )}
                                                                     </TableCell>
                                                                 </TableRow>
@@ -1565,48 +1731,44 @@ function LeagueManagement() {
                     <Button
                         onClick={handleCreateWeek}
                         variant="contained"
-                        disabled={!newWeek.week_number || !newWeek.start_date || !newWeek.end_date ||
+                        disabled={
+                            !newWeek.week_number ||
+                            !newWeek.start_date ||
+                            !newWeek.end_date ||
                             new Date(newWeek.end_date) <= new Date(newWeek.start_date) ||
-                            (generateMatchups && generatedMatchups.length === 0)}
+                            (generateMatchups && (
+                                !matchupConfig.selectedTeams ||
+                                matchupConfig.selectedTeams.length < 2 ||
+                                !matchupConfig.selectedCourse
+                            ))
+                        }
                     >
-                        {generateMatchups
-                            ? `Add Week & Create ${generatedMatchups.length} Matchups`
-                            : 'Add Week'}
+                        Create Week
                     </Button>
                 </DialogActions>
             </Dialog>
 
-            {/* Delete Week Dialog */}
+            {/* Delete Week Confirmation Dialog */}
             <Dialog
                 open={deleteWeekDialogOpen}
                 onClose={handleDeleteWeekClose}
             >
-                <DialogTitle>Delete Week</DialogTitle>
+                <DialogTitle>Confirm Delete Week</DialogTitle>
                 <DialogContent>
-                    <Box sx={{ pt: 1 }}>
-                        <Typography variant="body1" gutterBottom>
-                            Are you sure you want to delete Week {weekToDelete?.week_number}?
-                        </Typography>
-                        <Typography variant="body2" color="error">
-                            This will permanently delete this week and all associated matches. This action cannot be undone.
-                        </Typography>
-
-                        {matches && matches.length > 0 && (
-                            <Alert severity="warning" sx={{ mt: 2 }}>
-                                This week has {matches.length} {matches.length === 1 ? 'match' : 'matches'} that will also be deleted.
-                            </Alert>
-                        )}
-                    </Box>
+                    <Typography>
+                        Are you sure you want to delete Week {weekToDelete?.week_number}?
+                        This will also delete all matches scheduled for this week.
+                        This action cannot be undone.
+                    </Typography>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleDeleteWeekClose}>Cancel</Button>
                     <Button
                         onClick={handleDeleteWeek}
-                        variant="contained"
                         color="error"
-                        startIcon={<DeleteIcon />}
+                        variant="contained"
                     >
-                        Delete
+                        Delete Week
                     </Button>
                 </DialogActions>
             </Dialog>
