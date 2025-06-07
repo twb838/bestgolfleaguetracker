@@ -35,6 +35,7 @@ import TournamentManagement from './pages/tournaments/TournamentManagement';
 import TournamentCreationWizard from './pages/tournaments/TournamentCreationWizard';
 import Scorecard from './pages/tournaments/Scorecard';
 import LeagueSettings from './pages/leagues/LeagueSettings';
+import MatchupMatrix from './pages/leagues/MatchupMatrix';
 
 
 // Create a layout wrapper component
@@ -309,7 +310,7 @@ function App() {
                         } />
                         <Route path="/tournaments/:tournamentId/scorecard" element={<Scorecard />} />
                         <Route path="/leagues/:leagueId/settings" element={<LeagueSettings />} />
-
+                        <Route path="/leagues/:leagueId/matchup-matrix" element={<MatchupMatrix />} />
                         {/* Catch all */}
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>

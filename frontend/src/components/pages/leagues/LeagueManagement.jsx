@@ -59,7 +59,8 @@ import {
     Leaderboard as LeaderboardIcon,
     PrintOutlined as PrintIcon,
     TrendingUp as TrendingUpIcon,
-    Settings as SettingsIcon
+    Settings as SettingsIcon,
+    GridOn
 } from '@mui/icons-material';
 import { format, parseISO, addDays } from 'date-fns';
 import { get, post, put, del } from '../../../services/api'; // Import API service
@@ -1014,6 +1015,18 @@ function LeagueManagement() {
                 </Button>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                     <Button
+                        onClick={() => navigate(`/leagues/${leagueId}/matchup-matrix`)}
+                        variant="outlined"
+                        sx={{
+                            minWidth: '48px',
+                            width: '48px',
+                            height: '48px',
+                            padding: 0
+                        }}
+                    >
+                        <GridOn />
+                    </Button>
+                    <Button
                         onClick={() => navigate(`/leagues/${leagueId}/settings`)}
                         variant="outlined"
                         sx={{
@@ -1027,7 +1040,6 @@ function LeagueManagement() {
                     </Button>
                     <Button
                         onClick={() => {
-                            // Include week parameter in print URL if available
                             const printUrl = selectedWeek
                                 ? `/leagues/${leagueId}/print?week=${selectedWeek.week_number}`
                                 : `/leagues/${leagueId}/print`;
