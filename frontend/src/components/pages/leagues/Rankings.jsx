@@ -7,11 +7,13 @@ import {
     CircularProgress,
     Grid,
     List,
-    ListItem
+    ListItem,
+    Chip
 } from '@mui/material';
 import {
     EmojiEventsOutlined as TrophyOutlineIcon,
-    Leaderboard as LeaderboardIcon
+    Leaderboard as LeaderboardIcon,
+    TrendingUp as TrendingUpIcon
 } from '@mui/icons-material';
 import { format, parseISO } from 'date-fns';
 import { get } from '../../../services/api';
@@ -24,35 +26,45 @@ const Rankings = ({ league }) => {
         topIndividualGross: [],
         topIndividualNet: [],
         topTeamGross: [],
-        topTeamNet: []
+        topTeamNet: [],
+        mostImproved: []
     });
     const [loadingRankings, setLoadingRankings] = useState(false);
 
-    // Update fetchRankingsData to use API service and useCallback
+    // Update fetchRankingsData to include most improved players
     const fetchRankingsData = useCallback(async () => {
         if (!league?.id) return;
 
         setLoadingRankings(true);
         try {
-            const [individualGrossData, individualNetData, teamGrossData, teamNetData] = await Promise.all([
+            const [
+                individualGrossData,
+                individualNetData,
+                teamGrossData,
+                teamNetData,
+                mostImprovedData
+            ] = await Promise.all([
                 get(`/player-stats/league/${leagueId}/top-scores?limit=5&score_type=gross`).catch(() => []),
                 get(`/player-stats/league/${leagueId}/top-scores?limit=5&score_type=net`).catch(() => []),
                 get(`/team-stats/league/${leagueId}/top-scores?limit=5&score_type=gross`).catch(() => []),
-                get(`/team-stats/league/${leagueId}/top-scores?limit=5&score_type=net`).catch(() => [])
+                get(`/team-stats/league/${leagueId}/top-scores?limit=5&score_type=net`).catch(() => []),
+                get(`/player-stats/league/${leagueId}/most-improved?limit=5`).catch(() => [])
             ]);
 
             setRankingsData({
                 topIndividualGross: individualGrossData,
                 topIndividualNet: individualNetData,
                 topTeamGross: teamGrossData,
-                topTeamNet: teamNetData
+                topTeamNet: teamNetData,
+                mostImproved: mostImprovedData
             });
         } catch (error) {
             setRankingsData({
                 topIndividualGross: [],
                 topIndividualNet: [],
                 topTeamGross: [],
-                topTeamNet: []
+                topTeamNet: [],
+                mostImproved: []
             });
         } finally {
             setLoadingRankings(false);
@@ -76,6 +88,17 @@ const Rankings = ({ league }) => {
             console.error('Error formatting date:', error);
             return 'Invalid date';
         }
+    };
+
+    // Helper function to format handicap improvement
+    const formatHandicapImprovement = (improvement) => {
+        if (improvement === null || improvement === undefined) return 'N/A';
+        if (improvement > 0) {
+            return `+${improvement.toFixed(1)}`;
+        } else if (improvement < 0) {
+            return improvement.toFixed(1);
+        }
+        return '0.0';
     };
 
     return (
@@ -416,6 +439,89 @@ const Rankings = ({ league }) => {
                             ) : (
                                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
                                     No team net scores recorded yet
+                                </Typography>
+                            )}
+                        </Paper>
+                    </Grid>
+
+                    {/* Most Improved Players - moved to bottom */}
+                    <Grid item xs={12} md={6}>
+                        <Paper
+                            sx={{
+                                p: 2,
+                                height: '100%',
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                overflow: 'hidden'
+                            }}
+                        >
+                            <Box sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                mb: 2,
+                                pb: 1,
+                                borderBottom: '1px solid',
+                                borderColor: 'divider'
+                            }}>
+                                <TrendingUpIcon sx={{ mr: 1, color: 'primary.main' }} />
+                                <Typography variant="h6" component="h3">
+                                    Most Improved Players
+                                </Typography>
+                            </Box>
+
+                            {rankingsData.mostImproved.length > 0 ? (
+                                <List disablePadding>
+                                    {rankingsData.mostImproved.map((player, index) => (
+                                        <ListItem
+                                            key={`improved-${player.player_id}-${index}`}
+                                            sx={{
+                                                px: 1,
+                                                py: 0.5,
+                                                backgroundColor: index % 2 === 0 ? 'action.hover' : 'transparent'
+                                            }}
+                                        >
+                                            <Box
+                                                sx={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    width: '100%'
+                                                }}
+                                            >
+                                                <Typography
+                                                    variant="body1"
+                                                    sx={{
+                                                        fontWeight: 'bold',
+                                                        minWidth: '24px',
+                                                        color: index === 0 ? 'warning.dark' : 'text.primary'
+                                                    }}
+                                                >
+                                                    {index + 1}.
+                                                </Typography>
+                                                <Box sx={{ flexGrow: 1 }}>
+                                                    <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                                                        {player.player_name}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        Initial: {player.initial_avg?.toFixed(1) || 'N/A'} → Current: {player.overall_avg?.toFixed(1) || 'N/A'}
+                                                    </Typography>
+                                                </Box>
+                                                <Typography
+                                                    variant="body1"
+                                                    sx={{
+                                                        fontWeight: 'bold',
+                                                        color: 'success.main', // Changed from conditional color to match other rankings
+                                                        fontSize: index === 0 ? '1.2rem' : '1rem'
+                                                    }}
+                                                >
+                                                    {formatHandicapImprovement(player.handicap_improvement || player.improvement || 0)}
+                                                </Typography>
+                                            </Box>
+                                        </ListItem>
+                                    ))}
+                                </List>
+                            ) : (
+                                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                                    No improvement data available yet
                                 </Typography>
                             )}
                         </Paper>

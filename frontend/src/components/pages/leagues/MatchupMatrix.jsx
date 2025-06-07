@@ -384,7 +384,7 @@ const MatchupMatrix = () => {
 
             {/* Matrix Table */}
             <Paper sx={{ overflow: 'hidden' }}>
-                <TableContainer sx={{ maxHeight: '70vh' }}>
+                <TableContainer sx={{ maxHeight: '75vh' }}>
                     <Table stickyHeader size="small">
                         <TableHead>
                             <TableRow>
@@ -393,13 +393,16 @@ const MatchupMatrix = () => {
                                         bgcolor: 'primary.main',
                                         color: 'primary.contrastText',
                                         fontWeight: 'bold',
-                                        minWidth: 120,
+                                        minWidth: 100,
+                                        maxWidth: 100,
                                         position: 'sticky',
                                         left: 0,
-                                        zIndex: 3
+                                        zIndex: 3,
+                                        padding: '4px 8px',
+                                        fontSize: '0.75rem'
                                     }}
                                 >
-                                    Team vs Team
+                                    Teams
                                 </TableCell>
                                 {teams.map(team => (
                                     <TableCell
@@ -409,15 +412,17 @@ const MatchupMatrix = () => {
                                             color: 'primary.contrastText',
                                             fontWeight: 'bold',
                                             textAlign: 'center',
-                                            minWidth: 80,
-                                            padding: 1,
+                                            minWidth: 60,
+                                            maxWidth: 60,
+                                            padding: '2px',
                                             writingMode: 'vertical-rl',
                                             textOrientation: 'mixed',
-                                            height: 120
+                                            height: 80,
+                                            fontSize: '0.7rem'
                                         }}
                                     >
                                         <Box sx={{ transform: 'rotate(180deg)' }}>
-                                            {team.name}
+                                            {team.name.length > 12 ? `${team.name.substring(0, 12)}...` : team.name}
                                         </Box>
                                     </TableCell>
                                 ))}
@@ -433,10 +438,17 @@ const MatchupMatrix = () => {
                                             fontWeight: 'bold',
                                             position: 'sticky',
                                             left: 0,
-                                            zIndex: 2
+                                            zIndex: 2,
+                                            padding: '4px 8px',
+                                            fontSize: '0.75rem',
+                                            maxWidth: 100,
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap'
                                         }}
+                                        title={team.name}
                                     >
-                                        {team.name}
+                                        {team.name.length > 15 ? `${team.name.substring(0, 15)}...` : team.name}
                                     </TableCell>
                                     {teams.map(opponent =>
                                         renderMatchupCell(team.id, opponent.id)
