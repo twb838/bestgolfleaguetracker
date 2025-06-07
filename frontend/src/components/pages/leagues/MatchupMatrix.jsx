@@ -49,10 +49,10 @@ const MatchupMatrix = () => {
     }, [leagueId]);
 
     useEffect(() => {
-        if (matches.length > 0 && league?.teams) {
+        if (matches.length > 0 && league?.teams && weeks.length > 0) {
             buildMatrixData();
         }
-    }, [matches, league, selectedWeekFilter]);
+    }, [matches, league, selectedWeekFilter, weeks]); // Add weeks to dependencies
 
     const fetchData = async () => {
         setLoading(true);
@@ -77,7 +77,7 @@ const MatchupMatrix = () => {
 
     // Update the buildMatrixData function
     const buildMatrixData = () => {
-        if (!league?.teams || !matches.length) return;
+        if (!league?.teams || !matches.length || !weeks.length) return;
 
         const teams = league.teams.sort((a, b) => a.name.localeCompare(b.name));
         const filteredMatches = selectedWeekFilter === 'all'
@@ -105,9 +105,15 @@ const MatchupMatrix = () => {
             });
         });
 
-        // Debug logging to understand the data structure
-        console.log('Weeks data:', weeks);
-        console.log('Sample match:', matches[0]);
+        // Create a week lookup map for better performance
+        const weekLookup = {};
+        weeks.forEach(week => {
+            weekLookup[week.id] = week;
+            // Also map week_id if it exists and is different
+            if (week.week_id && week.week_id !== week.id) {
+                weekLookup[week.week_id] = week;
+            }
+        });
 
         // Fill matrix with match data
         filteredMatches.forEach(match => {
@@ -116,38 +122,9 @@ const MatchupMatrix = () => {
 
             if (!homeTeamId || !awayTeamId) return; // Skip bye weeks
 
-            // Try multiple ways to find the week
-            let weekData = null;
-            let weekNumber = 'Unknown';
-
-            // Method 1: Direct ID match
-            weekData = weeks.find(w => w.id === match.week_id);
-
-            // Method 2: If week has week_id property
-            if (!weekData) {
-                weekData = weeks.find(w => w.week_id === match.week_id);
-            }
-
-            // Method 3: If match has a week property
-            if (!weekData && match.week) {
-                weekData = match.week;
-            }
-
-            // Method 4: Check if week_number is directly on the match
-            if (!weekData && match.week_number) {
-                weekNumber = match.week_number;
-            } else if (weekData && weekData.week_number) {
-                weekNumber = weekData.week_number;
-            }
-
-            // Debug logging for troubleshooting
-            if (weekNumber === 'Unknown') {
-                console.log('Could not find week for match:', {
-                    matchWeekId: match.week_id,
-                    matchId: match.id,
-                    availableWeeks: weeks.map(w => ({ id: w.id, week_id: w.week_id, week_number: w.week_number }))
-                });
-            }
+            // Use the lookup map for better performance
+            const weekData = weekLookup[match.week_id];
+            const weekNumber = weekData?.week_number || match.week_number || 'Unknown';
 
             const matchInfo = {
                 weekNumber,
