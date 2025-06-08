@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, Boolean, Float, ForeignKey, Table, Enum
+from sqlalchemy import Column, Integer, String, Date, DateTime, Boolean, Float, ForeignKey, Table, Enum, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -25,7 +25,6 @@ tournament_team = Table(
 class ParticipantType(str, enum.Enum):
     INDIVIDUAL = "individual"
     TEAM = "team"
-    MIXED = "mixed"  # For tournaments that have both individual and team competitions
 
 # Tournament model
 class Tournament(Base):
@@ -44,6 +43,7 @@ class Tournament(Base):
     handicap_allowance = Column(Integer, default=100)
     participant_type = Column(Enum(ParticipantType), default=ParticipantType.INDIVIDUAL)
     team_size = Column(Integer, default=0)  # 0 for individual, 2+ for teams
+    settings = Column(JSON, nullable=True, default=dict)  # New JSON column for additional settings
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     
@@ -65,8 +65,8 @@ class TournamentFlight(Base):
     id = Column(Integer, primary_key=True, index=True)
     tournament_id = Column(Integer, ForeignKey("tournaments.id", ondelete="CASCADE"))
     name = Column(String(100), nullable=False)
-    min_handicap = Column(Float, nullable=True)  # Made nullable
-    max_handicap = Column(Float, nullable=True)  # Made nullable
+    min_handicap = Column(Float, nullable=True)
+    max_handicap = Column(Float, nullable=True)
     
     # Relationships
     tournament = relationship("Tournament", back_populates="flights")
