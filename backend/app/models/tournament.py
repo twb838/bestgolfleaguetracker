@@ -50,7 +50,11 @@ class Tournament(Base):
     # Relationships
     flights = relationship("TournamentFlight", back_populates="tournament", cascade="all, delete-orphan")
     individual_participants = relationship("TournamentParticipant", back_populates="tournament", cascade="all, delete-orphan")
-    teams = relationship("Team", secondary=tournament_team, backref="tournaments")
+    teams = relationship(
+        "Team", 
+        secondary="tournament_team", 
+        back_populates="tournaments"
+    )
     courses = relationship("Course", secondary=tournament_course, backref="tournaments")
     rounds = relationship("TournamentRound", back_populates="tournament", cascade="all, delete-orphan")
 

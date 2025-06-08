@@ -183,7 +183,7 @@ function Teams() {
     const hasFormErrors = () => {
         return (
             !newTeam.name ||
-            newTeam.players.some(p => !p.first_name || !p.last_name || !p.email) ||
+            newTeam.players.some(p => !p.first_name || !p.last_name) ||
             Object.keys(emailErrors).length > 0
         );
     };
@@ -467,7 +467,6 @@ function Teams() {
                                     value={player.email}
                                     onChange={(e) => handlePlayerChange(index, 'email', e.target.value)}
                                     size="small"
-                                    required
                                     error={!!emailErrors[index]}
                                     helperText={emailErrors[index] || ''}
                                 />

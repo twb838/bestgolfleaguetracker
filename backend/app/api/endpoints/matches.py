@@ -61,14 +61,14 @@ def create_match(match: MatchCreate, db: Session = Depends(get_db), current_user
     db.commit()
     db.refresh(db_match)
     
-    # Get all players from both teams
-    home_players = db.query(Player).filter(Player.team_id == match.home_team_id).all()
-    away_players = db.query(Player).filter(Player.team_id == match.away_team_id).all()
+    # Get all players from both teams using the many-to-many relationship
+    home_players = home_team.players  # Use the relationship instead of querying
+    away_players = away_team.players  # Use the relationship instead of querying
     
     # Add all players to match_players table with rounded handicaps
     for player in home_players:
         # Round the player's handicap to the nearest whole number
-        rounded_handicap = round(player.handicap) if player.handicap is not None else 0 # type: ignore
+        rounded_handicap = round(player.handicap) if player.handicap is not None else 0
         
         match_player = MatchPlayer(
             match_id=db_match.id,
@@ -82,7 +82,7 @@ def create_match(match: MatchCreate, db: Session = Depends(get_db), current_user
     
     for player in away_players:
         # Round the player's handicap to the nearest whole number
-        rounded_handicap = round(player.handicap) if player.handicap is not None else 0 # type: ignore
+        rounded_handicap = round(player.handicap) if player.handicap is not None else 0
         
         match_player = MatchPlayer(
             match_id=db_match.id,
