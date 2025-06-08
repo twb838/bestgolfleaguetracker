@@ -3,23 +3,26 @@ import {
     Box, Paper, Typography, Button, Dialog, DialogTitle, DialogContent,
     DialogActions, TextField, Grid, Autocomplete, Chip, List, ListItem,
     ListItemText, ListItemSecondaryAction, Divider, Alert, CircularProgress,
-    IconButton
+    IconButton, FormControl, InputLabel, Select, MenuItem, FormLabel,
+    RadioGroup, FormControlLabel, Radio
 } from '@mui/material';
 import {
     Group as GroupIcon,
     PersonAdd as PersonAddIcon,
-    Delete as DeleteIcon
+    Delete as DeleteIcon,
+    Add as AddIcon
 } from '@mui/icons-material';
 import { get, post } from '../../../services/api';
 
 function TournamentParticipants({ tournament, onUpdate }) {
     const [teamDialogOpen, setTeamDialogOpen] = useState(false);
+    const [createParticipantDialogOpen, setCreateParticipantDialogOpen] = useState(false);
 
     // Team management state
     const [existingTeams, setExistingTeams] = useState([]);
     const [availablePlayers, setAvailablePlayers] = useState([]);
     const [currentTeams, setCurrentTeams] = useState([]);
-    const [teamsLoading, setTeamsLoading] = useState(true); // Start with loading true
+    const [teamsLoading, setTeamsLoading] = useState(true);
     const [teamError, setTeamError] = useState(null);
 
     // New team creation state
@@ -29,6 +32,33 @@ function TournamentParticipants({ tournament, onUpdate }) {
         players: []
     });
     const [isCreatingNewTeam, setIsCreatingNewTeam] = useState(false);
+
+    // New participant creation state
+    const [participantType, setParticipantType] = useState('individual'); // 'individual' or 'team'
+    const [newParticipant, setNewParticipant] = useState({
+        // Individual fields
+        first_name: '',
+        last_name: '',
+        email: '',
+        phone: '',
+        handicap: '',
+        // Team fields
+        team_name: '',
+        team_description: '',
+        team_players: []
+    });
+    const [participantLoading, setParticipantLoading] = useState(false);
+    const [participantError, setParticipantError] = useState(null);
+
+    // New state variables for creating player for team
+    const [showCreatePlayerDialog, setShowCreatePlayerDialog] = useState(false);
+    const [newPlayerForTeam, setNewPlayerForTeam] = useState({
+        first_name: '',
+        last_name: '',
+        email: '',
+        phone: '',
+        handicap: ''
+    });
 
     // Fetch teams when component mounts or tournament changes
     useEffect(() => {
@@ -211,6 +241,194 @@ function TournamentParticipants({ tournament, onUpdate }) {
         }
     };
 
+    // New participant creation functions
+    const handleCreateParticipant = () => {
+        // Determine default participant type based on tournament settings
+        if (tournament.participant_type === 'individual') {
+            setParticipantType('individual');
+        } else if (tournament.participant_type === 'team') {
+            setParticipantType('team');
+        } else {
+            // Mixed - let user choose
+            setParticipantType('individual');
+        }
+
+        setCreateParticipantDialogOpen(true);
+
+        // Fetch players if we might need them for team creation
+        if (tournament.participant_type !== 'individual') {
+            fetchTeamsAndPlayers();
+        }
+    };
+
+    const handleCloseParticipantDialog = () => {
+        setCreateParticipantDialogOpen(false);
+        setParticipantType('individual');
+        setNewParticipant({
+            first_name: '',
+            last_name: '',
+            email: '',
+            phone: '',
+            handicap: '',
+            team_name: '',
+            team_description: '',
+            team_players: []
+        });
+        setParticipantError(null);
+    };
+
+    const handleCreateIndividualParticipant = async () => {
+        try {
+            setParticipantLoading(true);
+            setParticipantError(null);
+
+            if (!newParticipant.first_name.trim() || !newParticipant.last_name.trim()) {
+                setParticipantError('First name and last name are required');
+                return;
+            }
+
+            // Create the player
+            const playerData = {
+                first_name: newParticipant.first_name,
+                last_name: newParticipant.last_name,
+                email: newParticipant.email || null,
+                phone: newParticipant.phone || null,
+                handicap: newParticipant.handicap ? parseFloat(newParticipant.handicap) : null
+            };
+
+            console.log('Creating new player:', playerData);
+            const createdPlayer = await post('/players', playerData);
+            console.log('Created player:', createdPlayer);
+
+            // Add the player to the tournament
+            console.log(`Adding player ${createdPlayer.id} to tournament ${tournament.id}`);
+            await post(`/tournaments/${tournament.id}/participants`, {
+                player_id: createdPlayer.id
+            });
+
+            // Refresh data
+            await fetchCurrentTeams();
+
+            // Notify parent component to refresh tournament data
+            if (onUpdate) {
+                onUpdate();
+            }
+
+            handleCloseParticipantDialog();
+            console.log(`New player ${createdPlayer.first_name} ${createdPlayer.last_name} created and added to tournament`);
+
+        } catch (error) {
+            console.error('Error creating individual participant:', error);
+            setParticipantError(error.message || 'Failed to create participant');
+        } finally {
+            setParticipantLoading(false);
+        }
+    };
+
+    const handleCreateTeamParticipant = async () => {
+        try {
+            setParticipantLoading(true);
+            setParticipantError(null);
+
+            if (!newParticipant.team_name.trim()) {
+                setParticipantError('Team name is required');
+                return;
+            }
+
+            const minTeamSize = tournament.team_size || 2;
+            if (newParticipant.team_players.length < minTeamSize) {
+                setParticipantError(`Team must have at least ${minTeamSize} players`);
+                return;
+            }
+
+            // Create the team
+            const teamData = {
+                name: newParticipant.team_name,
+                description: newParticipant.team_description,
+                player_ids: newParticipant.team_players.map(player => player.id)
+            };
+
+            console.log('Creating new team:', teamData);
+            const createdTeam = await post('/teams', teamData);
+            console.log('Created team:', createdTeam);
+
+            // Add the team to the tournament
+            console.log(`Adding team ${createdTeam.id} to tournament ${tournament.id}`);
+            await post(`/tournaments/${tournament.id}/teams/${createdTeam.id}`);
+
+            // Refresh data
+            await fetchCurrentTeams();
+
+            // Notify parent component to refresh tournament data
+            if (onUpdate) {
+                onUpdate();
+            }
+
+            handleCloseParticipantDialog();
+            console.log(`New team ${createdTeam.name} created and added to tournament`);
+
+        } catch (error) {
+            console.error('Error creating team participant:', error);
+            setParticipantError(error.message || 'Failed to create team');
+        } finally {
+            setParticipantLoading(false);
+        }
+    };
+
+    const handleCreateNewPlayerForTeam = async () => {
+        try {
+            if (!newPlayerForTeam.first_name.trim() || !newPlayerForTeam.last_name.trim()) {
+                setParticipantError('First name and last name are required');
+                return;
+            }
+
+            const playerData = {
+                first_name: newPlayerForTeam.first_name,
+                last_name: newPlayerForTeam.last_name,
+                email: newPlayerForTeam.email || null,
+                phone: newPlayerForTeam.phone || null,
+                handicap: newPlayerForTeam.handicap ? parseFloat(newPlayerForTeam.handicap) : null
+            };
+
+            console.log('Creating new player for team:', playerData);
+            const createdPlayer = await post('/players', playerData);
+            console.log('Created player:', createdPlayer);
+
+            // Add the new player to the team players list
+            setNewParticipant({
+                ...newParticipant,
+                team_players: [...newParticipant.team_players, createdPlayer]
+            });
+
+            // Update available players list
+            setAvailablePlayers(prev => [...prev, createdPlayer]);
+
+            // Reset and close the create player dialog
+            setNewPlayerForTeam({
+                first_name: '',
+                last_name: '',
+                email: '',
+                phone: '',
+                handicap: ''
+            });
+            setShowCreatePlayerDialog(false);
+
+            console.log(`New player ${createdPlayer.first_name} ${createdPlayer.last_name} created and added to team`);
+
+        } catch (error) {
+            console.error('Error creating new player for team:', error);
+            setParticipantError(error.message || 'Failed to create new player');
+        }
+    };
+
+    const handleSubmitParticipant = () => {
+        if (participantType === 'individual') {
+            handleCreateIndividualParticipant();
+        } else {
+            handleCreateTeamParticipant();
+        }
+    };
+
     if (!tournament) {
         return (
             <Paper sx={{ p: 3, textAlign: 'center' }}>
@@ -257,76 +475,377 @@ function TournamentParticipants({ tournament, onUpdate }) {
                     <Typography variant="h6">
                         Tournament Teams ({currentTeams.length})
                     </Typography>
-                    <Button
-                        variant="contained"
-                        startIcon={<GroupIcon />}
-                        onClick={handleManageTeams}
-                    >
-                        Manage Teams
-                    </Button>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button
+                            variant="outlined"
+                            startIcon={<AddIcon />}
+                            onClick={handleCreateParticipant}
+                        >
+                            Create Participant
+                        </Button>
+                        <Button
+                            variant="contained"
+                            startIcon={<GroupIcon />}
+                            onClick={handleManageTeams}
+                        >
+                            Manage Teams
+                        </Button>
+                    </Box>
                 </Box>
 
-                {/* Debug info - remove this later */}
-                <Alert severity="info" sx={{ mb: 2 }}>
-                    Debug: Tournament ID: {tournament.id}, Current Teams Count: {currentTeams.length}
-                    {currentTeams.length > 0 && `, Team IDs: ${currentTeams.map(t => t.id).join(', ')}`}
-                </Alert>
-
                 {currentTeams.length > 0 ? (
-                    <Grid container spacing={2}>
+                    <List>
                         {currentTeams.map((team) => (
-                            <Grid item xs={12} sm={6} md={4} key={team.id}>
-                                <Paper
-                                    sx={{
-                                        p: 2,
-                                        border: '1px solid',
-                                        borderColor: 'divider',
-                                        height: '100%'
-                                    }}
-                                >
-                                    <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                                        {team.name}
-                                    </Typography>
-                                    {team.description && (
-                                        <Typography variant="body2" color="text.secondary" gutterBottom>
-                                            {team.description}
+                            <ListItem key={team.id} sx={{ py: 1 }}>
+                                <ListItemText
+                                    primary={
+                                        <Typography variant="subtitle1" fontWeight="bold">
+                                            {team.name}
                                         </Typography>
-                                    )}
-                                    <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                                        {team.players?.length || 0} players
-                                    </Typography>
-                                    {team.players && team.players.length > 0 && (
-                                        <Box sx={{ mt: 1 }}>
-                                            {team.players.map(player => (
-                                                <Chip
-                                                    key={player.id}
-                                                    label={`${player.first_name} ${player.last_name}`}
-                                                    size="small"
-                                                    sx={{ mr: 0.5, mb: 0.5 }}
-                                                />
-                                            ))}
+                                    }
+                                    secondary={
+                                        <Box sx={{ mt: 0.5 }}>
+                                            <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
+                                                {team.players?.length || 0} players
+                                            </Typography>
+                                            {team.players && team.players.length > 0 && (
+                                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                                    {team.players.map(player => (
+                                                        <Chip
+                                                            key={player.id}
+                                                            label={`${player.first_name} ${player.last_name}`}
+                                                            size="small"
+                                                            variant="outlined"
+                                                            sx={{ fontSize: '0.75rem' }}
+                                                        />
+                                                    ))}
+                                                </Box>
+                                            )}
                                         </Box>
-                                    )}
-                                </Paper>
-                            </Grid>
+                                    }
+                                />
+                            </ListItem>
                         ))}
-                    </Grid>
+                    </List>
                 ) : (
                     <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'grey.50' }}>
                         <GroupIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
                         <Typography variant="body1" color="text.secondary" paragraph>
-                            No teams have been added to this tournament yet.
+                            No participants have been added to this tournament yet.
                         </Typography>
-                        <Button
-                            variant="outlined"
-                            startIcon={<GroupIcon />}
-                            onClick={handleManageTeams}
-                        >
-                            Add Teams
-                        </Button>
+                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+                            <Button
+                                variant="outlined"
+                                startIcon={<AddIcon />}
+                                onClick={handleCreateParticipant}
+                            >
+                                Create New Participant
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                startIcon={<GroupIcon />}
+                                onClick={handleManageTeams}
+                            >
+                                Add Existing Teams
+                            </Button>
+                        </Box>
                     </Paper>
                 )}
             </Paper>
+
+            {/* Create Participant Dialog */}
+            <Dialog
+                open={createParticipantDialogOpen}
+                onClose={handleCloseParticipantDialog}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <AddIcon sx={{ mr: 1 }} />
+                        Create New Participant - {tournament.name}
+                    </Box>
+                </DialogTitle>
+                <DialogContent>
+                    {participantError && (
+                        <Alert severity="error" sx={{ mb: 2 }}>
+                            {participantError}
+                        </Alert>
+                    )}
+
+                    {/* Participant Type Selection for Mixed Tournaments */}
+                    {tournament.participant_type === 'mixed' && (
+                        <Box sx={{ mb: 3 }}>
+                            <FormLabel component="legend">Participant Type</FormLabel>
+                            <RadioGroup
+                                row
+                                value={participantType}
+                                onChange={(e) => setParticipantType(e.target.value)}
+                            >
+                                <FormControlLabel
+                                    value="individual"
+                                    control={<Radio />}
+                                    label="Individual Player"
+                                />
+                                <FormControlLabel
+                                    value="team"
+                                    control={<Radio />}
+                                    label="Team"
+                                />
+                            </RadioGroup>
+                        </Box>
+                    )}
+
+                    {participantType === 'individual' ? (
+                        /* Individual Participant Form */
+                        <Box
+                            component="form"
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                if (newParticipant.first_name.trim() && newParticipant.last_name.trim()) {
+                                    handleCreateIndividualParticipant();
+                                }
+                            }}
+                        >
+                            <Grid container spacing={2}>
+                                <Grid item xs={12}>
+                                    <Typography variant="h6" gutterBottom>
+                                        Create Individual Participant
+                                    </Typography>
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="First Name"
+                                        value={newParticipant.first_name}
+                                        onChange={(e) => setNewParticipant({
+                                            ...newParticipant,
+                                            first_name: e.target.value
+                                        })}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && newParticipant.first_name.trim() && newParticipant.last_name.trim()) {
+                                                e.preventDefault();
+                                                handleCreateIndividualParticipant();
+                                            }
+                                        }}
+                                        required
+                                        autoFocus
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="Last Name"
+                                        value={newParticipant.last_name}
+                                        onChange={(e) => setNewParticipant({
+                                            ...newParticipant,
+                                            last_name: e.target.value
+                                        })}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && newParticipant.first_name.trim() && newParticipant.last_name.trim()) {
+                                                e.preventDefault();
+                                                handleCreateIndividualParticipant();
+                                            }
+                                        }}
+                                        required
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="Email"
+                                        type="email"
+                                        value={newParticipant.email}
+                                        onChange={(e) => setNewParticipant({
+                                            ...newParticipant,
+                                            email: e.target.value
+                                        })}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && newParticipant.first_name.trim() && newParticipant.last_name.trim()) {
+                                                e.preventDefault();
+                                                handleCreateIndividualParticipant();
+                                            }
+                                        }}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="Phone"
+                                        value={newParticipant.phone}
+                                        onChange={(e) => setNewParticipant({
+                                            ...newParticipant,
+                                            phone: e.target.value
+                                        })}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && newParticipant.first_name.trim() && newParticipant.last_name.trim()) {
+                                                e.preventDefault();
+                                                handleCreateIndividualParticipant();
+                                            }
+                                        }}
+                                    />
+                                </Grid>
+                                <Grid item xs={12} sm={6}>
+                                    <TextField
+                                        fullWidth
+                                        label="Handicap"
+                                        type="number"
+                                        inputProps={{ step: 0.1, min: 0, max: 54 }}
+                                        value={newParticipant.handicap}
+                                        onChange={(e) => setNewParticipant({
+                                            ...newParticipant,
+                                            handicap: e.target.value
+                                        })}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && newParticipant.first_name.trim() && newParticipant.last_name.trim()) {
+                                                e.preventDefault();
+                                                handleCreateIndividualParticipant();
+                                            }
+                                        }}
+                                        helperText="Optional"
+                                    />
+                                </Grid>
+                            </Grid>
+                        </Box>
+                    ) : (
+                        /* Team Participant Form - Updated */
+                        <Grid container spacing={2}>
+                            <Grid item xs={12}>
+                                <Typography variant="h6" gutterBottom>
+                                    Create Team Participant
+                                </Typography>
+                                {tournament.team_size && (
+                                    <Alert severity="info" sx={{ mb: 2 }}>
+                                        This tournament requires teams of {tournament.team_size} players.
+                                    </Alert>
+                                )}
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    fullWidth
+                                    label="Team Name"
+                                    value={newParticipant.team_name}
+                                    onChange={(e) => setNewParticipant({
+                                        ...newParticipant,
+                                        team_name: e.target.value
+                                    })}
+                                    required
+                                />
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    fullWidth
+                                    label="Team Description"
+                                    value={newParticipant.team_description}
+                                    onChange={(e) => setNewParticipant({
+                                        ...newParticipant,
+                                        team_description: e.target.value
+                                    })}
+                                />
+                            </Grid>
+                            <Grid item xs={12}>
+                                <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1 }}>
+                                    <Autocomplete
+                                        multiple
+                                        sx={{ flexGrow: 1 }}
+                                        options={availablePlayers.filter(player =>
+                                            !newParticipant.team_players.find(p => p.id === player.id)
+                                        )}
+                                        getOptionLabel={(player) => `${player.first_name} ${player.last_name}${player.handicap ? ` (HCP: ${player.handicap})` : ''}`}
+                                        value={newParticipant.team_players}
+                                        onChange={(event, newValue) => {
+                                            setNewParticipant({
+                                                ...newParticipant,
+                                                team_players: newValue
+                                            });
+                                        }}
+                                        renderInput={(params) => (
+                                            <TextField
+                                                {...params}
+                                                label="Select Team Members"
+                                                placeholder="Choose players for the team"
+                                                helperText={`Select ${tournament.team_size || '2+'} players for the team`}
+                                            />
+                                        )}
+                                        renderTags={(value, getTagProps) =>
+                                            value.map((player, index) => (
+                                                <Chip
+                                                    variant="outlined"
+                                                    label={`${player.first_name} ${player.last_name}`}
+                                                    {...getTagProps({ index })}
+                                                    key={player.id}
+                                                />
+                                            ))
+                                        }
+                                    />
+                                    <Button
+                                        variant="outlined"
+                                        startIcon={<PersonAddIcon />}
+                                        onClick={() => setShowCreatePlayerDialog(true)}
+                                        sx={{ minWidth: 'auto', height: '56px' }}
+                                    >
+                                        New Player
+                                    </Button>
+                                </Box>
+                            </Grid>
+
+                            {newParticipant.team_players.length > 0 && (
+                                <Grid item xs={12}>
+                                    <Paper sx={{ p: 2, backgroundColor: 'grey.50' }}>
+                                        <Typography variant="subtitle2" gutterBottom>
+                                            Selected Team Members ({newParticipant.team_players.length})
+                                        </Typography>
+                                        <List dense>
+                                            {newParticipant.team_players.map((player) => (
+                                                <ListItem key={player.id}>
+                                                    <ListItemText
+                                                        primary={`${player.first_name} ${player.last_name}`}
+                                                        secondary={player.handicap ? `Handicap: ${player.handicap}` : 'No handicap'}
+                                                    />
+                                                    <ListItemSecondaryAction>
+                                                        <IconButton
+                                                            edge="end"
+                                                            onClick={() => setNewParticipant({
+                                                                ...newParticipant,
+                                                                team_players: newParticipant.team_players.filter(p => p.id !== player.id)
+                                                            })}
+                                                            size="small"
+                                                        >
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </ListItemSecondaryAction>
+                                                </ListItem>
+                                            ))}
+                                        </List>
+                                    </Paper>
+                                </Grid>
+                            )}
+                        </Grid>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseParticipantDialog}>
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleSubmitParticipant}
+                        variant="contained"
+                        disabled={
+                            participantLoading ||
+                            (participantType === 'individual' &&
+                                (!newParticipant.first_name.trim() || !newParticipant.last_name.trim())) ||
+                            (participantType === 'team' &&
+                                (!newParticipant.team_name.trim() ||
+                                    newParticipant.team_players.length < (tournament.team_size || 2)))
+                        }
+                    >
+                        {participantLoading ? (
+                            <CircularProgress size={20} sx={{ mr: 1 }} />
+                        ) : null}
+                        Create {participantType === 'individual' ? 'Player' : 'Team'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             {/* Team Management Dialog */}
             <Dialog
@@ -364,15 +883,15 @@ function TournamentParticipants({ tournament, onUpdate }) {
                                                 <ListItem key={team.id}>
                                                     <ListItemText
                                                         primary={team.name}
-                                                        secondary={
-                                                            <Box>
-                                                                <Typography variant="body2" color="text.secondary">
-                                                                    {team.description || 'No description'}
-                                                                </Typography>
-                                                                <Typography variant="caption" color="text.secondary">
-                                                                    {team.players?.length || 0} players
-                                                                </Typography>
-                                                                {team.players && team.players.length > 0 && (
+                                                        secondary={{
+                                                            props: {
+                                                                variant: 'body2',
+                                                                color: 'text.secondary'
+                                                            },
+                                                            children: [
+                                                                team.description || 'No description',
+                                                                `${team.players?.length || 0} players`,
+                                                                team.players && team.players.length > 0 && (
                                                                     <Box sx={{ mt: 1 }}>
                                                                         {team.players.map(player => (
                                                                             <Chip
@@ -383,9 +902,9 @@ function TournamentParticipants({ tournament, onUpdate }) {
                                                                             />
                                                                         ))}
                                                                     </Box>
-                                                                )}
-                                                            </Box>
-                                                        }
+                                                                )
+                                                            ]
+                                                        }}
                                                     />
                                                     <ListItemSecondaryAction>
                                                         <Button
@@ -611,6 +1130,167 @@ function TournamentParticipants({ tournament, onUpdate }) {
                             Create & Add Team
                         </Button>
                     )}
+                </DialogActions>
+            </Dialog>
+
+            {/* Create New Player Dialog */}
+            <Dialog
+                open={showCreatePlayerDialog}
+                onClose={() => {
+                    setShowCreatePlayerDialog(false);
+                    setNewPlayerForTeam({
+                        first_name: '',
+                        last_name: '',
+                        email: '',
+                        phone: '',
+                        handicap: ''
+                    });
+                    setParticipantError(null);
+                }}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <PersonAddIcon sx={{ mr: 1 }} />
+                        Create New Player
+                    </Box>
+                </DialogTitle>
+                <DialogContent>
+                    {participantError && (
+                        <Alert severity="error" sx={{ mb: 2 }}>
+                            {participantError}
+                        </Alert>
+                    )}
+
+                    <Box
+                        component="form"
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            if (newPlayerForTeam.first_name.trim() && newPlayerForTeam.last_name.trim()) {
+                                handleCreateNewPlayerForTeam();
+                            }
+                        }}
+                    >
+                        <Grid container spacing={2} sx={{ mt: 1 }}>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    fullWidth
+                                    label="First Name"
+                                    value={newPlayerForTeam.first_name}
+                                    onChange={(e) => setNewPlayerForTeam({
+                                        ...newPlayerForTeam,
+                                        first_name: e.target.value
+                                    })}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && newPlayerForTeam.first_name.trim() && newPlayerForTeam.last_name.trim()) {
+                                            e.preventDefault();
+                                            handleCreateNewPlayerForTeam();
+                                        }
+                                    }}
+                                    required
+                                    autoFocus
+                                />
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    fullWidth
+                                    label="Last Name"
+                                    value={newPlayerForTeam.last_name}
+                                    onChange={(e) => setNewPlayerForTeam({
+                                        ...newPlayerForTeam,
+                                        last_name: e.target.value
+                                    })}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && newPlayerForTeam.first_name.trim() && newPlayerForTeam.last_name.trim()) {
+                                            e.preventDefault();
+                                            handleCreateNewPlayerForTeam();
+                                        }
+                                    }}
+                                    required
+                                />
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    fullWidth
+                                    label="Email"
+                                    type="email"
+                                    value={newPlayerForTeam.email}
+                                    onChange={(e) => setNewPlayerForTeam({
+                                        ...newPlayerForTeam,
+                                        email: e.target.value
+                                    })}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && newPlayerForTeam.first_name.trim() && newPlayerForTeam.last_name.trim()) {
+                                            e.preventDefault();
+                                            handleCreateNewPlayerForTeam();
+                                        }
+                                    }}
+                                />
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    fullWidth
+                                    label="Phone"
+                                    value={newPlayerForTeam.phone}
+                                    onChange={(e) => setNewPlayerForTeam({
+                                        ...newPlayerForTeam,
+                                        phone: e.target.value
+                                    })}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && newPlayerForTeam.first_name.trim() && newPlayerForTeam.last_name.trim()) {
+                                            e.preventDefault();
+                                            handleCreateNewPlayerForTeam();
+                                        }
+                                    }}
+                                />
+                            </Grid>
+                            <Grid item xs={12} sm={6}>
+                                <TextField
+                                    fullWidth
+                                    label="Handicap"
+                                    type="number"
+                                    inputProps={{ step: 0.1, min: 0, max: 54 }}
+                                    value={newPlayerForTeam.handicap}
+                                    onChange={(e) => setNewPlayerForTeam({
+                                        ...newPlayerForTeam,
+                                        handicap: e.target.value
+                                    })}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && newPlayerForTeam.first_name.trim() && newPlayerForTeam.last_name.trim()) {
+                                            e.preventDefault();
+                                            handleCreateNewPlayerForTeam();
+                                        }
+                                    }}
+                                    helperText="Optional"
+                                />
+                            </Grid>
+                        </Grid>
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        onClick={() => {
+                            setShowCreatePlayerDialog(false);
+                            setNewPlayerForTeam({
+                                first_name: '',
+                                last_name: '',
+                                email: '',
+                                phone: '',
+                                handicap: ''
+                            });
+                            setParticipantError(null);
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleCreateNewPlayerForTeam}
+                        variant="contained"
+                        disabled={!newPlayerForTeam.first_name.trim() || !newPlayerForTeam.last_name.trim()}
+                    >
+                        Create Player
+                    </Button>
                 </DialogActions>
             </Dialog>
         </Box>

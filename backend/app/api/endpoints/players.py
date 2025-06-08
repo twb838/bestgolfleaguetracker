@@ -42,19 +42,21 @@ def get_players(
 @router.post("", response_model=PlayerResponse, status_code=status.HTTP_201_CREATED)
 def create_player(player_in: PlayerCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Create a new player."""
-    # Check if email already exists
-    db_player = db.query(Player).filter(Player.email == player_in.email).first()
-    if db_player:
-        raise HTTPException(
-            status_code=400,
-            detail="Email already registered"
-        )
+    # Check if email already exists (only if email is provided)
+    if player_in.email:
+        db_player = db.query(Player).filter(Player.email == player_in.email).first()
+        if db_player:
+            raise HTTPException(
+                status_code=400,
+                detail="Email already registered"
+            )
     
     # Create new player
     db_player = Player(
         first_name=player_in.first_name,
         last_name=player_in.last_name,
-        email=player_in.email,
+        email=player_in.email,  # This will be None if not provided
+        phone=player_in.phone,  # Add phone field if it exists
         handicap=player_in.handicap,
         team_id=player_in.team_id,
     )

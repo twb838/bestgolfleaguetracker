@@ -14,6 +14,7 @@ import {
 import { useParams, useNavigate } from 'react-router-dom';
 import { format, parseISO, addDays } from 'date-fns';
 import { get } from '../../../services/api';
+import TournamentParticipants from './TournamentParticipants';
 
 // Create a date formatting utility
 const formatDate = (dateString, formatPattern) => {
@@ -41,7 +42,20 @@ function TournamentManagement() {
             setError(null);
 
             const data = await get(`/tournaments/${tournamentId}`);
-            setTournament(data);
+
+            // Fetch additional tournament data including teams and participants
+            const [participants, teams] = await Promise.all([
+                get(`/tournaments/${tournamentId}/participants`).catch(() => []),
+                get(`/tournaments/${tournamentId}/teams`).catch(() => [])
+            ]);
+
+            const tournamentWithDetails = {
+                ...data,
+                participants: participants,
+                teams: teams
+            };
+
+            setTournament(tournamentWithDetails);
         } catch (error) {
             console.error('Error fetching tournament:', error);
             setError(error.message || 'Failed to fetch tournament details');
@@ -63,6 +77,11 @@ function TournamentManagement() {
     };
 
     const handleRetry = () => {
+        fetchTournament();
+    };
+
+    const handleTournamentUpdate = () => {
+        // Refresh tournament data when participants are updated
         fetchTournament();
     };
 
@@ -220,76 +239,72 @@ function TournamentManagement() {
                 </Tabs>
             </Paper>
 
-            <Paper sx={{ p: 3 }}>
-                {activeTab === 0 && (
-                    <Box>
-                        <Typography variant="h6" gutterBottom>
-                            Tournament Overview
-                        </Typography>
-                        <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
-                            Overview content will be available here.
-                        </Typography>
-                    </Box>
-                )}
+            {/* Update the tab content rendering */}
+            {activeTab === 0 && (
+                <Paper sx={{ p: 3 }}>
+                    <Typography variant="h6" gutterBottom>
+                        Tournament Overview
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
+                        Overview content will be available here.
+                    </Typography>
+                </Paper>
+            )}
 
-                {activeTab === 1 && (
-                    <Box>
-                        <Typography variant="h6" gutterBottom>
-                            Tournament Participants
-                        </Typography>
-                        <Typography variant="body1">
-                            {tournament.participants?.length || 0} participants registered
-                        </Typography>
-                    </Box>
-                )}
+            {activeTab === 1 && (
+                /* Participants Tab - Use TournamentParticipants Component */
+                <TournamentParticipants
+                    tournament={tournament}
+                    onUpdate={handleTournamentUpdate}
+                />
+            )}
 
-                {activeTab === 2 && (
-                    <Box>
-                        <Typography variant="h6" gutterBottom>
-                            Tournament Courses
-                        </Typography>
-                        <Typography variant="body1">
-                            {tournament.courses?.length || 0} courses assigned
-                        </Typography>
-                    </Box>
-                )}
+            {activeTab === 2 && (
+                <Paper sx={{ p: 3 }}>
+                    <Typography variant="h6" gutterBottom>
+                        Tournament Courses
+                    </Typography>
+                    <Typography variant="body1">
+                        {tournament.courses?.length || 0} courses assigned
+                    </Typography>
+                </Paper>
+            )}
 
-                {activeTab === 3 && (
-                    <Box>
+            {activeTab === 3 && (
+                <Paper sx={{ p: 3 }}>
+                    <Typography variant="h6" gutterBottom>
+                        Scorecard Entry
+                    </Typography>
+                    <Paper sx={{ p: 3, textAlign: 'center' }}>
+                        <ScorecardIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
                         <Typography variant="h6" gutterBottom>
-                            Scorecard Entry
+                            Enter Player Scores
                         </Typography>
-                        <Paper sx={{ p: 3, textAlign: 'center' }}>
-                            <ScorecardIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
-                            <Typography variant="h6" gutterBottom>
-                                Enter Player Scores
-                            </Typography>
-                            <Typography variant="body1" color="text.secondary" paragraph>
-                                Record scores for each participant, hole by hole, for each day of the tournament.
-                            </Typography>
-                            <Button
-                                variant="contained"
-                                size="large"
-                                startIcon={<ScorecardIcon />}
-                                onClick={() => navigate(`/tournaments/${tournamentId}/scorecard`)}
-                            >
-                                Open Scorecard Entry
-                            </Button>
-                        </Paper>
-                    </Box>
-                )}
+                        <Typography variant="body1" color="text.secondary" paragraph>
+                            Record scores for each participant, hole by hole, for each day of the tournament.
+                        </Typography>
+                        <Button
+                            variant="contained"
+                            size="large"
+                            startIcon={<ScorecardIcon />}
+                            onClick={() => navigate(`/tournaments/${tournamentId}/scorecard`)}
+                        >
+                            Open Scorecard Entry
+                        </Button>
+                    </Paper>
+                </Paper>
+            )}
 
-                {activeTab === 4 && (
-                    <Box>
-                        <Typography variant="h6" gutterBottom>
-                            Tournament Leaderboard
-                        </Typography>
-                        <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
-                            Leaderboard will appear once the tournament starts and scores are entered.
-                        </Typography>
-                    </Box>
-                )}
-            </Paper>
+            {activeTab === 4 && (
+                <Paper sx={{ p: 3 }}>
+                    <Typography variant="h6" gutterBottom>
+                        Tournament Leaderboard
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
+                        Leaderboard will appear once the tournament starts and scores are entered.
+                    </Typography>
+                </Paper>
+            )}
         </Box>
     );
 }

@@ -1,11 +1,12 @@
 from typing import Optional
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel
 
 class PlayerBase(BaseModel):
     first_name: str
     last_name: str
-    email: EmailStr
-    handicap: float = Field(0.0, ge=0)
+    email: Optional[str] = None  # Make email optional with default None
+    phone: Optional[str] = None  # Add phone if not already present
+    handicap: Optional[float] = None
     team_id: Optional[int] = None
 
 class PlayerCreate(PlayerBase):
@@ -14,7 +15,8 @@ class PlayerCreate(PlayerBase):
 class PlayerUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
     handicap: Optional[float] = None
     team_id: Optional[int] = None
 
