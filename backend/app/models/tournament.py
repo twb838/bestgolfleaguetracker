@@ -65,8 +65,8 @@ class TournamentFlight(Base):
     id = Column(Integer, primary_key=True, index=True)
     tournament_id = Column(Integer, ForeignKey("tournaments.id", ondelete="CASCADE"))
     name = Column(String(100), nullable=False)
-    min_handicap = Column(Float)
-    max_handicap = Column(Float)
+    min_handicap = Column(Float, nullable=True)  # Made nullable
+    max_handicap = Column(Float, nullable=True)  # Made nullable
     
     # Relationships
     tournament = relationship("Tournament", back_populates="flights")
