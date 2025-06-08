@@ -335,9 +335,15 @@ function LeagueManagement() {
 
     // Match creation handlers
     const handleCreateMatchClick = () => {
+        // Get the start date of the selected week
+        const selectedWeek = weeks.find(week => week.id === selectedWeekId);
+        const defaultMatchDate = selectedWeek
+            ? selectedWeek.start_date
+            : format(new Date(), 'yyyy-MM-dd');
+
         // Initialize with default values
         let initialMatchState = {
-            match_date: format(new Date(), 'yyyy-MM-dd'),
+            match_date: defaultMatchDate,
             home_team_id: '',
             away_team_id: '',
             course_id: ''
