@@ -384,7 +384,7 @@ const MatchupMatrix = () => {
 
             {/* Matrix Table */}
             <Paper sx={{ overflow: 'hidden' }}>
-                <TableContainer sx={{ maxHeight: '75vh' }}>
+                <TableContainer sx={{ overflow: 'auto' }}> {/* Removed maxHeight and changed overflow */}
                     <Table stickyHeader size="small">
                         <TableHead>
                             <TableRow>
