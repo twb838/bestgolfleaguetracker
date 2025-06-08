@@ -19,7 +19,7 @@ function TournamentParticipants({ tournament, onUpdate }) {
     const [existingTeams, setExistingTeams] = useState([]);
     const [availablePlayers, setAvailablePlayers] = useState([]);
     const [currentTeams, setCurrentTeams] = useState([]);
-    const [teamsLoading, setTeamsLoading] = useState(false);
+    const [teamsLoading, setTeamsLoading] = useState(true); // Start with loading true
     const [teamError, setTeamError] = useState(null);
 
     // New team creation state
@@ -30,22 +30,51 @@ function TournamentParticipants({ tournament, onUpdate }) {
     });
     const [isCreatingNewTeam, setIsCreatingNewTeam] = useState(false);
 
+    // Fetch teams when component mounts or tournament changes
     useEffect(() => {
         if (tournament) {
+            console.log('Tournament changed, fetching teams for tournament:', tournament.id);
             setCurrentTeams(tournament.teams || []);
+            fetchCurrentTeams();
         }
     }, [tournament]);
+
+    // New function to just fetch current tournament teams
+    const fetchCurrentTeams = async () => {
+        if (!tournament?.id) return;
+
+        try {
+            setTeamsLoading(true);
+            console.log(`Fetching teams for tournament ${tournament.id}`);
+
+            const tournamentTeams = await get(`/tournaments/${tournament.id}/teams`);
+            console.log('Fetched tournament teams:', tournamentTeams);
+
+            setCurrentTeams(tournamentTeams);
+        } catch (error) {
+            console.error('Error fetching tournament teams:', error);
+            setTeamError(error.message || 'Failed to fetch tournament teams');
+        } finally {
+            setTeamsLoading(false);
+        }
+    };
 
     const fetchTeamsAndPlayers = async () => {
         try {
             setTeamsLoading(true);
             setTeamError(null);
 
+            console.log('Fetching all teams and players...');
+
             const [teamsData, playersData, tournamentTeams] = await Promise.all([
                 get('/teams'),
                 get('/players'),
                 tournament ? get(`/tournaments/${tournament.id}/teams`) : Promise.resolve([])
             ]);
+
+            console.log('Fetched existing teams:', teamsData);
+            console.log('Fetched players:', playersData);
+            console.log('Fetched tournament teams:', tournamentTeams);
 
             setExistingTeams(teamsData);
             setAvailablePlayers(playersData);
@@ -76,6 +105,7 @@ function TournamentParticipants({ tournament, onUpdate }) {
 
     const handleAddExistingTeam = async (team) => {
         try {
+            console.log(`Adding team ${team.id} to tournament ${tournament.id}`);
             await post(`/tournaments/${tournament.id}/teams/${team.id}`);
 
             // Refresh team data
@@ -112,9 +142,12 @@ function TournamentParticipants({ tournament, onUpdate }) {
                 player_ids: newTeam.players.map(player => player.id)
             };
 
+            console.log('Creating new team:', teamData);
             const createdTeam = await post('/teams', teamData);
+            console.log('Created team:', createdTeam);
 
             // Add the new team to the tournament
+            console.log(`Adding new team ${createdTeam.id} to tournament ${tournament.id}`);
             await post(`/tournaments/${tournament.id}/teams/${createdTeam.id}`);
 
             // Refresh team data
@@ -149,6 +182,8 @@ function TournamentParticipants({ tournament, onUpdate }) {
 
     const handleRemoveTeamFromTournament = async (team) => {
         try {
+            console.log(`Removing team ${team.id} from tournament ${tournament.id}`);
+
             const response = await fetch(`/tournaments/${tournament.id}/teams/${team.id}`, {
                 method: 'DELETE',
                 headers: {
@@ -186,6 +221,34 @@ function TournamentParticipants({ tournament, onUpdate }) {
         );
     }
 
+    // Show loading state while fetching initial data
+    if (teamsLoading && !teamDialogOpen) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+                <CircularProgress />
+                <Typography variant="body1" sx={{ ml: 2 }}>
+                    Loading tournament teams...
+                </Typography>
+            </Box>
+        );
+    }
+
+    // Show error state if there's an error
+    if (teamError && !teamDialogOpen) {
+        return (
+            <Paper sx={{ p: 3 }}>
+                <Alert severity="error" sx={{ mb: 2 }}>
+                    {teamError}
+                </Alert>
+                <Button onClick={fetchCurrentTeams} variant="outlined">
+                    Retry
+                </Button>
+            </Paper>
+        );
+    }
+
+    console.log('Rendering with currentTeams:', currentTeams);
+
     return (
         <Box>
             {/* Tournament Teams Overview */}
@@ -202,6 +265,12 @@ function TournamentParticipants({ tournament, onUpdate }) {
                         Manage Teams
                     </Button>
                 </Box>
+
+                {/* Debug info - remove this later */}
+                <Alert severity="info" sx={{ mb: 2 }}>
+                    Debug: Tournament ID: {tournament.id}, Current Teams Count: {currentTeams.length}
+                    {currentTeams.length > 0 && `, Team IDs: ${currentTeams.map(t => t.id).join(', ')}`}
+                </Alert>
 
                 {currentTeams.length > 0 ? (
                     <Grid container spacing={2}>

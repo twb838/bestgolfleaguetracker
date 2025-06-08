@@ -746,9 +746,18 @@ function TournamentCreationWizard() {
                 return (
                     <Grid container spacing={3}>
                         <Grid item xs={12}>
+                            <Alert severity="info" sx={{ mb: 3 }}>
+                                <Typography variant="subtitle2" gutterBottom>
+                                    Participants are optional
+                                </Typography>
+                                <Typography variant="body2">
+                                    You can create the tournament now and add participants later through the tournament management page.
+                                </Typography>
+                            </Alert>
+
                             {tournamentData.participant_type !== 'team' && (
                                 <>
-                                    <Typography variant="h6" gutterBottom>Individual Participants</Typography>
+                                    <Typography variant="h6" gutterBottom>Individual Participants (Optional)</Typography>
                                     <FormControl fullWidth>
                                         <InputLabel id="participants-select-label">Select Players</InputLabel>
                                         <Select
@@ -785,7 +794,7 @@ function TournamentCreationWizard() {
 
                             {tournamentData.participant_type !== 'individual' && (
                                 <Grid item xs={12} sx={{ mt: tournamentData.participant_type === 'mixed' ? 3 : 0 }}>
-                                    <Typography variant="h6" gutterBottom>Teams</Typography>
+                                    <Typography variant="h6" gutterBottom>Teams (Optional)</Typography>
                                     <FormControl fullWidth>
                                         <InputLabel id="teams-select-label">Select Teams</InputLabel>
                                         <Select
@@ -855,6 +864,20 @@ function TournamentCreationWizard() {
                                     )}
                                 </Grid>
                             )}
+
+                            {/* Show message when no participants are selected */}
+                            {tournamentData.individual_participants.length === 0 &&
+                                tournamentData.teams.length === 0 && (
+                                    <Paper sx={{ p: 3, mt: 3, textAlign: 'center', bgcolor: 'grey.50' }}>
+                                        <GroupIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                                        <Typography variant="body1" color="text.secondary" paragraph>
+                                            No participants selected yet
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            You can proceed to create the tournament and add participants later.
+                                        </Typography>
+                                    </Paper>
+                                )}
                         </Grid>
                     </Grid>
                 );
@@ -975,24 +998,35 @@ function TournamentCreationWizard() {
                                     <Grid item xs={12} sm={6}>
                                         <Typography variant="subtitle2">Participants</Typography>
                                         <Typography variant="body1" gutterBottom>
-                                            {tournamentData.participant_type === 'individual' ?
-                                                `${tournamentData.individual_participants?.length || 0} players selected` :
-                                                tournamentData.participant_type === 'team' ?
-                                                    `${tournamentData.teams?.length || 0} teams selected` :
-                                                    `${tournamentData.individual_participants?.length || 0} players and ${tournamentData.teams?.length || 0} teams selected`}
+                                            {(() => {
+                                                const individualCount = tournamentData.individual_participants?.length || 0;
+                                                const teamCount = tournamentData.teams?.length || 0;
+
+                                                if (individualCount === 0 && teamCount === 0) {
+                                                    return "No participants selected (can be added later)";
+                                                }
+
+                                                if (tournamentData.participant_type === 'individual') {
+                                                    return `${individualCount} players selected`;
+                                                } else if (tournamentData.participant_type === 'team') {
+                                                    return `${teamCount} teams selected`;
+                                                } else {
+                                                    return `${individualCount} players and ${teamCount} teams selected`;
+                                                }
+                                            })()}
                                         </Typography>
                                     </Grid>
                                 </Grid>
                             </Paper>
 
                             {(tournamentData.name === '' ||
-                                tournamentData.courses.length === 0 ||
-                                (tournamentData.participant_type === 'individual' && tournamentData.individual_participants.length === 0) ||
-                                (tournamentData.participant_type === 'team' && tournamentData.teams.length === 0) ||
-                                (tournamentData.participant_type === 'mixed' &&
-                                    tournamentData.individual_participants.length === 0 && tournamentData.teams.length === 0)) && (
+                                tournamentData.courses.length === 0) && (
                                     <Alert severity="warning">
                                         Please complete all required fields before creating the tournament.
+                                        <br />
+                                        <strong>Required:</strong> Tournament name and at least one course.
+                                        <br />
+                                        <strong>Optional:</strong> Participants (can be added after tournament creation).
                                     </Alert>
                                 )}
 
@@ -1021,34 +1055,12 @@ function TournamentCreationWizard() {
             case 2:
                 return tournamentData.courses && tournamentData.courses.length > 0;
             case 3:
-                // Safely check for participant data based on the selected participant type
-                if (tournamentData.participant_type === 'individual') {
-                    return tournamentData.individual_participants &&
-                        tournamentData.individual_participants.length > 0;
-                } else if (tournamentData.participant_type === 'team') {
-                    return tournamentData.teams &&
-                        tournamentData.teams.length > 0;
-                } else { // mixed
-                    return (tournamentData.individual_participants || tournamentData.teams) &&
-                        ((tournamentData.individual_participants && tournamentData.individual_participants.length > 0) ||
-                            (tournamentData.teams && tournamentData.teams.length > 0));
-                }
+                // Participants step is now always complete (participants are optional)
+                return true;
             case 4:
+                // Final step only requires name and courses (participants are optional)
                 return tournamentData.name !== '' &&
-                    tournamentData.courses && tournamentData.courses.length > 0 &&
-                    (
-                        (tournamentData.participant_type === 'individual' &&
-                            tournamentData.individual_participants &&
-                            tournamentData.individual_participants.length > 0) ||
-
-                        (tournamentData.participant_type === 'team' &&
-                            tournamentData.teams &&
-                            tournamentData.teams.length > 0) ||
-
-                        (tournamentData.participant_type === 'mixed' &&
-                            ((tournamentData.individual_participants && tournamentData.individual_participants.length > 0) ||
-                                (tournamentData.teams && tournamentData.teams.length > 0)))
-                    );
+                    tournamentData.courses && tournamentData.courses.length > 0;
             default:
                 return false;
         }
