@@ -7,7 +7,7 @@ from datetime import date, datetime
 from app.db.base import get_db
 from app.models.course import Course
 from app.models.hole import Hole
-from app.models.tournament import Tournament, TournamentParticipant, ParticipantType
+from app.models.tournament import Tournament, TournamentPlayer, ParticipantType
 from app.models.player import Player
 from app.models.team import Team
 from app.models.user import User
@@ -45,40 +45,24 @@ def create_tournament(tournament: TournamentCreate, db: Session = Depends(get_db
             if course:
                 new_tournament.courses.append(course)
     
-    # Add individual participants if applicable
-    if tournament.participant_type in [ParticipantType.INDIVIDUAL, ParticipantType.MIXED] and tournament.individual_participants:
+    # Add individual players if applicable
+    if tournament.participant_type in [ParticipantType.INDIVIDUAL] and tournament.individual_participants:
         for player_id in tournament.individual_participants:
             player = db.query(Player).filter(Player.id == player_id).first()
             if player:
-                participant = TournamentParticipant(
+                tournament_player = TournamentPlayer(
                     tournament_id=new_tournament.id,
                     player_id=player_id
                 )
-                db.add(participant)
+                db.add(tournament_player)
     
     # Add team participants if applicable
-    if tournament.participant_type in [ParticipantType.TEAM, ParticipantType.MIXED] and tournament.teams:
+    if tournament.participant_type in [ParticipantType.TEAM] and tournament.teams:
         for team_id in tournament.teams:
             team = db.query(Team).filter(Team.id == team_id).first()
             if team:
                 new_tournament.teams.append(team)
                 
-                # For mixed tournaments, also add team players as individual participants
-                if tournament.participant_type == ParticipantType.MIXED:
-                    for team_player in team.players:
-                        # Check if player is already added as individual participant
-                        existing = db.query(TournamentParticipant).filter(
-                            TournamentParticipant.tournament_id == new_tournament.id,
-                            TournamentParticipant.player_id == team_player.id
-                        ).first()
-                        
-                        if not existing:
-                            participant = TournamentParticipant(
-                                tournament_id=new_tournament.id,
-                                player_id=team_player.id,
-                                team_id=team_id
-                            )
-                            db.add(participant)
     
     db.commit()
     db.refresh(new_tournament)
@@ -98,50 +82,44 @@ def get_tournament(tournament_id: int, db: Session = Depends(get_db), current_us
         raise HTTPException(status_code=404, detail="Tournament not found")
     return tournament
 
-@router.get("/{tournament_id}/participants", response_model=List[Dict])
-def get_tournament_participants(
+@router.get("/{tournament_id}/players", response_model=List[Dict])
+def get_tournament_players(
     tournament_id: int, 
     db: Session = Depends(get_db), 
     current_user: User = Depends(get_current_active_user)
 ):
-    """Get all participants for a tournament"""
+    """Get all players for a tournament"""
     # Verify tournament exists
     tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found")
     
-    # Get individual participants
-    participants = db.query(
-        TournamentParticipant.id,
-        TournamentParticipant.player_id,
-        TournamentParticipant.team_id,
+    # Get individual players (removed team_id references)
+    players = db.query(
+        TournamentPlayer.id,
+        TournamentPlayer.player_id,
         Player.first_name.label('first_name'),
         Player.last_name.label('last_name'),
-        Player.handicap.label('handicap'),
-        Team.name.label('team_name')
+        Player.handicap.label('handicap')
     ).join(
-        Player, TournamentParticipant.player_id == Player.id
-    ).outerjoin(
-        Team, TournamentParticipant.team_id == Team.id
+        Player, TournamentPlayer.player_id == Player.id
     ).filter(
-        TournamentParticipant.tournament_id == tournament_id
+        TournamentPlayer.tournament_id == tournament_id
     ).all()
     
     # Format the response
     result = []
-    for participant in participants:
+    for player in players:
         # Combine first and last name for player_name
-        player_name = f"{participant.first_name} {participant.last_name}".strip()
+        player_name = f"{player.first_name} {player.last_name}".strip()
         if not player_name:
-            player_name = f"Player {participant.player_id}"
+            player_name = f"Player {player.player_id}"
             
         result.append({
-            "id": participant.id,
-            "player_id": participant.player_id,
+            "id": player.id,
+            "player_id": player.player_id,
             "player_name": player_name,
-            "handicap": participant.handicap,
-            "team_id": participant.team_id,
-            "team_name": participant.team_name
+            "handicap": player.handicap
         })
     
     return result
@@ -216,74 +194,90 @@ def get_tournament_courses(
         
         return result
 
-@router.post("/{tournament_id}/participants")
-def add_tournament_participant(
+@router.post("/{tournament_id}/players")
+def add_tournament_player(
     tournament_id: int,
-    participant_data: Dict,
+    player_data: Dict,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Add a new participant to a tournament"""
+    """Add a new player to a tournament"""
     # Verify tournament exists
     tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found")
     
-    # Create or find player
-    player_name = participant_data.get("player_name")
-    handicap = participant_data.get("handicap", 0)
+    # Get player_id from request data
+    player_id = player_data.get("player_id")
     
-    if not player_name:
-        raise HTTPException(status_code=400, detail="Player name is required")
+    if not player_id:
+        raise HTTPException(status_code=400, detail="Player ID is required")
     
-    # Split name into first and last name
-    name_parts = player_name.strip().split()
-    first_name = name_parts[0] if name_parts else ""
-    last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
-    
-    # Check if player already exists (check by both first and last name)
-    player = db.query(Player).filter(
-        Player.first_name == first_name,
-        Player.last_name == last_name
-    ).first()
-    
+    # Verify player exists
+    player = db.query(Player).filter(Player.id == player_id).first()
     if not player:
-        # Create new player
-        player = Player(
-            first_name=first_name,
-            last_name=last_name,
-            handicap=float(handicap) if handicap else 0.0
-        )
-        db.add(player)
-        db.flush()
+        raise HTTPException(status_code=404, detail="Player not found")
     
-    # Check if participant already exists in tournament
-    existing = db.query(TournamentParticipant).filter(
-        TournamentParticipant.tournament_id == tournament_id,
-        TournamentParticipant.player_id == player.id
+    # Check if player is already in tournament
+    existing = db.query(TournamentPlayer).filter(
+        TournamentPlayer.tournament_id == tournament_id,
+        TournamentPlayer.player_id == player_id
     ).first()
     
     if existing:
-        raise HTTPException(status_code=400, detail="Player is already a participant in this tournament")
+        raise HTTPException(status_code=400, detail="Player is already in this tournament")
     
-    # Create participant
-    participant = TournamentParticipant(
+    # Create tournament player record - ONLY with tournament_id and player_id
+    tournament_player = TournamentPlayer(
         tournament_id=tournament_id,
-        player_id=player.id
+        player_id=player_id
+        # Removed flight_id and team_id - they should be None/NULL by default
     )
     
-    db.add(participant)
+    db.add(tournament_player)
     db.commit()
-    db.refresh(participant)
+    db.refresh(tournament_player)
     
     # Get the full name for response
     full_name = f"{player.first_name} {player.last_name}".strip()
     
     return {
-        "id": participant.id,
+        "id": tournament_player.id,
         "player_id": player.id,
         "player_name": full_name,
         "handicap": player.handicap
+    }
+
+@router.delete("/{tournament_id}/players/{player_id}")
+def remove_tournament_player(
+    tournament_id: int,
+    player_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Remove a player from a tournament"""
+    # Verify tournament exists
+    tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
+    if not tournament:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    
+    # Find the tournament player record
+    tournament_player = db.query(TournamentPlayer).filter(
+        TournamentPlayer.tournament_id == tournament_id,
+        TournamentPlayer.id == player_id  # This is the tournament_player.id, not the player.id
+    ).first()
+    
+    if not tournament_player:
+        raise HTTPException(status_code=404, detail="Player not found in this tournament")
+    
+    # Remove the tournament player record
+    db.delete(tournament_player)
+    db.commit()
+    
+    return {
+        "message": "Player removed from tournament successfully",
+        "tournament_id": tournament_id,
+        "player_id": player_id
     }
 
 @router.get("/{tournament_id}/teams", response_model=List[Dict])
@@ -298,16 +292,9 @@ def get_tournament_teams(
     if not tournament:
         raise HTTPException(status_code=404, detail="Tournament not found")
     
-    # Get teams with their players
-    teams = db.query(Team).join(
-        Tournament.teams
-    ).filter(
-        Tournament.id == tournament_id
-    ).all()
-    
-    # Format response with team players included
+    # Get teams that are associated with this tournament
     result = []
-    for team in teams:
+    for team in tournament.teams:
         # Get team players
         players = []
         for player in team.players:
@@ -323,20 +310,12 @@ def get_tournament_teams(
                 "last_name": player.last_name
             })
         
-        # Check if team has any participants in this tournament
-        team_participants = db.query(TournamentParticipant).filter(
-            TournamentParticipant.tournament_id == tournament_id,
-            TournamentParticipant.team_id == team.id
-        ).all()
-        
         team_data = {
             "id": team.id,
             "name": team.name,
-            "description": "TODO: Add team description",
+            "description": team.description or "",
             "player_count": len(players),
-            "players": players,
-            "tournament_participants": len(team_participants),
-            "is_active_in_tournament": len(team_participants) > 0
+            "players": players
         }
         result.append(team_data)
     
@@ -367,31 +346,13 @@ def add_team_to_tournament(
     # Add team to tournament
     tournament.teams.append(team)
     
-    # If tournament allows team participants, add team players as participants
-    if tournament.participant_type in [ParticipantType.TEAM, ParticipantType.MIXED]:
-        for player in team.players:
-            # Check if player is already a participant
-            existing = db.query(TournamentParticipant).filter(
-                TournamentParticipant.tournament_id == tournament_id,
-                TournamentParticipant.player_id == player.id
-            ).first()
-            
-            # Only add if player is not already a participant
-            if not existing:
-                participant = TournamentParticipant(
-                    tournament_id=tournament_id,
-                    player_id=player.id,
-                    team_id=team_id
-                )
-                db.add(participant)
-    
     db.commit()
     
     return {
         "message": f"Team '{team.name}' added to tournament '{tournament.name}'",
         "team_id": team_id,
         "tournament_id": tournament_id,
-        "players_added": len(team.players)
+        "players_in_team": len(team.players)
     }
 
 @router.delete("/{tournament_id}/teams/{team_id}")
@@ -416,16 +377,7 @@ def remove_team_from_tournament(
     if team not in tournament.teams:
         raise HTTPException(status_code=400, detail="Team is not in this tournament")
     
-    # Remove team participants
-    team_participants = db.query(TournamentParticipant).filter(
-        TournamentParticipant.tournament_id == tournament_id,
-        TournamentParticipant.team_id == team_id
-    ).all()
-    
-    for participant in team_participants:
-        db.delete(participant)
-    
-    # Remove team from tournament
+    # Remove team from tournament (this handles the tournament_team association)
     tournament.teams.remove(team)
     
     db.commit()
@@ -433,24 +385,23 @@ def remove_team_from_tournament(
     return {
         "message": f"Team '{team.name}' removed from tournament '{tournament.name}'",
         "team_id": team_id,
-        "tournament_id": tournament_id,
-        "participants_removed": len(team_participants)
+        "tournament_id": tournament_id
     }
 
-@router.get("/{tournament_id}/scorecards/{participant_id}/{day}/{course_id}")
+@router.get("/{tournament_id}/scorecards/{player_id}/{day}/{course_id}")
 def get_scorecard(
     tournament_id: int,
-    participant_id: int,
+    player_id: int,
     day: int,
     course_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Get a scorecard for a participant"""
+    """Get a scorecard for a player"""
     # This is a placeholder - you'll need to implement the actual scorecard model
     # For now, return empty scores
     return {
-        "participant_id": participant_id,
+        "player_id": player_id,
         "day": day,
         "course_id": course_id,
         "scores": {}
@@ -471,7 +422,7 @@ def save_scorecard(
     return {
         "message": "Scorecard saved successfully",
         "tournament_id": tournament_id,
-        "participant_id": scorecard_data.get("participant_id"),
+        "player_id": scorecard_data.get("player_id"),
         "day": scorecard_data.get("day"),
         "course_id": scorecard_data.get("course_id")
     }

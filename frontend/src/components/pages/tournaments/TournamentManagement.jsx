@@ -6,6 +6,7 @@ import {
 import {
     ArrowBack as ArrowBackIcon,
     Event as EventIcon,
+    Person as PersonIcon,
     Groups as GroupsIcon,
     GolfCourse as GolfCourseIcon,
     Leaderboard as LeaderboardIcon,
@@ -14,7 +15,7 @@ import {
 import { useParams, useNavigate } from 'react-router-dom';
 import { format, parseISO, addDays } from 'date-fns';
 import { get } from '../../../services/api';
-import TournamentParticipants from './TournamentParticipants';
+import TournamentPlayers from './TournamentPlayers';
 
 // Create a date formatting utility
 const formatDate = (dateString, formatPattern) => {
@@ -43,16 +44,20 @@ function TournamentManagement() {
 
             const data = await get(`/tournaments/${tournamentId}`);
 
-            // Fetch additional tournament data including teams and participants
-            const [participants, teams] = await Promise.all([
-                get(`/tournaments/${tournamentId}/participants`).catch(() => []),
-                get(`/tournaments/${tournamentId}/teams`).catch(() => [])
-            ]);
+            // Fetch additional tournament data based on participant type
+            let participantsData = [];
+            let teamsData = [];
+
+            if (data.participant_type === 'individual') {
+                participantsData = await get(`/tournaments/${tournamentId}/players`).catch(() => []);
+            } else if (data.participant_type === 'team') {
+                teamsData = await get(`/tournaments/${tournamentId}/teams`).catch(() => []);
+            }
 
             const tournamentWithDetails = {
                 ...data,
-                participants: participants,
-                teams: teams
+                participants: participantsData,
+                teams: teamsData
             };
 
             setTournament(tournamentWithDetails);
@@ -100,6 +105,29 @@ function TournamentManagement() {
         } else {
             return <Chip size="small" label="In Progress" color="warning" />;
         }
+    };
+
+    // Generate tabs based on tournament type
+    const getTabs = () => {
+        const baseTabs = [
+            { icon: <EventIcon />, label: "Overview" },
+        ];
+
+        // Add participants tab based on tournament type
+        if (tournament?.participant_type === 'individual') {
+            baseTabs.push({ icon: <PersonIcon />, label: "Players" });
+        } else if (tournament?.participant_type === 'team') {
+            baseTabs.push({ icon: <GroupsIcon />, label: "Teams" });
+        }
+
+        // Add remaining tabs
+        baseTabs.push(
+            { icon: <GolfCourseIcon />, label: "Courses" },
+            { icon: <ScorecardIcon />, label: "Scorecards" },
+            { icon: <LeaderboardIcon />, label: "Leaderboard" }
+        );
+
+        return baseTabs;
     };
 
     if (loading) {
@@ -178,6 +206,8 @@ function TournamentManagement() {
         );
     }
 
+    const tabs = getTabs();
+
     return (
         <Box>
             <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between' }}>
@@ -215,6 +245,9 @@ function TournamentManagement() {
                         {tournament.format === 'stableford' && 'Stableford'}
                         {tournament.format === 'four_ball' && 'Four-Ball'}
                     </Typography>
+                    <Typography variant="body2">
+                        Type: {tournament.participant_type === 'individual' ? 'Individual Players' : `Teams (${tournament.team_size} players)`}
+                    </Typography>
                     {tournament.use_flights && (
                         <Typography variant="body2">
                             Flights: {tournament.number_of_flights}
@@ -231,29 +264,67 @@ function TournamentManagement() {
                     textColor="primary"
                     indicatorColor="primary"
                 >
-                    <Tab icon={<EventIcon />} label="Overview" />
-                    <Tab icon={<GroupsIcon />} label="Participants" />
-                    <Tab icon={<GolfCourseIcon />} label="Courses" />
-                    <Tab icon={<ScorecardIcon />} label="Scorecards" />
-                    <Tab icon={<LeaderboardIcon />} label="Leaderboard" />
+                    {tabs.map((tab, index) => (
+                        <Tab key={index} icon={tab.icon} label={tab.label} />
+                    ))}
                 </Tabs>
             </Paper>
 
-            {/* Update the tab content rendering */}
+            {/* Tab Content */}
             {activeTab === 0 && (
                 <Paper sx={{ p: 3 }}>
                     <Typography variant="h6" gutterBottom>
                         Tournament Overview
                     </Typography>
-                    <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
-                        Overview content will be available here.
-                    </Typography>
+                    <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))' }}>
+                        <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+                            <Typography variant="subtitle2" color="text.secondary">
+                                Participant Type
+                            </Typography>
+                            <Typography variant="h6">
+                                {tournament.participant_type === 'individual' ? 'Individual Players' : 'Teams'}
+                            </Typography>
+                        </Paper>
+
+                        <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+                            <Typography variant="subtitle2" color="text.secondary">
+                                {tournament.participant_type === 'individual' ? 'Players' : 'Teams'} Registered
+                            </Typography>
+                            <Typography variant="h6">
+                                {tournament.participant_type === 'individual'
+                                    ? (tournament.participants?.length || 0)
+                                    : (tournament.teams?.length || 0)
+                                }
+                            </Typography>
+                        </Paper>
+
+                        <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+                            <Typography variant="subtitle2" color="text.secondary">
+                                Tournament Format
+                            </Typography>
+                            <Typography variant="h6">
+                                {tournament.format === 'stroke_play' && 'Stroke Play'}
+                                {tournament.format === 'match_play' && 'Match Play'}
+                                {tournament.format === 'stableford' && 'Stableford'}
+                                {tournament.format === 'four_ball' && 'Four-Ball'}
+                            </Typography>
+                        </Paper>
+
+                        <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
+                            <Typography variant="subtitle2" color="text.secondary">
+                                Duration
+                            </Typography>
+                            <Typography variant="h6">
+                                {tournament.number_of_days} day{tournament.number_of_days !== 1 ? 's' : ''}
+                            </Typography>
+                        </Paper>
+                    </Box>
                 </Paper>
             )}
 
             {activeTab === 1 && (
-                /* Participants Tab - Use TournamentParticipants Component */
-                <TournamentParticipants
+                /* Participants Tab - Use TournamentPlayers Component */
+                <TournamentPlayers
                     tournament={tournament}
                     onUpdate={handleTournamentUpdate}
                 />
@@ -278,10 +349,10 @@ function TournamentManagement() {
                     <Paper sx={{ p: 3, textAlign: 'center' }}>
                         <ScorecardIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
                         <Typography variant="h6" gutterBottom>
-                            Enter Player Scores
+                            Enter {tournament.participant_type === 'individual' ? 'Player' : 'Team'} Scores
                         </Typography>
                         <Typography variant="body1" color="text.secondary" paragraph>
-                            Record scores for each participant, hole by hole, for each day of the tournament.
+                            Record scores for each {tournament.participant_type === 'individual' ? 'participant' : 'team'}, hole by hole, for each day of the tournament.
                         </Typography>
                         <Button
                             variant="contained"

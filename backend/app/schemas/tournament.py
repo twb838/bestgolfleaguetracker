@@ -29,12 +29,12 @@ class FlightOut(FlightBase):
         orm_mode = True
 
 # Tournament participant schemas
-class TournamentParticipantBase(BaseModel):
+class TournamentPlayerBase(BaseModel):
     player_id: int
     team_id: Optional[int] = None
     flight_id: Optional[int] = None
 
-class TournamentParticipantOut(TournamentParticipantBase):
+class TournamentPlayerOut(TournamentPlayerBase):
     id: int
     tournament_id: int
     player: Optional[PlayerResponse] = None
@@ -42,7 +42,7 @@ class TournamentParticipantOut(TournamentParticipantBase):
     class Config:
         orm_mode = True
 
-class TournamentParticipantResponse(BaseModel):
+class TournamentPlayerResponse(BaseModel):
     id: int
     player_id: int
     player_name: str
@@ -55,7 +55,7 @@ class TournamentParticipantResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class TournamentParticipantCreate(BaseModel):
+class TournamentPlayerCreate(BaseModel):
     player_name: str
     handicap: Optional[float] = 0
 
@@ -100,7 +100,7 @@ class TournamentOut(TournamentBase):
     updated_at: datetime
     flights: Optional[List[FlightOut]] = []
     courses: Optional[List[CourseResponse]] = []
-    individual_participants: Optional[List[TournamentParticipantOut]] = []
+    individual_participants: Optional[List[TournamentPlayerOut]] = []
     teams: Optional[List[TeamResponse]] = []
     
     class Config:

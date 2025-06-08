@@ -49,7 +49,7 @@ class Tournament(Base):
     
     # Relationships
     flights = relationship("TournamentFlight", back_populates="tournament", cascade="all, delete-orphan")
-    individual_participants = relationship("TournamentParticipant", back_populates="tournament", cascade="all, delete-orphan")
+    players = relationship("TournamentPlayer", back_populates="tournament", cascade="all, delete-orphan")  # Updated relationship name
     teams = relationship(
         "Team", 
         secondary="tournament_team", 
@@ -70,24 +70,23 @@ class TournamentFlight(Base):
     
     # Relationships
     tournament = relationship("Tournament", back_populates="flights")
-    participants = relationship("TournamentParticipant", back_populates="flight")
+    players = relationship("TournamentPlayer", back_populates="flight")  # Updated relationship name
 
-# Participant model for individual players
-class TournamentParticipant(Base):
-    __tablename__ = "tournament_participants"
+# Player model for individual players in tournaments (renamed from TournamentPlayer)
+class TournamentPlayer(Base):
+    __tablename__ = "tournament_players"  # Changed from tournament_participants
     
     id = Column(Integer, primary_key=True, index=True)
     tournament_id = Column(Integer, ForeignKey("tournaments.id", ondelete="CASCADE"))
     player_id = Column(Integer, ForeignKey("players.id"))
-    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)  # For mixed tournaments
     flight_id = Column(Integer, ForeignKey("tournament_flights.id"), nullable=True)
+    # Removed team_id field
     
     # Relationships
-    tournament = relationship("Tournament", back_populates="individual_participants")
+    tournament = relationship("Tournament", back_populates="players")  # Updated relationship name
     player = relationship("Player")
-    team = relationship("Team")
-    flight = relationship("TournamentFlight", back_populates="participants")
-    scores = relationship("TournamentScore", back_populates="participant", cascade="all, delete-orphan")
+    flight = relationship("TournamentFlight", back_populates="players")  # Updated relationship name
+    scores = relationship("TournamentScore", back_populates="player", cascade="all, delete-orphan")  # Updated relationship name
 
 # Tournament Round model
 class TournamentRound(Base):
@@ -111,13 +110,13 @@ class TournamentScore(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     round_id = Column(Integer, ForeignKey("tournament_rounds.id", ondelete="CASCADE"))
-    participant_id = Column(Integer, ForeignKey("tournament_participants.id", ondelete="CASCADE"))
+    player_id = Column(Integer, ForeignKey("tournament_players.id", ondelete="CASCADE"))  # Updated foreign key reference
     hole_number = Column(Integer, nullable=False)
     score = Column(Integer, nullable=False)
     
     # Relationships
     round = relationship("TournamentRound", back_populates="individual_scores")
-    participant = relationship("TournamentParticipant", back_populates="scores")
+    player = relationship("TournamentPlayer", back_populates="scores")  # Updated relationship name
 
 # Team Score model
 class TournamentTeamScore(Base):

@@ -58,7 +58,6 @@ def create_player(player_in: PlayerCreate, db: Session = Depends(get_db), curren
         email=player_in.email,  # This will be None if not provided
         phone=player_in.phone,  # Add phone field if it exists
         handicap=player_in.handicap,
-        team_id=player_in.team_ids[0] if player_in.team_ids else None  # Use first team ID if provided,
     )
     db.add(db_player)
     db.commit()

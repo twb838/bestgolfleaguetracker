@@ -12,7 +12,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { get } from '../../../services/api';
-import TournamentParticipants from './TournamentParticipants';
+import TournamentPlayers from './TournamentPlayers';
 
 function Tournaments() {
     const [tournaments, setTournaments] = useState([]);
@@ -43,8 +43,8 @@ function Tournaments() {
                         console.log(`Fetching details for tournament ${tournament.id} (${tournament.name})`);
 
                         const [participants, teams] = await Promise.all([
-                            get(`/tournaments/${tournament.id}/participants`).catch((err) => {
-                                console.error(`Error fetching participants for tournament ${tournament.id}:`, err);
+                            get(`/tournaments/${tournament.id}/players`).catch((err) => {
+                                console.error(`Error fetching players for tournament ${tournament.id}:`, err);
                                 return [];
                             }),
                             get(`/tournaments/${tournament.id}/teams`).catch((err) => {
@@ -147,7 +147,7 @@ function Tournaments() {
                         {selectedTournament.name} - Team Management
                     </Typography>
                 </Box>
-                <TournamentParticipants
+                <TournamentPlayers
                     tournament={selectedTournament}
                     onUpdate={handleTournamentUpdate}
                 />

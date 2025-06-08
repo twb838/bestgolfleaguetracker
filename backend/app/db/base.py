@@ -19,7 +19,7 @@ from app.models.score import PlayerScore
 from app.models.tournament import (
     Tournament, 
     TournamentFlight, 
-    TournamentParticipant, 
+    TournamentPlayer, 
     TournamentRound,
     TournamentScore,
     TournamentTeamScore,
