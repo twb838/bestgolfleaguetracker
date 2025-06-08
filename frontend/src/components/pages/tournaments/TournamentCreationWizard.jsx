@@ -50,16 +50,15 @@ function TournamentCreationWizard() {
         format: 'stroke_play',
         scoring_type: 'gross',
         number_of_days: 1,
-        // Updated flight options
-        flight_method: 'none', // 'none', 'pre_handicap', 'post_scores'
+        flight_method: 'none',
         number_of_flights: 0,
-        auto_flight_size: 16, // Target size for auto-created flights
+        auto_flight_size: 16,
         courses: [],
         individual_participants: [],
         teams: [],
         handicap_allowance: 100,
-        participant_type: 'individual',
-        team_size: 0
+        participant_type: 'individual', // Default to individual
+        team_size: 2 // Default team size
     });
 
     // Flight state for pre-handicap flights
@@ -614,17 +613,12 @@ function TournamentCreationWizard() {
                                     <FormControlLabel
                                         value="team"
                                         control={<Radio />}
-                                        label="Teams Only"
-                                    />
-                                    <FormControlLabel
-                                        value="mixed"
-                                        control={<Radio />}
-                                        label="Mixed (Both Individual & Team)"
+                                        label="Teams"
                                     />
                                 </RadioGroup>
                             </FormControl>
 
-                            {tournamentData.participant_type !== 'individual' && (
+                            {tournamentData.participant_type === 'team' && (
                                 <TextField
                                     margin="normal"
                                     label="Team Size"
@@ -634,7 +628,7 @@ function TournamentCreationWizard() {
                                     onChange={handleInputChange}
                                     InputProps={{ inputProps: { min: 2, max: 4 } }}
                                     helperText="Number of players per team (2-4)"
-                                    fullWidth
+                                    sx={{ maxWidth: 300 }}
                                 />
                             )}
                         </Grid>
@@ -755,7 +749,7 @@ function TournamentCreationWizard() {
                                 </Typography>
                             </Alert>
 
-                            {tournamentData.participant_type !== 'team' && (
+                            {tournamentData.participant_type === 'individual' ? (
                                 <>
                                     <Typography variant="h6" gutterBottom>Individual Participants (Optional)</Typography>
                                     <FormControl fullWidth>
@@ -790,10 +784,8 @@ function TournamentCreationWizard() {
                                         </Select>
                                     </FormControl>
                                 </>
-                            )}
-
-                            {tournamentData.participant_type !== 'individual' && (
-                                <Grid item xs={12} sx={{ mt: tournamentData.participant_type === 'mixed' ? 3 : 0 }}>
+                            ) : (
+                                <>
                                     <Typography variant="h6" gutterBottom>Teams (Optional)</Typography>
                                     <FormControl fullWidth>
                                         <InputLabel id="teams-select-label">Select Teams</InputLabel>
@@ -820,7 +812,7 @@ function TournamentCreationWizard() {
                                         >
                                             {teams.map((team) => (
                                                 <MenuItem key={team.id} value={team.id}>
-                                                    {team.name} ({team.members?.length || 0} members)
+                                                    {team.name} ({team.players?.length || 0} players)
                                                 </MenuItem>
                                             ))}
                                         </Select>
@@ -841,14 +833,14 @@ function TournamentCreationWizard() {
                                                                     {team.name}
                                                                 </Typography>
                                                                 <Typography variant="body2" color="text.secondary">
-                                                                    Members: {team.members?.length || 0}
+                                                                    Players: {team.players?.length || 0}
                                                                 </Typography>
-                                                                {team.members && team.members.length > 0 && (
+                                                                {team.players && team.players.length > 0 && (
                                                                     <Box sx={{ mt: 1 }}>
-                                                                        {team.members.map(member => (
+                                                                        {team.players.map(player => (
                                                                             <Chip
-                                                                                key={member.id}
-                                                                                label={`${member.first_name} ${member.last_name}`}
+                                                                                key={player.id}
+                                                                                label={`${player.first_name} ${player.last_name}`}
                                                                                 size="small"
                                                                                 sx={{ mr: 0.5, mb: 0.5 }}
                                                                             />
@@ -862,19 +854,19 @@ function TournamentCreationWizard() {
                                             </Grid>
                                         </Box>
                                     )}
-                                </Grid>
+                                </>
                             )}
 
                             {/* Show message when no participants are selected */}
-                            {tournamentData.individual_participants.length === 0 &&
-                                tournamentData.teams.length === 0 && (
+                            {((tournamentData.participant_type === 'individual' && tournamentData.individual_participants.length === 0) ||
+                                (tournamentData.participant_type === 'team' && tournamentData.teams.length === 0)) && (
                                     <Paper sx={{ p: 3, mt: 3, textAlign: 'center', bgcolor: 'grey.50' }}>
                                         <GroupIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
                                         <Typography variant="body1" color="text.secondary" paragraph>
-                                            No participants selected yet
+                                            No {tournamentData.participant_type === 'individual' ? 'players' : 'teams'} selected yet
                                         </Typography>
                                         <Typography variant="body2" color="text.secondary">
-                                            You can proceed to create the tournament and add participants later.
+                                            You can proceed to create the tournament and add {tournamentData.participant_type === 'individual' ? 'players' : 'teams'} later.
                                         </Typography>
                                     </Paper>
                                 )}
@@ -967,9 +959,8 @@ function TournamentCreationWizard() {
                                     <Grid item xs={12} sm={6}>
                                         <Typography variant="subtitle2">Participant Type</Typography>
                                         <Typography variant="body1" gutterBottom>
-                                            {tournamentData.participant_type === 'individual' && 'Individual Players Only'}
-                                            {tournamentData.participant_type === 'team' && `Teams Only (${tournamentData.team_size} players per team)`}
-                                            {tournamentData.participant_type === 'mixed' && `Mixed: Individual & Teams (${tournamentData.team_size} players per team)`}
+                                            {tournamentData.participant_type === 'individual' && 'Individual Players'}
+                                            {tournamentData.participant_type === 'team' && `Teams (${tournamentData.team_size} players per team)`}
                                         </Typography>
                                     </Grid>
                                 </Grid>
@@ -999,19 +990,16 @@ function TournamentCreationWizard() {
                                         <Typography variant="subtitle2">Participants</Typography>
                                         <Typography variant="body1" gutterBottom>
                                             {(() => {
-                                                const individualCount = tournamentData.individual_participants?.length || 0;
-                                                const teamCount = tournamentData.teams?.length || 0;
-
-                                                if (individualCount === 0 && teamCount === 0) {
-                                                    return "No participants selected (can be added later)";
-                                                }
-
                                                 if (tournamentData.participant_type === 'individual') {
-                                                    return `${individualCount} players selected`;
-                                                } else if (tournamentData.participant_type === 'team') {
-                                                    return `${teamCount} teams selected`;
+                                                    const individualCount = tournamentData.individual_participants?.length || 0;
+                                                    return individualCount === 0
+                                                        ? "No players selected (can be added later)"
+                                                        : `${individualCount} player${individualCount !== 1 ? 's' : ''} selected`;
                                                 } else {
-                                                    return `${individualCount} players and ${teamCount} teams selected`;
+                                                    const teamCount = tournamentData.teams?.length || 0;
+                                                    return teamCount === 0
+                                                        ? "No teams selected (can be added later)"
+                                                        : `${teamCount} team${teamCount !== 1 ? 's' : ''} selected`;
                                                 }
                                             })()}
                                         </Typography>
