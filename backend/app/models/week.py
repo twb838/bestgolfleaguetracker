@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from app.db.base import Base
 
 class Week(Base):
-    __tablename__ = "weeks"
+    __tablename__ = "league_weeks"  # Changed from "weeks" to "league_weeks"
     
     id = Column(Integer, primary_key=True, index=True)
     week_number = Column(Integer, nullable=False)

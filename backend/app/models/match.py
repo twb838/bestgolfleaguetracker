@@ -20,7 +20,7 @@ class Match(Base):
     away_team_points = Column(Float, nullable=True, comment="Away team total points")
     
     # Foreign keys
-    week_id = Column(Integer, ForeignKey('weeks.id', ondelete='CASCADE'))
+    week_id = Column(Integer, ForeignKey("league_weeks.id"), nullable=False)  # Updated reference
     course_id = Column(Integer, ForeignKey("courses.id"), nullable=False)
     home_team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
     away_team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
