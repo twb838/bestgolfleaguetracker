@@ -16,6 +16,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { format, parseISO, addDays } from 'date-fns';
 import { get } from '../../../services/api';
 import TournamentPlayers from './TournamentPlayers';
+import TournamentTeams from './TournamentTeams';
 
 // Create a date formatting utility
 const formatDate = (dateString, formatPattern) => {
@@ -323,11 +324,18 @@ function TournamentManagement() {
             )}
 
             {activeTab === 1 && (
-                /* Participants Tab - Use TournamentPlayers Component */
-                <TournamentPlayers
-                    tournament={tournament}
-                    onUpdate={handleTournamentUpdate}
-                />
+                /* Players/Teams Tab - Conditional rendering based on tournament type */
+                tournament.participant_type === 'individual' ? (
+                    <TournamentPlayers
+                        tournament={tournament}
+                        onUpdate={handleTournamentUpdate}
+                    />
+                ) : (
+                    <TournamentTeams
+                        tournament={tournament}
+                        onUpdate={handleTournamentUpdate}
+                    />
+                )
             )}
 
             {activeTab === 2 && (
