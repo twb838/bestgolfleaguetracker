@@ -15,7 +15,8 @@ import {
     Person as PersonIcon,
     Edit as EditIcon,
     PersonAdd as PersonAddIcon,
-    PersonRemove as PersonRemoveIcon
+    PersonRemove as PersonRemoveIcon,
+    Warning as WarningIcon
 } from '@mui/icons-material';
 import { get, post, del, put } from '../../../services/api';
 
@@ -51,6 +52,39 @@ function TournamentTeams({ tournament, onUpdate }) {
     });
 
     const [teamLoading, setTeamLoading] = useState(false);
+
+    // Helper function to get team size status
+    const getTeamSizeStatus = (team) => {
+        const playerCount = team.players?.length || 0;
+        const requiredSize = tournament?.team_size || 0;
+
+        if (playerCount < requiredSize) {
+            return {
+                type: 'warning',
+                message: `Needs ${requiredSize - playerCount} more player${requiredSize - playerCount !== 1 ? 's' : ''}`,
+                color: 'warning'
+            };
+        } else if (playerCount > requiredSize) {
+            return {
+                type: 'error',
+                message: `${playerCount - requiredSize} player${playerCount - requiredSize !== 1 ? 's' : ''} over limit`,
+                color: 'error'
+            };
+        } else {
+            return {
+                type: 'success',
+                message: 'Complete team',
+                color: 'success'
+            };
+        }
+    };
+
+    // Helper function to check if player can be added
+    const canAddPlayerToTeam = (team) => {
+        const playerCount = team.players?.length || 0;
+        const requiredSize = tournament?.team_size || 0;
+        return playerCount < requiredSize;
+    };
 
     // Fetch teams when component mounts or tournament changes
     useEffect(() => {
@@ -285,6 +319,15 @@ function TournamentTeams({ tournament, onUpdate }) {
 
     const handleAddPlayerToTeam = async (playerId) => {
         try {
+            // Check if adding this player would exceed team size
+            const currentPlayerCount = selectedTeamForPlayers?.players?.length || 0;
+            const maxTeamSize = tournament?.team_size || 0;
+
+            if (currentPlayerCount >= maxTeamSize) {
+                setTeamError(`Cannot add player: Team already has the maximum ${maxTeamSize} players allowed for this tournament.`);
+                return;
+            }
+
             console.log(`Adding player ${playerId} to team ${selectedTeamForPlayers.id}`);
             await post(`/teams/${selectedTeamForPlayers.id}/players/${playerId}`, {});
 
@@ -372,6 +415,12 @@ function TournamentTeams({ tournament, onUpdate }) {
 
     console.log('Rendering with currentTeams:', currentTeams);
 
+    // Calculate team size validation summary
+    const teamsWithIssues = currentTeams.filter(team => {
+        const status = getTeamSizeStatus(team);
+        return status.type !== 'success';
+    });
+
     return (
         <Box>
             {/* Tournament Teams Overview */}
@@ -398,161 +447,199 @@ function TournamentTeams({ tournament, onUpdate }) {
                     </Box>
                 </Box>
 
+                {/* Team Size Requirements Alert */}
+                {tournament?.team_size && (
+                    <Alert
+                        severity="info"
+                        sx={{ mb: 2 }}
+                        icon={<GroupsIcon />}
+                    >
+                        <Typography variant="body2">
+                            <strong>Team Size Requirement:</strong> Each team must have exactly {tournament.team_size} player{tournament.team_size !== 1 ? 's' : ''} for this tournament.
+                        </Typography>
+                    </Alert>
+                )}
+
+                {/* Team Size Validation Summary */}
+                {currentTeams.length > 0 && teamsWithIssues.length > 0 && (
+                    <Alert
+                        severity="warning"
+                        sx={{ mb: 2 }}
+                        icon={<WarningIcon />}
+                    >
+                        <Typography variant="body2">
+                            <strong>Team Size Issues:</strong> {teamsWithIssues.length} team{teamsWithIssues.length !== 1 ? 's' : ''} {teamsWithIssues.length === 1 ? 'does' : 'do'} not have the required number of players.
+                        </Typography>
+                    </Alert>
+                )}
+
                 {currentTeams.length > 0 ? (
                     <List>
-                        {currentTeams.map((team) => (
-                            <React.Fragment key={team.id}>
-                                <ListItem
-                                    sx={{
-                                        py: 1,
-                                        cursor: 'pointer',
-                                        '&:hover': {
-                                            backgroundColor: 'action.hover'
-                                        }
-                                    }}
-                                    onClick={() => handleEditTeam(team)}
-                                >
-                                    <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
-                                        <GroupsIcon />
-                                    </Avatar>
-                                    <ListItemText
-                                        primary={
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <Typography variant="subtitle1" fontWeight="bold">
-                                                    {team.name}
-                                                </Typography>
-                                                <Chip
-                                                    label={`${team.player_count} players`}
-                                                    size="small"
-                                                    variant="outlined"
-                                                />
-                                            </Box>
-                                        }
-                                        secondary={
-                                            <Box sx={{ mt: 0.5 }}>
-                                                {team.description && (
-                                                    <Typography variant="body2" color="text.secondary">
-                                                        {team.description}
+                        {currentTeams.map((team) => {
+                            const sizeStatus = getTeamSizeStatus(team);
+                            return (
+                                <React.Fragment key={team.id}>
+                                    <ListItem
+                                        sx={{
+                                            py: 1,
+                                            cursor: 'pointer',
+                                            '&:hover': {
+                                                backgroundColor: 'action.hover'
+                                            }
+                                        }}
+                                        onClick={() => handleEditTeam(team)}
+                                    >
+                                        <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
+                                            <GroupsIcon />
+                                        </Avatar>
+                                        <ListItemText
+                                            primary={
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                                                    <Typography variant="subtitle1" fontWeight="bold">
+                                                        {team.name}
                                                     </Typography>
-                                                )}
-                                                <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                                                    Click to edit team details
-                                                </Typography>
-                                            </Box>
-                                        }
-                                    />
-                                    <ListItemSecondaryAction>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                            <IconButton
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleManageTeamPlayers(team);
-                                                }}
-                                                size="small"
-                                                color="info"
-                                                title="Manage Players"
-                                            >
-                                                <PersonAddIcon fontSize="small" />
-                                            </IconButton>
-                                            <IconButton
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleEditTeam(team);
-                                                }}
-                                                size="small"
-                                                color="primary"
-                                                title="Edit Team"
-                                            >
-                                                <EditIcon fontSize="small" />
-                                            </IconButton>
-                                            <IconButton
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    toggleTeamExpansion(team.id);
-                                                }}
-                                                size="small"
-                                                title="View Players"
-                                            >
-                                                {expandedTeams.has(team.id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                                            </IconButton>
-                                            <IconButton
-                                                edge="end"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleRemoveTeamFromTournament(team);
-                                                }}
-                                                size="small"
-                                                color="error"
-                                                title="Remove from Tournament"
-                                            >
-                                                <DeleteIcon fontSize="small" />
-                                            </IconButton>
-                                        </Box>
-                                    </ListItemSecondaryAction>
-                                </ListItem>
-
-                                {/* Team Players Collapse */}
-                                <Collapse in={expandedTeams.has(team.id)} timeout="auto" unmountOnExit>
-                                    <Box sx={{ pl: 8, pr: 2, pb: 2 }}>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                            <Typography variant="subtitle2" color="text.secondary">
-                                                Team Players:
-                                            </Typography>
-                                            <Button
-                                                size="small"
-                                                startIcon={<PersonAddIcon />}
-                                                onClick={() => handleManageTeamPlayers(team)}
-                                            >
-                                                Manage Players
-                                            </Button>
-                                        </Box>
-                                        {team.players && team.players.length > 0 ? (
-                                            <List dense>
-                                                {team.players.map((player) => (
-                                                    <ListItem key={player.id} sx={{ py: 0.5 }}>
-                                                        <PersonIcon sx={{ mr: 1, fontSize: 16, color: 'text.secondary' }} />
-                                                        <ListItemText
-                                                            primary={player.player_name}
-                                                            secondary={
-                                                                player.handicap !== null ?
-                                                                    `Handicap: ${player.handicap}` :
-                                                                    'No handicap'
-                                                            }
+                                                    <Chip
+                                                        label={`${team.player_count}/${tournament?.team_size || '?'} players`}
+                                                        size="small"
+                                                        variant="outlined"
+                                                        color={sizeStatus.color}
+                                                    />
+                                                    {sizeStatus.type !== 'success' && (
+                                                        <Chip
+                                                            label={sizeStatus.message}
+                                                            size="small"
+                                                            color={sizeStatus.color}
+                                                            icon={<WarningIcon />}
                                                         />
-                                                        <ListItemSecondaryAction>
-                                                            <IconButton
-                                                                size="small"
-                                                                color="error"
-                                                                onClick={() => handleRemovePlayerFromTeam(player.id, team.id)}
-                                                                title="Remove from Team"
-                                                            >
-                                                                <PersonRemoveIcon fontSize="small" />
-                                                            </IconButton>
-                                                        </ListItemSecondaryAction>
-                                                    </ListItem>
-                                                ))}
-                                            </List>
-                                        ) : (
-                                            <Box sx={{ textAlign: 'center', py: 2 }}>
-                                                <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mb: 1 }}>
-                                                    No players assigned to this team
+                                                    )}
+                                                </Box>
+                                            }
+                                            secondary={
+                                                <Box sx={{ mt: 0.5 }}>
+                                                    {team.description && (
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            {team.description}
+                                                        </Typography>
+                                                    )}
+                                                    <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                                                        Click to edit team details
+                                                    </Typography>
+                                                </Box>
+                                            }
+                                        />
+                                        <ListItemSecondaryAction>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <IconButton
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleManageTeamPlayers(team);
+                                                    }}
+                                                    size="small"
+                                                    color="info"
+                                                    title="Manage Players"
+                                                >
+                                                    <PersonAddIcon fontSize="small" />
+                                                </IconButton>
+                                                <IconButton
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleEditTeam(team);
+                                                    }}
+                                                    size="small"
+                                                    color="primary"
+                                                    title="Edit Team"
+                                                >
+                                                    <EditIcon fontSize="small" />
+                                                </IconButton>
+                                                <IconButton
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        toggleTeamExpansion(team.id);
+                                                    }}
+                                                    size="small"
+                                                    title="View Players"
+                                                >
+                                                    {expandedTeams.has(team.id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                                </IconButton>
+                                                <IconButton
+                                                    edge="end"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleRemoveTeamFromTournament(team);
+                                                    }}
+                                                    size="small"
+                                                    color="error"
+                                                    title="Remove from Tournament"
+                                                >
+                                                    <DeleteIcon fontSize="small" />
+                                                </IconButton>
+                                            </Box>
+                                        </ListItemSecondaryAction>
+                                    </ListItem>
+
+                                    {/* Team Players Collapse */}
+                                    <Collapse in={expandedTeams.has(team.id)} timeout="auto" unmountOnExit>
+                                        <Box sx={{ pl: 8, pr: 2, pb: 2 }}>
+                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                                <Typography variant="subtitle2" color="text.secondary">
+                                                    Team Players:
                                                 </Typography>
                                                 <Button
                                                     size="small"
-                                                    variant="outlined"
                                                     startIcon={<PersonAddIcon />}
                                                     onClick={() => handleManageTeamPlayers(team)}
                                                 >
-                                                    Add Players
+                                                    Manage Players
                                                 </Button>
                                             </Box>
-                                        )}
-                                    </Box>
-                                </Collapse>
+                                            {team.players && team.players.length > 0 ? (
+                                                <List dense>
+                                                    {team.players.map((player) => (
+                                                        <ListItem key={player.id} sx={{ py: 0.5 }}>
+                                                            <PersonIcon sx={{ mr: 1, fontSize: 16, color: 'text.secondary' }} />
+                                                            <ListItemText
+                                                                primary={player.player_name}
+                                                                secondary={
+                                                                    player.handicap !== null ?
+                                                                        `Handicap: ${player.handicap}` :
+                                                                        'No handicap'
+                                                                }
+                                                            />
+                                                            <ListItemSecondaryAction>
+                                                                <IconButton
+                                                                    size="small"
+                                                                    color="error"
+                                                                    onClick={() => handleRemovePlayerFromTeam(player.id, team.id)}
+                                                                    title="Remove from Team"
+                                                                >
+                                                                    <PersonRemoveIcon fontSize="small" />
+                                                                </IconButton>
+                                                            </ListItemSecondaryAction>
+                                                        </ListItem>
+                                                    ))}
+                                                </List>
+                                            ) : (
+                                                <Box sx={{ textAlign: 'center', py: 2 }}>
+                                                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mb: 1 }}>
+                                                        No players assigned to this team
+                                                    </Typography>
+                                                    <Button
+                                                        size="small"
+                                                        variant="outlined"
+                                                        startIcon={<PersonAddIcon />}
+                                                        onClick={() => handleManageTeamPlayers(team)}
+                                                    >
+                                                        Add Players
+                                                    </Button>
+                                                </Box>
+                                            )}
+                                        </Box>
+                                    </Collapse>
 
-                                {team !== currentTeams[currentTeams.length - 1] && <Divider />}
-                            </React.Fragment>
-                        ))}
+                                    {team !== currentTeams[currentTeams.length - 1] && <Divider />}
+                                </React.Fragment>
+                            );
+                        })}
                     </List>
                 ) : (
                     <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'grey.50' }}>
@@ -579,6 +666,172 @@ function TournamentTeams({ tournament, onUpdate }) {
                     </Paper>
                 )}
             </Paper>
+
+            {/* Manage Team Players Dialog */}
+            <Dialog
+                open={addPlayerDialogOpen}
+                onClose={handleCloseAddPlayerDialog}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <PersonAddIcon sx={{ mr: 1 }} />
+                        Manage Players - {selectedTeamForPlayers?.name}
+                        {selectedTeamForPlayers && tournament?.team_size && (
+                            <Chip
+                                label={`${selectedTeamForPlayers.players?.length || 0}/${tournament.team_size} players`}
+                                size="small"
+                                sx={{ ml: 1 }}
+                                color={
+                                    (selectedTeamForPlayers.players?.length || 0) === tournament.team_size
+                                        ? 'success'
+                                        : 'warning'
+                                }
+                            />
+                        )}
+                    </Box>
+                </DialogTitle>
+                <DialogContent>
+                    {teamError && (
+                        <Alert severity="error" sx={{ mb: 2 }}>
+                            {teamError}
+                        </Alert>
+                    )}
+
+                    {/* Team Size Warning */}
+                    {selectedTeamForPlayers && tournament?.team_size && (
+                        (() => {
+                            const status = getTeamSizeStatus(selectedTeamForPlayers);
+                            return status.type !== 'success' && (
+                                <Alert severity={status.type} sx={{ mb: 2 }}>
+                                    <Typography variant="body2">
+                                        <strong>Team Size Issue:</strong> {status.message}.
+                                        Required: {tournament.team_size} player{tournament.team_size !== 1 ? 's' : ''}.
+                                    </Typography>
+                                </Alert>
+                            );
+                        })()
+                    )}
+
+                    {/* Current Team Players */}
+                    <Typography variant="h6" gutterBottom>
+                        Current Team Players ({selectedTeamForPlayers?.players?.length || 0})
+                    </Typography>
+
+                    {selectedTeamForPlayers?.players && selectedTeamForPlayers.players.length > 0 ? (
+                        <List dense sx={{ mb: 3, bgcolor: 'background.default', borderRadius: 1 }}>
+                            {selectedTeamForPlayers.players.map((player) => (
+                                <ListItem key={player.id}>
+                                    <PersonIcon sx={{ mr: 1, color: 'primary.main' }} />
+                                    <ListItemText
+                                        primary={player.player_name}
+                                        secondary={player.handicap !== null ? `Handicap: ${player.handicap}` : 'No handicap'}
+                                    />
+                                    <ListItemSecondaryAction>
+                                        <IconButton
+                                            size="small"
+                                            color="error"
+                                            onClick={() => handleRemovePlayerFromTeam(player.id, selectedTeamForPlayers.id)}
+                                        >
+                                            <PersonRemoveIcon />
+                                        </IconButton>
+                                    </ListItemSecondaryAction>
+                                </ListItem>
+                            ))}
+                        </List>
+                    ) : (
+                        <Paper sx={{ p: 2, mb: 3, textAlign: 'center', bgcolor: 'background.default' }}>
+                            <Typography variant="body2" color="text.secondary">
+                                No players in this team yet
+                            </Typography>
+                        </Paper>
+                    )}
+
+                    <Divider sx={{ my: 2 }} />
+
+                    {/* Available Players to Add */}
+                    <Typography variant="h6" gutterBottom>
+                        Available Players
+                        {selectedTeamForPlayers && tournament?.team_size && !canAddPlayerToTeam(selectedTeamForPlayers) && (
+                            <Chip
+                                label="Team Full"
+                                size="small"
+                                color="error"
+                                sx={{ ml: 1 }}
+                            />
+                        )}
+                    </Typography>
+
+                    {playersLoading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : (
+                        (() => {
+                            const currentPlayerIds = selectedTeamForPlayers?.players?.map(p => p.id) || [];
+                            const availablePlayersFiltered = availablePlayers.filter(player => !currentPlayerIds.includes(player.id));
+                            const teamIsFull = selectedTeamForPlayers && !canAddPlayerToTeam(selectedTeamForPlayers);
+
+                            return availablePlayersFiltered.length === 0 ? (
+                                <Paper sx={{ p: 3, textAlign: 'center' }}>
+                                    <PersonIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                                    <Typography variant="body1" color="text.secondary">
+                                        {availablePlayers.length === 0 ?
+                                            'No players found.' :
+                                            'All available players are already in this team.'
+                                        }
+                                    </Typography>
+                                </Paper>
+                            ) : (
+                                <List>
+                                    {availablePlayersFiltered.map((player) => (
+                                        <ListItem key={player.id}>
+                                            <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                                            <ListItemText
+                                                primary={`${player.first_name} ${player.last_name}`}
+                                                secondary={
+                                                    <Box>
+                                                        {player.email && (
+                                                            <Typography variant="body2" color="text.secondary">
+                                                                {player.email}
+                                                            </Typography>
+                                                        )}
+                                                        {player.handicap !== null && (
+                                                            <Chip
+                                                                label={`HCP: ${player.handicap}`}
+                                                                size="small"
+                                                                sx={{ mt: 0.5 }}
+                                                            />
+                                                        )}
+                                                    </Box>
+                                                }
+                                            />
+                                            <ListItemSecondaryAction>
+                                                <Button
+                                                    variant="outlined"
+                                                    size="small"
+                                                    startIcon={<PersonAddIcon />}
+                                                    onClick={() => handleAddPlayerToTeam(player.id)}
+                                                    disabled={teamIsFull}
+                                                    title={teamIsFull ? 'Team has reached maximum size' : 'Add to Team'}
+                                                >
+                                                    Add to Team
+                                                </Button>
+                                            </ListItemSecondaryAction>
+                                        </ListItem>
+                                    ))}
+                                </List>
+                            );
+                        })()
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseAddPlayerDialog}>
+                        Close
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             {/* Create New Team Dialog */}
             <Dialog
@@ -710,134 +963,6 @@ function TournamentTeams({ tournament, onUpdate }) {
                             <CircularProgress size={20} sx={{ mr: 1 }} />
                         ) : null}
                         Update Team
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
-            {/* Manage Team Players Dialog */}
-            <Dialog
-                open={addPlayerDialogOpen}
-                onClose={handleCloseAddPlayerDialog}
-                maxWidth="md"
-                fullWidth
-            >
-                <DialogTitle>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <PersonAddIcon sx={{ mr: 1 }} />
-                        Manage Players - {selectedTeamForPlayers?.name}
-                    </Box>
-                </DialogTitle>
-                <DialogContent>
-                    {teamError && (
-                        <Alert severity="error" sx={{ mb: 2 }}>
-                            {teamError}
-                        </Alert>
-                    )}
-
-                    {/* Current Team Players */}
-                    <Typography variant="h6" gutterBottom>
-                        Current Team Players ({selectedTeamForPlayers?.players?.length || 0})
-                    </Typography>
-
-                    {selectedTeamForPlayers?.players && selectedTeamForPlayers.players.length > 0 ? (
-                        <List dense sx={{ mb: 3, bgcolor: 'background.default', borderRadius: 1 }}>
-                            {selectedTeamForPlayers.players.map((player) => (
-                                <ListItem key={player.id}>
-                                    <PersonIcon sx={{ mr: 1, color: 'primary.main' }} />
-                                    <ListItemText
-                                        primary={player.player_name}
-                                        secondary={player.handicap !== null ? `Handicap: ${player.handicap}` : 'No handicap'}
-                                    />
-                                    <ListItemSecondaryAction>
-                                        <IconButton
-                                            size="small"
-                                            color="error"
-                                            onClick={() => handleRemovePlayerFromTeam(player.id, selectedTeamForPlayers.id)}
-                                        >
-                                            <PersonRemoveIcon />
-                                        </IconButton>
-                                    </ListItemSecondaryAction>
-                                </ListItem>
-                            ))}
-                        </List>
-                    ) : (
-                        <Paper sx={{ p: 2, mb: 3, textAlign: 'center', bgcolor: 'background.default' }}>
-                            <Typography variant="body2" color="text.secondary">
-                                No players in this team yet
-                            </Typography>
-                        </Paper>
-                    )}
-
-                    <Divider sx={{ my: 2 }} />
-
-                    {/* Available Players to Add */}
-                    <Typography variant="h6" gutterBottom>
-                        Available Players
-                    </Typography>
-
-                    {playersLoading ? (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-                            <CircularProgress />
-                        </Box>
-                    ) : (
-                        (() => {
-                            const currentPlayerIds = selectedTeamForPlayers?.players?.map(p => p.id) || [];
-                            const availablePlayersFiltered = availablePlayers.filter(player => !currentPlayerIds.includes(player.id));
-
-                            return availablePlayersFiltered.length === 0 ? (
-                                <Paper sx={{ p: 3, textAlign: 'center' }}>
-                                    <PersonIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                                    <Typography variant="body1" color="text.secondary">
-                                        {availablePlayers.length === 0 ?
-                                            'No players found.' :
-                                            'All available players are already in this team.'
-                                        }
-                                    </Typography>
-                                </Paper>
-                            ) : (
-                                <List>
-                                    {availablePlayersFiltered.map((player) => (
-                                        <ListItem key={player.id}>
-                                            <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                                            <ListItemText
-                                                primary={`${player.first_name} ${player.last_name}`}
-                                                secondary={
-                                                    <Box>
-                                                        {player.email && (
-                                                            <Typography variant="body2" color="text.secondary">
-                                                                {player.email}
-                                                            </Typography>
-                                                        )}
-                                                        {player.handicap !== null && (
-                                                            <Chip
-                                                                label={`HCP: ${player.handicap}`}
-                                                                size="small"
-                                                                sx={{ mt: 0.5 }}
-                                                            />
-                                                        )}
-                                                    </Box>
-                                                }
-                                            />
-                                            <ListItemSecondaryAction>
-                                                <Button
-                                                    variant="outlined"
-                                                    size="small"
-                                                    startIcon={<PersonAddIcon />}
-                                                    onClick={() => handleAddPlayerToTeam(player.id)}
-                                                >
-                                                    Add to Team
-                                                </Button>
-                                            </ListItemSecondaryAction>
-                                        </ListItem>
-                                    ))}
-                                </List>
-                            );
-                        })()
-                    )}
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseAddPlayerDialog}>
-                        Close
                     </Button>
                 </DialogActions>
             </Dialog>
