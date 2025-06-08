@@ -1,44 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import {
     Typography, Button, Box, Paper, Grid, Card, CardContent, CardActions,
-    CircularProgress, Chip, IconButton, Tooltip, Dialog, DialogTitle,
-    DialogContent, DialogActions, TextField, FormControl, InputLabel,
-    Select, MenuItem, List, ListItem, ListItemText, ListItemSecondaryAction,
-    Divider, Alert, Autocomplete
+    CircularProgress, Chip, IconButton, Tooltip
 } from '@mui/material';
 import {
     Add as AddIcon,
     Event as EventIcon,
     EmojiEvents as TrophyIcon,
-    Group as GroupIcon,
-    PersonAdd as PersonAddIcon,
-    Delete as DeleteIcon,
-    Edit as EditIcon
+    Group as GroupIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
-import { get, post } from '../../../services/api';
+import { get } from '../../../services/api';
+import TournamentParticipants from './TournamentParticipants';
 
 function Tournaments() {
     const [tournaments, setTournaments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [teamDialogOpen, setTeamDialogOpen] = useState(false);
     const [selectedTournament, setSelectedTournament] = useState(null);
-
-    // Team management state
-    const [existingTeams, setExistingTeams] = useState([]);
-    const [availablePlayers, setAvailablePlayers] = useState([]);
-    const [teamsLoading, setTeamsLoading] = useState(false);
-    const [teamError, setTeamError] = useState(null);
-
-    // New team creation state
-    const [newTeam, setNewTeam] = useState({
-        name: '',
-        description: '',
-        players: []
-    });
-    const [isCreatingNewTeam, setIsCreatingNewTeam] = useState(false);
+    const [showParticipants, setShowParticipants] = useState(false);
 
     const navigate = useNavigate();
 
@@ -46,7 +27,6 @@ function Tournaments() {
         fetchTournaments();
     }, []);
 
-    // Replace the existing fetchTournaments function with this enhanced version:
     const fetchTournaments = async () => {
         try {
             setLoading(true);
@@ -102,36 +82,6 @@ function Tournaments() {
         }
     };
 
-    // Update the fetchTeamsAndPlayers function to also get current tournament teams
-    const fetchTeamsAndPlayers = async () => {
-        try {
-            setTeamsLoading(true);
-            setTeamError(null);
-
-            const [teamsData, playersData, tournamentTeams] = await Promise.all([
-                get('/teams'),
-                get('/players'),
-                selectedTournament ? get(`/tournaments/${selectedTournament.id}/teams`) : Promise.resolve([])
-            ]);
-
-            setExistingTeams(teamsData);
-            setAvailablePlayers(playersData);
-
-            // Update the selected tournament with current teams
-            if (selectedTournament) {
-                setSelectedTournament({
-                    ...selectedTournament,
-                    currentTeams: tournamentTeams
-                });
-            }
-        } catch (error) {
-            console.error('Error fetching teams and players:', error);
-            setTeamError(error.message || 'Failed to fetch teams and players');
-        } finally {
-            setTeamsLoading(false);
-        }
-    };
-
     const handleCreateTournament = () => {
         navigate('/tournaments/create');
     };
@@ -142,99 +92,17 @@ function Tournaments() {
 
     const handleManageTeams = (tournament) => {
         setSelectedTournament(tournament);
-        setTeamDialogOpen(true);
-        fetchTeamsAndPlayers();
+        setShowParticipants(true);
     };
 
-    const handleCloseTeamDialog = () => {
-        setTeamDialogOpen(false);
+    const handleBackToTournaments = () => {
+        setShowParticipants(false);
         setSelectedTournament(null);
-        setIsCreatingNewTeam(false);
-        setNewTeam({
-            name: '',
-            description: '',
-            players: []
-        });
-        setTeamError(null);
     };
 
-    const handleAddExistingTeam = async (team) => {
-        try {
-            await post(`/tournaments/${selectedTournament.id}/teams/${team.id}`);
-
-            // Refresh tournament data
-            fetchTournaments();
-
-            // Show success message or close dialog
-            console.log(`Team ${team.name} added to tournament`);
-        } catch (error) {
-            console.error('Error adding team to tournament:', error);
-            setTeamError(error.message || 'Failed to add team to tournament');
-        }
-    };
-
-    const handleCreateNewTeam = async () => {
-        try {
-            if (!newTeam.name.trim()) {
-                setTeamError('Team name is required');
-                return;
-            }
-
-            if (newTeam.players.length < 2) {
-                setTeamError('Team must have at least 2 players');
-                return;
-            }
-
-            // Create the new team
-            const teamData = {
-                name: newTeam.name,
-                description: newTeam.description,
-                player_ids: newTeam.players.map(player => player.id)
-            };
-
-            const createdTeam = await post('/teams', teamData);
-
-            // Add the new team to the tournament
-            await post(`/tournaments/${selectedTournament.id}/teams/${createdTeam.id}`);
-
-            // Refresh tournament data
-            fetchTournaments();
-
-            // Reset form and close dialog
-            setNewTeam({
-                name: '',
-                description: '',
-                players: []
-            });
-            setIsCreatingNewTeam(false);
-
-            console.log(`New team ${createdTeam.name} created and added to tournament`);
-        } catch (error) {
-            console.error('Error creating new team:', error);
-            setTeamError(error.message || 'Failed to create new team');
-        }
-    };
-
-    const handleRemovePlayerFromNewTeam = (playerToRemove) => {
-        setNewTeam({
-            ...newTeam,
-            players: newTeam.players.filter(player => player.id !== playerToRemove.id)
-        });
-    };
-
-    // Add this new function to fetch detailed tournament data including teams
-    const fetchTournamentDetails = async (tournamentId) => {
-        try {
-            const [participants, teams] = await Promise.all([
-                get(`/tournaments/${tournamentId}/participants`),
-                get(`/tournaments/${tournamentId}/teams`)
-            ]);
-
-            return { participants, teams };
-        } catch (error) {
-            console.error('Error fetching tournament details:', error);
-            return { participants: [], teams: [] };
-        }
+    const handleTournamentUpdate = () => {
+        // Refresh tournaments data when teams are updated
+        fetchTournaments();
     };
 
     // Helper to format dates
@@ -267,38 +135,25 @@ function Tournaments() {
         fetchTournaments();
     };
 
-    // Add a function to remove teams from tournament
-    const handleRemoveTeamFromTournament = async (team) => {
-        try {
-            // Use the API service delete function if available, or fix the URL
-            // Option 1: If you have a delete function in your API service
-            // await del(`/tournaments/${selectedTournament.id}/teams/${team.id}`);
-
-            // Option 2: Fix the fetch URL (remove hardcoded /api/)
-            const response = await fetch(`/tournaments/${selectedTournament.id}/teams/${team.id}`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    // Add any auth headers that your API service normally includes
-                    // You may need to get these from your auth context or token storage
-                }
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Failed to remove team from tournament: ${errorText}`);
-            }
-
-            // Refresh data
-            await fetchTournaments();
-            await fetchTeamsAndPlayers();
-
-            console.log(`Team ${team.name} removed from tournament`);
-        } catch (error) {
-            console.error('Error removing team from tournament:', error);
-            setTeamError(error.message || 'Failed to remove team from tournament');
-        }
-    };
+    // Show participants management view
+    if (showParticipants && selectedTournament) {
+        return (
+            <div>
+                <Box sx={{ mb: 3 }}>
+                    <Button onClick={handleBackToTournaments} sx={{ mb: 2 }}>
+                        ← Back to Tournaments
+                    </Button>
+                    <Typography variant="h4" component="h1" gutterBottom>
+                        {selectedTournament.name} - Team Management
+                    </Typography>
+                </Box>
+                <TournamentParticipants
+                    tournament={selectedTournament}
+                    onUpdate={handleTournamentUpdate}
+                />
+            </div>
+        );
+    }
 
     return (
         <div>
@@ -387,12 +242,6 @@ function Tournaments() {
                                     <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
                                         <GroupIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
                                         <Typography variant="body2" color="text.secondary">
-                                            {console.log(`Tournament ${tournament.id} display data:`, {
-                                                participants: tournament.individual_participants,
-                                                teams: tournament.teams,
-                                                participantCount: tournament.individual_participants?.length,
-                                                teamCount: tournament.teams?.length
-                                            })}
                                             {tournament.individual_participants?.length || 0} players
                                             {tournament.teams?.length > 0 && `, ${tournament.teams.length} teams`}
                                         </Typography>
@@ -453,14 +302,11 @@ function Tournaments() {
                                         Manage
                                     </Button>
 
-                                    {/* Debug: Let's see what participant_type we're getting */}
-                                    {console.log('Tournament participant_type:', tournament.participant_type)}
-
-                                    {/* More inclusive condition for team management */}
+                                    {/* Show team management for team tournaments */}
                                     {(tournament.participant_type === 'team' ||
                                         tournament.participant_type === 'mixed' ||
-                                        tournament.participant_type === 'teams' || // Alternative naming
-                                        !tournament.participant_type) && ( // Show for undefined/null as fallback
+                                        tournament.participant_type === 'teams' ||
+                                        !tournament.participant_type) && (
                                             <Tooltip title="Manage Teams">
                                                 <IconButton
                                                     size="small"
@@ -509,292 +355,6 @@ function Tournaments() {
                     </Button>
                 </Paper>
             )}
-
-            {/* Team Management Dialog */}
-            <Dialog
-                open={teamDialogOpen}
-                onClose={handleCloseTeamDialog}
-                maxWidth="md"
-                fullWidth
-            >
-                <DialogTitle>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <GroupIcon sx={{ mr: 1 }} />
-                        Manage Teams - {selectedTournament?.name}
-                    </Box>
-                </DialogTitle>
-                <DialogContent>
-                    {teamsLoading ? (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
-                            <CircularProgress />
-                        </Box>
-                    ) : teamError ? (
-                        <Alert severity="error" sx={{ mb: 2 }}>
-                            {teamError}
-                        </Alert>
-                    ) : (
-                        <Box>
-                            {/* Show current teams in tournament */}
-                            {selectedTournament?.currentTeams && selectedTournament.currentTeams.length > 0 && (
-                                <Box sx={{ mb: 3 }}>
-                                    <Typography variant="h6" gutterBottom>
-                                        Current Teams in Tournament ({selectedTournament.currentTeams.length})
-                                    </Typography>
-                                    <Paper sx={{ p: 2, backgroundColor: 'action.hover' }}>
-                                        <List dense>
-                                            {selectedTournament.currentTeams.map((team) => (
-                                                <ListItem key={team.id}>
-                                                    <ListItemText
-                                                        primary={team.name}
-                                                        secondary={
-                                                            <Box>
-                                                                <Typography variant="body2" color="text.secondary">
-                                                                    {team.description || 'No description'}
-                                                                </Typography>
-                                                                <Typography variant="caption" color="text.secondary">
-                                                                    {team.players?.length || 0} players
-                                                                </Typography>
-                                                                {team.players && team.players.length > 0 && (
-                                                                    <Box sx={{ mt: 1 }}>
-                                                                        {team.players.map(player => (
-                                                                            <Chip
-                                                                                key={player.id}
-                                                                                label={`${player.first_name} ${player.last_name}`}
-                                                                                size="small"
-                                                                                sx={{ mr: 0.5, mb: 0.5 }}
-                                                                            />
-                                                                        ))}
-                                                                    </Box>
-                                                                )}
-                                                            </Box>
-                                                        }
-                                                    />
-                                                    <ListItemSecondaryAction>
-                                                        <Button
-                                                            variant="outlined"
-                                                            size="small"
-                                                            color="error"
-                                                            onClick={() => handleRemoveTeamFromTournament(team)}
-                                                        >
-                                                            Remove
-                                                        </Button>
-                                                    </ListItemSecondaryAction>
-                                                </ListItem>
-                                            ))}
-                                        </List>
-                                    </Paper>
-                                    <Divider sx={{ my: 2 }} />
-                                </Box>
-                            )}
-
-                            {/* Toggle between existing teams and new team creation */}
-                            <Box sx={{ mb: 3 }}>
-                                <Button
-                                    variant={!isCreatingNewTeam ? "contained" : "outlined"}
-                                    onClick={() => setIsCreatingNewTeam(false)}
-                                    sx={{ mr: 1 }}
-                                >
-                                    Add Existing Team
-                                </Button>
-                                <Button
-                                    variant={isCreatingNewTeam ? "contained" : "outlined"}
-                                    onClick={() => setIsCreatingNewTeam(true)}
-                                    startIcon={<PersonAddIcon />}
-                                >
-                                    Create New Team
-                                </Button>
-                            </Box>
-
-                            {!isCreatingNewTeam ? (
-                                // Existing Teams Section (filter out teams already in tournament)
-                                <Box>
-                                    <Typography variant="h6" gutterBottom>
-                                        Available Teams
-                                    </Typography>
-
-                                    {(() => {
-                                        const currentTeamIds = selectedTournament?.currentTeams?.map(t => t.id) || [];
-                                        const availableTeams = existingTeams.filter(team => !currentTeamIds.includes(team.id));
-
-                                        return availableTeams.length === 0 ? (
-                                            <Paper sx={{ p: 3, textAlign: 'center' }}>
-                                                <GroupIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                                                <Typography variant="body1" color="text.secondary" paragraph>
-                                                    {existingTeams.length === 0 ?
-                                                        'No existing teams found.' :
-                                                        'All existing teams are already in this tournament.'
-                                                    }
-                                                </Typography>
-                                                <Button
-                                                    variant="outlined"
-                                                    onClick={() => setIsCreatingNewTeam(true)}
-                                                    startIcon={<PersonAddIcon />}
-                                                >
-                                                    Create New Team
-                                                </Button>
-                                            </Paper>
-                                        ) : (
-                                            <List>
-                                                {availableTeams.map((team) => (
-                                                    <React.Fragment key={team.id}>
-                                                        <ListItem>
-                                                            <ListItemText
-                                                                primary={team.name}
-                                                                secondary={
-                                                                    <Box>
-                                                                        <Typography variant="body2" color="text.secondary">
-                                                                            {team.description || 'No description'}
-                                                                        </Typography>
-                                                                        <Typography variant="caption" color="text.secondary">
-                                                                            {team.players?.length || 0} players
-                                                                        </Typography>
-                                                                        {team.players && team.players.length > 0 && (
-                                                                            <Box sx={{ mt: 1 }}>
-                                                                                {team.players.map(player => (
-                                                                                    <Chip
-                                                                                        key={player.id}
-                                                                                        label={`${player.first_name} ${player.last_name}`}
-                                                                                        size="small"
-                                                                                        sx={{ mr: 0.5, mb: 0.5 }}
-                                                                                    />
-                                                                                ))}
-                                                                            </Box>
-                                                                        )}
-                                                                    </Box>
-                                                                }
-                                                            />
-                                                            <ListItemSecondaryAction>
-                                                                <Button
-                                                                    variant="outlined"
-                                                                    size="small"
-                                                                    onClick={() => handleAddExistingTeam(team)}
-                                                                >
-                                                                    Add to Tournament
-                                                                </Button>
-                                                            </ListItemSecondaryAction>
-                                                        </ListItem>
-                                                        <Divider />
-                                                    </React.Fragment>
-                                                ))}
-                                            </List>
-                                        );
-                                    })()}
-                                </Box>
-                            ) : (
-                                // New Team Creation Section
-                                <Box>
-                                    <Typography variant="h6" gutterBottom>
-                                        Create New Team
-                                    </Typography>
-
-                                    <Grid container spacing={2}>
-                                        <Grid item xs={12} sm={6}>
-                                            <TextField
-                                                fullWidth
-                                                label="Team Name"
-                                                value={newTeam.name}
-                                                onChange={(e) => setNewTeam({
-                                                    ...newTeam,
-                                                    name: e.target.value
-                                                })}
-                                                required
-                                            />
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                            <TextField
-                                                fullWidth
-                                                label="Description"
-                                                value={newTeam.description}
-                                                onChange={(e) => setNewTeam({
-                                                    ...newTeam,
-                                                    description: e.target.value
-                                                })}
-                                            />
-                                        </Grid>
-                                        <Grid item xs={12}>
-                                            <Autocomplete
-                                                multiple
-                                                options={availablePlayers.filter(player =>
-                                                    !newTeam.players.find(p => p.id === player.id)
-                                                )}
-                                                getOptionLabel={(player) => `${player.first_name} ${player.last_name}${player.handicap ? ` (HCP: ${player.handicap})` : ''}`}
-                                                value={newTeam.players}
-                                                onChange={(event, newValue) => {
-                                                    setNewTeam({
-                                                        ...newTeam,
-                                                        players: newValue
-                                                    });
-                                                }}
-                                                renderInput={(params) => (
-                                                    <TextField
-                                                        {...params}
-                                                        label="Select Players"
-                                                        placeholder="Choose team members"
-                                                        helperText="Select 2-4 players for the team"
-                                                    />
-                                                )}
-                                                renderTags={(value, getTagProps) =>
-                                                    value.map((player, index) => (
-                                                        <Chip
-                                                            variant="outlined"
-                                                            label={`${player.first_name} ${player.last_name}`}
-                                                            {...getTagProps({ index })}
-                                                            key={player.id}
-                                                        />
-                                                    ))
-                                                }
-                                            />
-                                        </Grid>
-
-                                        {newTeam.players.length > 0 && (
-                                            <Grid item xs={12}>
-                                                <Paper sx={{ p: 2, backgroundColor: 'grey.50' }}>
-                                                    <Typography variant="subtitle2" gutterBottom>
-                                                        Team Members ({newTeam.players.length})
-                                                    </Typography>
-                                                    <List dense>
-                                                        {newTeam.players.map((player) => (
-                                                            <ListItem key={player.id}>
-                                                                <ListItemText
-                                                                    primary={`${player.first_name} ${player.last_name}`}
-                                                                    secondary={player.handicap ? `Handicap: ${player.handicap}` : 'No handicap'}
-                                                                />
-                                                                <ListItemSecondaryAction>
-                                                                    <IconButton
-                                                                        edge="end"
-                                                                        onClick={() => handleRemovePlayerFromNewTeam(player)}
-                                                                        size="small"
-                                                                    >
-                                                                        <DeleteIcon fontSize="small" />
-                                                                    </IconButton>
-                                                                </ListItemSecondaryAction>
-                                                            </ListItem>
-                                                        ))}
-                                                    </List>
-                                                </Paper>
-                                            </Grid>
-                                        )}
-                                    </Grid>
-                                </Box>
-                            )}
-                        </Box>
-                    )}
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseTeamDialog}>
-                        Cancel
-                    </Button>
-                    {isCreatingNewTeam && (
-                        <Button
-                            onClick={handleCreateNewTeam}
-                            variant="contained"
-                            disabled={!newTeam.name.trim() || newTeam.players.length < 2}
-                        >
-                            Create & Add Team
-                        </Button>
-                    )}
-                </DialogActions>
-            </Dialog>
         </div>
     );
 }
