@@ -67,6 +67,7 @@ import { get, post, put, del } from '../../../services/api'; // Import API servi
 import Rankings from './Rankings';
 import PlayerStats from './PlayerStats';
 import Standings from './Standings';
+import Teams from './Teams';
 
 function LeagueManagement() {
     const { leagueId } = useParams();
@@ -1401,27 +1402,7 @@ function LeagueManagement() {
                 )}
 
                 {activeTab === 4 && (
-                    <Paper sx={{ p: 3 }}>
-                        <Typography variant="h6" gutterBottom>
-                            Teams
-                        </Typography>
-                        {league.teams && league.teams.length > 0 ? (
-                            <List>
-                                {league.teams.map((team) => (
-                                    <ListItem key={team.id}>
-                                        <ListItemText
-                                            primary={team.name}
-                                            secondary={`Members: ${team.members?.length || 0}`}
-                                        />
-                                    </ListItem>
-                                ))}
-                            </List>
-                        ) : (
-                            <Typography variant="body2" color="text.secondary">
-                                No teams assigned to this league.
-                            </Typography>
-                        )}
-                    </Paper>
+                    <Teams league={league} />
                 )}
 
                 {activeTab === 5 && (

@@ -341,3 +341,62 @@ def get_league_matches(league_id: int, db: Session = Depends(get_db)):
             
     return response_matches
 
+@router.get("/{league_id}/teams", response_model=List[dict])
+def get_league_teams(league_id: int, db: Session = Depends(get_db)):
+    """
+    Get all teams and their players for a league.
+    Excludes substitute players.
+    """
+    from app.models.match_player import MatchPlayer
+    
+    # Verify league exists
+    league = db.query(League).filter(League.id == league_id).first()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    
+    # Get teams directly associated with the league
+    teams = league.teams
+    
+    teams_data = []
+    for team in teams:
+        # Get all players for this team who have participated in this league as NON-SUBSTITUTES
+        # Players are found through match_player entries in league matches
+        players_query = db.query(Player).join(
+            MatchPlayer, MatchPlayer.player_id == Player.id
+        ).join(
+            Match, MatchPlayer.match_id == Match.id
+        ).join(
+            Week, Match.week_id == Week.id
+        ).filter(
+            MatchPlayer.team_id == team.id,
+            Week.league_id == league_id,
+            MatchPlayer.is_substitute == False  # Exclude substitute players
+        ).distinct().all()
+        
+        # Format player data
+        players_data = []
+        for player in players_query:
+            player_data = {
+                "id": player.id,
+                "first_name": player.first_name,
+                "last_name": player.last_name,
+                "player_name": f"{player.first_name} {player.last_name}",
+                "email": player.email,
+                "handicap": player.handicap
+            }
+            players_data.append(player_data)
+        
+        team_data = {
+            "id": team.id,
+            "name": team.name,
+            "description": team.description,
+            "players": players_data,
+            "player_count": len(players_data)
+        }
+        teams_data.append(team_data)
+    
+    # Sort teams by name
+    teams_data.sort(key=lambda x: x["name"])
+    
+    return teams_data
+
