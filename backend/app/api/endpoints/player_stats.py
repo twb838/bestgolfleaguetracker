@@ -441,3 +441,260 @@ def get_most_improved_players(
     
     # Apply the limit
     return improvements[:limit]
+
+@router.get("/league/{league_id}/mvp", response_model=List[Dict[str, Any]])
+def get_most_valuable_players(
+    league_id: int,
+    limit: int = 10,
+    min_rounds: int = 1,
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get the Most Valuable Players (MVP) in a league based on total points earned.
+    Players must have played at least min_rounds to be considered.
+    Returns players ranked by total points earned throughout the season.
+    """
+    # Verify league exists
+    league = db.query(League).filter(League.id == league_id).first()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    
+    # Query to get total points for each player in the league
+    mvp_stats = db.query(
+        MatchPlayer.player_id,
+        Player.first_name,
+        Player.last_name,
+        func.sum(MatchPlayer.points).label("total_points"),
+        func.count(MatchPlayer.id).label("rounds_played"),
+        func.avg(MatchPlayer.points).label("avg_points_per_round")
+    ).join(
+        Player, MatchPlayer.player_id == Player.id
+    ).join(
+        Match, MatchPlayer.match_id == Match.id
+    ).join(
+        Week, Match.week_id == Week.id
+    ).filter(
+        Week.league_id == league_id,
+        MatchPlayer.points.isnot(None)
+    ).group_by(
+        MatchPlayer.player_id,
+        Player.first_name,
+        Player.last_name
+    ).having(
+        func.count(MatchPlayer.id) >= min_rounds
+    ).order_by(
+        func.sum(MatchPlayer.points).desc()
+    ).limit(limit).all()
+    
+    # Get the most recent team for each player
+    player_teams = {}
+    for stat in mvp_stats:
+        most_recent_team = db.query(
+            Team.name.label("team_name")
+        ).join(
+            MatchPlayer, MatchPlayer.team_id == Team.id
+        ).join(
+            Match, MatchPlayer.match_id == Match.id
+        ).join(
+            Week, Match.week_id == Week.id
+        ).filter(
+            MatchPlayer.player_id == stat.player_id,
+            Week.league_id == league_id
+        ).order_by(
+            Match.match_date.desc()
+        ).first()
+        
+        if most_recent_team:
+            player_teams[stat.player_id] = most_recent_team.team_name
+        else:
+            player_teams[stat.player_id] = "Unknown Team"
+    
+    # Format results
+    results = []
+    for rank, stat in enumerate(mvp_stats, 1):
+        results.append({
+            "rank": rank,
+            "player_id": stat.player_id,
+            "player_name": f"{stat.first_name} {stat.last_name}",
+            "team_name": player_teams.get(stat.player_id, "Unknown Team"),
+            "total_points": float(stat.total_points) if stat.total_points else 0.0,
+            "rounds_played": stat.rounds_played,
+            "avg_points_per_round": round(float(stat.avg_points_per_round), 2) if stat.avg_points_per_round else 0.0
+        })
+    
+    return results
+
+@router.get("/league/{league_id}/mvp-detailed", response_model=Dict[str, Any])
+def get_mvp_detailed_stats(
+    league_id: int,
+    player_id: Optional[int] = None,
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get detailed MVP statistics for a league.
+    If player_id is provided, returns detailed breakdown for that player.
+    Otherwise returns overall MVP leaderboard with additional context.
+    """
+    # Verify league exists
+    league = db.query(League).filter(League.id == league_id).first()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    
+    if player_id:
+        # Verify player exists
+        player = db.query(Player).filter(Player.id == player_id).first()
+        if not player:
+            raise HTTPException(status_code=404, detail="Player not found")
+        
+        # Get detailed stats for specific player
+        player_matches = db.query(
+            MatchPlayer.points,
+            MatchPlayer.gross_score,
+            MatchPlayer.net_score,
+            Match.match_date,
+            Week.week_number,
+            Team.name.label("team_name"),
+            Course.name.label("course_name")
+        ).join(
+            Match, MatchPlayer.match_id == Match.id
+        ).join(
+            Week, Match.week_id == Week.id
+        ).join(
+            Team, MatchPlayer.team_id == Team.id
+        ).join(
+            Course, Match.course_id == Course.id
+        ).filter(
+            MatchPlayer.player_id == player_id,
+            Week.league_id == league_id,
+            MatchPlayer.points_earned.isnot(None)
+        ).order_by(
+            Match.match_date.desc()
+        ).all()
+        
+        # Calculate summary stats
+        total_points = sum(match.points for match in player_matches)
+        rounds_played = len(player_matches)
+        avg_points = total_points / rounds_played if rounds_played > 0 else 0
+        best_week = max(player_matches, key=lambda x: x.points_earned) if player_matches else None
+        
+        # Get player's rank in league
+        rank_query = db.query(
+            MatchPlayer.player_id,
+            func.sum(MatchPlayer.points).label("total_points")
+        ).join(
+            Match, MatchPlayer.match_id == Match.id
+        ).join(
+            Week, Match.week_id == Week.id
+        ).filter(
+            Week.league_id == league_id,
+            MatchPlayer.points.isnot(None)
+        ).group_by(
+            MatchPlayer.player_id
+        ).order_by(
+            func.sum(MatchPlayer.points).desc()
+        ).all()
+        
+        player_rank = None
+        for rank, result in enumerate(rank_query, 1):
+            if result.player_id == player_id:
+                player_rank = rank
+                break
+        
+        return {
+            "player_id": player_id,
+            "player_name": f"{player.first_name} {player.last_name}",
+            "league_rank": player_rank,
+            "total_players": len(rank_query),
+            "total_points": total_points,
+            "rounds_played": rounds_played,
+            "avg_points_per_round": round(avg_points, 2),
+            "best_week": {
+                "week_number": best_week.week_number,
+                "points_earned": best_week.points_earned,
+                "match_date": best_week.match_date,
+                "course_name": best_week.course_name
+            } if best_week else None,
+            "recent_matches": [
+                {
+                    "week_number": match.week_number,
+                    "match_date": match.match_date,
+                    "course_name": match.course_name,
+                    "team_name": match.team_name,
+                    "points_earned": match.points_earned,
+                    "gross_score": match.gross_score,
+                    "net_score": match.net_score
+                }
+                for match in player_matches[:10]  # Last 10 matches
+            ]
+        }
+    
+    else:
+        # Get overall MVP leaderboard with context
+        mvp_stats = db.query(
+            MatchPlayer.player_id,
+            Player.first_name,
+            Player.last_name,
+            func.sum(MatchPlayer.points).label("total_points"),
+            func.count(MatchPlayer.id).label("rounds_played"),
+            func.avg(MatchPlayer.points).label("avg_points_per_round"),
+            func.max(MatchPlayer.points).label("best_week_points")
+        ).join(
+            Player, MatchPlayer.player_id == Player.id
+        ).join(
+            Match, MatchPlayer.match_id == Match.id
+        ).join(
+            Week, Match.week_id == Week.id
+        ).filter(
+            Week.league_id == league_id,
+            MatchPlayer.points.isnot(None)
+        ).group_by(
+            MatchPlayer.player_id,
+            Player.first_name,
+            Player.last_name
+        ).order_by(
+            func.sum(MatchPlayer.points).desc()
+        ).limit(10).all()
+        
+        # Get league context
+        total_weeks = db.query(func.count(Week.id)).filter(Week.league_id == league_id).scalar()
+        total_players = db.query(func.count(func.distinct(MatchPlayer.player_id))).join(
+            Match, MatchPlayer.match_id == Match.id
+        ).join(
+            Week, Match.week_id == Week.id
+        ).filter(Week.league_id == league_id).scalar()
+        
+        # Calculate average points per week across all players
+        avg_points_per_week = db.query(
+            func.avg(MatchPlayer.points)
+        ).join(
+            Match, MatchPlayer.match_id == Match.id
+        ).join(
+            Week, Match.week_id == Week.id
+        ).filter(
+            Week.league_id == league_id,
+            MatchPlayer.points.isnot(None)
+        ).scalar()
+        
+        results = []
+        for rank, stat in enumerate(mvp_stats, 1):
+            results.append({
+                "rank": rank,
+                "player_id": stat.player_id,
+                "player_name": f"{stat.first_name} {stat.last_name}",
+                "total_points": float(stat.total_points) if stat.total_points else 0.0,
+                "rounds_played": stat.rounds_played,
+                "avg_points_per_round": round(float(stat.avg_points_per_round), 2) if stat.avg_points_per_round else 0.0,
+                "best_week_points": float(stat.best_week_points) if stat.best_week_points else 0.0
+            })
+        
+        return {
+            "league_id": league_id,
+            "league_name": league.name,
+            "total_weeks": total_weeks,
+            "total_players": total_players,
+            "league_avg_points_per_week": round(float(avg_points_per_week), 2) if avg_points_per_week else 0.0,
+            "mvp_leaderboard": results
+        }
+
