@@ -45,6 +45,7 @@ const PrinterFriendlyLeagueSummary = () => {
     });
     const [makeupMatches, setMakeupMatches] = useState([]);
     const [mostImprovedPlayers, setMostImprovedPlayers] = useState([]);
+    const [mvpPlayers, setMvpPlayers] = useState([]);
     const [previousWeekMatches, setPreviousWeekMatches] = useState([]);
     const [previousWeek, setPreviousWeek] = useState(null);
     const [previousWeekTopScores, setPreviousWeekTopScores] = useState({
@@ -99,6 +100,9 @@ const PrinterFriendlyLeagueSummary = () => {
 
                 // Fetch most improved players
                 await fetchMostImprovedPlayers();
+
+                // Fetch MVP players
+                await fetchMvpPlayers();
 
                 // Find the previous week for showing results
                 if (weeksData && weeksData.length > 1) {
@@ -305,6 +309,22 @@ const PrinterFriendlyLeagueSummary = () => {
             console.error('Error fetching most improved players:', error);
             setMostImprovedPlayers([]);
         }
+    };
+
+    const fetchMvpPlayers = async () => {
+        try {
+            const data = await get(`/player-stats/league/${leagueId}/mvp?limit=5&min_rounds=1`);
+            setMvpPlayers(data);
+        } catch (error) {
+            console.error('Error fetching MVP players:', error);
+            setMvpPlayers([]);
+        }
+    };
+
+    // Helper function to format points
+    const formatPoints = (points) => {
+        if (points === null || points === undefined) return '0';
+        return Number.isInteger(points) ? points.toString() : points.toFixed(1);
     };
 
     const fetchPreviousWeekTopScores = async (weekId) => {
@@ -988,6 +1008,50 @@ const PrinterFriendlyLeagueSummary = () => {
                                 ) : (
                                     <Typography variant="body2" color="text.secondary">
                                         No players have enough rounds (minimum 4) to calculate improvement.
+                                    </Typography>
+                                )}
+                            </Grid>
+
+                            {/* Most Valuable Players */}
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                    Most Valuable Players
+                                </Typography>
+
+                                {mvpPlayers.length > 0 ? (
+                                    <List disablePadding>
+                                        {mvpPlayers.map((player, index) => (
+                                            <ListItem
+                                                key={`mvp-${player.player_id}`}
+                                                sx={{
+                                                    px: 1,
+                                                    py: 0.25,
+                                                    backgroundColor: index % 2 === 0 ? '#f9f9f9' : 'transparent'
+                                                }}
+                                                disableGutters
+                                            >
+                                                <Typography variant="body2" sx={{ fontWeight: 'bold', minWidth: '20px' }}>
+                                                    {index + 1}.
+                                                </Typography>
+                                                <Box sx={{ ml: 1, flexGrow: 1 }}>
+                                                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                                                        {player.player_name} - <span style={{
+                                                            color: '#2e7d32',
+                                                            fontWeight: 'bold'
+                                                        }}>
+                                                            {formatPoints(player.total_points)} pts
+                                                        </span>
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {player.team_name || 'Unknown Team'} • {player.rounds_played} round{player.rounds_played !== 1 ? 's' : ''} • Avg: {formatPoints(player.avg_points_per_round)} pts/round
+                                                    </Typography>
+                                                </Box>
+                                            </ListItem>
+                                        ))}
+                                    </List>
+                                ) : (
+                                    <Typography variant="body2" color="text.secondary">
+                                        No MVP data available yet.
                                     </Typography>
                                 )}
                             </Grid>
