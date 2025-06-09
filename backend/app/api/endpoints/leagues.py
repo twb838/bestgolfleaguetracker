@@ -400,3 +400,170 @@ def get_league_teams(league_id: int, db: Session = Depends(get_db)):
     
     return teams_data
 
+@router.get("/{league_id}/players/{player_id}", response_model=dict)
+def get_league_player_detail(league_id: int, player_id: int, db: Session = Depends(get_db)):
+    """
+    Get detailed information for a specific player in a league.
+    Returns player info, all matches played, scores, and statistics.
+    """
+    from app.models.match_player import MatchPlayer
+    
+    # Verify league exists
+    league = db.query(League).filter(League.id == league_id).first()
+    if not league:
+        raise HTTPException(status_code=404, detail="League not found")
+    
+    # Verify player exists
+    player = db.query(Player).filter(Player.id == player_id).first()
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    
+    # Get all match entries for this player in this league
+    match_entries = db.query(MatchPlayer).join(
+        Match, MatchPlayer.match_id == Match.id
+    ).join(
+        Week, Match.week_id == Week.id
+    ).join(
+        Team, MatchPlayer.team_id == Team.id
+    ).join(
+        Course, Match.course_id == Course.id
+    ).filter(
+        MatchPlayer.player_id == player_id,
+        Week.league_id == league_id
+    ).order_by(Match.match_date.desc()).all()
+    
+    if not match_entries:
+        raise HTTPException(status_code=404, detail="Player has not played in this league")
+    
+    # Format match data
+    matches_data = []
+    total_points = 0.0
+    total_gross_score = 0
+    total_net_score = 0
+    completed_matches = 0
+    substitute_matches = 0
+    regular_matches = 0
+    gross_score_count = 0  # Add counter for gross scores
+    net_score_count = 0    # Add counter for net scores
+    
+    for entry in match_entries:
+        match = entry.match
+        week = match.week
+        team = entry.team
+        course = match.course
+        
+        # Get opponent team
+        if match.home_team_id == team.id:
+            opponent_team_id = match.away_team_id
+            team_points = match.home_team_points
+            opponent_points = match.away_team_points
+            team_gross = match.home_team_gross_score
+            team_net = match.home_team_net_score
+            opponent_gross = match.away_team_gross_score
+            opponent_net = match.away_team_net_score
+        else:
+            opponent_team_id = match.home_team_id
+            team_points = match.away_team_points
+            opponent_points = match.home_team_points
+            team_gross = match.away_team_gross_score
+            team_net = match.away_team_net_score
+            opponent_gross = match.home_team_gross_score
+            opponent_net = match.home_team_net_score
+        
+        # Get opponent team name
+        opponent_team = db.query(Team).filter(Team.id == opponent_team_id).first()
+        opponent_team_name = opponent_team.name if opponent_team else "Unknown Team"
+        
+        match_data = {
+            "match_id": match.id,
+            "week_number": week.week_number,
+            "match_date": match.match_date,
+            "course_name": course.name if course else "Unknown Course",
+            "team_name": team.name,
+            "opponent_team_name": opponent_team_name,
+            "is_substitute": entry.is_substitute,
+            "gross_score": entry.gross_score,
+            "net_score": entry.net_score,
+            "points_earned": entry.points,
+            "handicap_used": entry.handicap,
+            "team_points": team_points,
+            "opponent_points": opponent_points,
+            "team_gross_total": team_gross,
+            "team_net_total": team_net,
+            "opponent_gross_total": opponent_gross,
+            "opponent_net_total": opponent_net,
+            "match_completed": match.is_completed
+        }
+        matches_data.append(match_data)
+        
+        # Calculate statistics
+        if match.is_completed and entry.points is not None:
+            total_points += entry.points
+            completed_matches += 1
+            
+        if entry.gross_score is not None:
+            total_gross_score += entry.gross_score
+            gross_score_count += 1  # Increment only when we have a score
+            
+        if entry.net_score is not None:
+            total_net_score += entry.net_score
+            net_score_count += 1    # Increment only when we have a score
+            
+        if entry.is_substitute: # type: ignore
+            substitute_matches += 1
+        else:
+            regular_matches += 1
+    
+    # Calculate averages using actual score counts
+    avg_points = total_points / completed_matches if completed_matches > 0 else 0
+    avg_gross = total_gross_score / gross_score_count if gross_score_count > 0 else 0
+    avg_net = total_net_score / net_score_count if net_score_count > 0 else 0
+    
+    # Get best performances
+    best_gross = min([m["gross_score"] for m in matches_data if m["gross_score"] is not None], default=None)
+    best_net = min([m["net_score"] for m in matches_data if m["net_score"] is not None], default=None)
+    best_points = max([m["points_earned"] for m in matches_data if m["points_earned"] is not None], default=None)
+
+    # Get handicap improvement (first 3 matches vs overall average)
+    handicap_improvement = None
+    if len(match_entries) >= 3 and net_score_count >= 3:
+        # Get first 3 matches with net scores (chronologically first, not most recent)
+        first_matches = match_entries[-3:]  # Last 3 in the desc list are the earliest chronologically
+        first_scores = [m.net_score for m in first_matches if m.net_score is not None]
+        
+        if len(first_scores) >= 3:
+            first_avg = sum(first_scores) / len(first_scores)
+            # handicap_improvement = first average - overall average
+            # Positive means improvement (lower scores)
+            handicap_improvement = first_avg - avg_net
+    
+    # Get teams played for
+    teams_played_for = list(set([entry.team.name for entry in match_entries]))
+    
+    return {
+        "player_id": player.id,
+        "player_name": f"{player.first_name} {player.last_name}",
+        "first_name": player.first_name,
+        "last_name": player.last_name,
+        "email": player.email,
+        "current_handicap": player.handicap,
+        "league_id": league_id,
+        "league_name": league.name,
+        "teams_played_for": teams_played_for,
+        "statistics": {
+            "total_matches": len(match_entries),
+            "completed_matches": completed_matches,
+            "regular_matches": regular_matches,
+            "substitute_matches": substitute_matches,
+            "total_points_earned": round(total_points, 1), # type: ignore
+            "avg_points_per_match": round(avg_points, 2), # type: ignore
+            "avg_gross_score": round(avg_gross, 1), # type: ignore
+            "avg_net_score": round(avg_net, 1), # type: ignore
+            "best_gross_score": best_gross,
+            "best_net_score": best_net,
+            "best_points_match": best_points,
+            "handicap_improvement": round(handicap_improvement, 1) if handicap_improvement else None # type: ignore
+        },
+        "matches": matches_data
+    }
+
