@@ -246,12 +246,10 @@ const PrinterFriendlyLeagueSummary = () => {
         try {
             const matchesData = await get(`/matches/weeks/${weekId}/matches`);
 
-            // Only include completed matches with results
-            const completedMatches = matchesData.filter(match => match.is_completed);
-
+            // Include ALL matches (both completed and incomplete)
             // Enrich the matches data with team and course details
             if (leagueData?.teams && leagueData?.courses) {
-                const enrichedMatches = completedMatches.map(match => {
+                const enrichedMatches = matchesData.map(match => {
                     const homeTeam = leagueData.teams.find(team => team.id === match.home_team_id);
                     const awayTeam = leagueData.teams.find(team => team.id === match.away_team_id);
                     const course = leagueData.courses.find(course => course.id === match.course_id);
@@ -266,7 +264,7 @@ const PrinterFriendlyLeagueSummary = () => {
 
                 setPreviousWeekMatches(enrichedMatches);
             } else {
-                setPreviousWeekMatches(completedMatches);
+                setPreviousWeekMatches(matchesData);
             }
         } catch (error) {
             console.error('Error fetching previous week matches:', error);
@@ -608,24 +606,31 @@ const PrinterFriendlyLeagueSummary = () => {
                                             <TableCell sx={{ fontWeight: 'bold' }}>Home Team</TableCell>
                                             <TableCell sx={{ fontWeight: 'bold' }}>Away Team</TableCell>
                                             <TableCell sx={{ fontWeight: 'bold' }}>Result</TableCell>
-                                            <TableCell sx={{ fontWeight: 'bold' }}>Winner</TableCell>
+                                            <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
                                         {previousWeekMatches.map(match => {
-                                            // Determine winner
+                                            // Determine winner and status
                                             let winner = null;
-                                            if (match.home_team_points > match.away_team_points) {
-                                                winner = match.home_team.name;
-                                            } else if (match.away_team_points > match.home_team_points) {
-                                                winner = match.away_team.name;
+                                            let status = null;
+
+                                            if (match.is_completed) {
+                                                if (match.home_team_points > match.away_team_points) {
+                                                    winner = match.home_team.name;
+                                                } else if (match.away_team_points > match.home_team_points) {
+                                                    winner = match.away_team.name;
+                                                } else {
+                                                    winner = "Tied";
+                                                }
+                                                status = "Complete";
                                             } else {
-                                                winner = "Tied";
+                                                status = "Incomplete";
                                             }
 
                                             return (
                                                 <TableRow key={`prev-${match.id}`} sx={{
-                                                    backgroundColor: '#f5faff'
+                                                    backgroundColor: match.is_completed ? '#f5faff' : '#fff8e1'
                                                 }} className="print-force-background">
                                                     <TableCell>
                                                         {format(parseISO(match.match_date), 'MMM d, yyyy')}
@@ -634,52 +639,75 @@ const PrinterFriendlyLeagueSummary = () => {
                                                         {match.course?.name || 'N/A'}
                                                     </TableCell>
                                                     <TableCell sx={{
-                                                        fontWeight: match.home_team_points > match.away_team_points ? 'bold' : 'normal'
+                                                        fontWeight: match.is_completed && match.home_team_points > match.away_team_points ? 'bold' : 'normal'
                                                     }}>
                                                         {match.home_team?.name || 'Home Team'}
                                                     </TableCell>
                                                     <TableCell sx={{
-                                                        fontWeight: match.away_team_points > match.home_team_points ? 'bold' : 'normal'
+                                                        fontWeight: match.is_completed && match.away_team_points > match.home_team_points ? 'bold' : 'normal'
                                                     }}>
                                                         {match.away_team?.name || 'Away Team'}
                                                     </TableCell>
                                                     <TableCell sx={{ fontWeight: 'bold' }}>
-                                                        {match.home_team_points !== null
-                                                            ? (match.home_team_points % 1 === 0
-                                                                ? match.home_team_points
-                                                                : match.home_team_points.toFixed(1))
-                                                            : '-'}
-                                                        {' - '}
-                                                        {match.away_team_points !== null
-                                                            ? (match.away_team_points % 1 === 0
-                                                                ? match.away_team_points
-                                                                : match.away_team_points.toFixed(1))
-                                                            : '-'}
+                                                        {match.is_completed ? (
+                                                            <>
+                                                                {match.home_team_points !== null
+                                                                    ? (match.home_team_points % 1 === 0
+                                                                        ? match.home_team_points
+                                                                        : match.home_team_points.toFixed(1))
+                                                                    : '-'}
+                                                                {' - '}
+                                                                {match.away_team_points !== null
+                                                                    ? (match.away_team_points % 1 === 0
+                                                                        ? match.away_team_points
+                                                                        : match.away_team_points.toFixed(1))
+                                                                    : '-'}
+                                                            </>
+                                                        ) : (
+                                                            <Typography variant="body2" color="text.secondary">
+                                                                No Result
+                                                            </Typography>
+                                                        )}
                                                     </TableCell>
                                                     <TableCell>
-                                                        {winner === "Tied" ? (
-                                                            <Box sx={{
-                                                                display: 'inline-block',
-                                                                bgcolor: 'grey.200',
-                                                                px: 1,
-                                                                py: 0.25,
-                                                                borderRadius: 1,
-                                                                fontSize: '0.75rem'
-                                                            }} className="print-force-background">
-                                                                Tied Match
-                                                            </Box>
+                                                        {match.is_completed ? (
+                                                            winner === "Tied" ? (
+                                                                <Box sx={{
+                                                                    display: 'inline-block',
+                                                                    bgcolor: 'grey.200',
+                                                                    px: 1,
+                                                                    py: 0.25,
+                                                                    borderRadius: 1,
+                                                                    fontSize: '0.75rem'
+                                                                }} className="print-force-background">
+                                                                    Tied Match
+                                                                </Box>
+                                                            ) : (
+                                                                <Box sx={{
+                                                                    display: 'inline-block',
+                                                                    bgcolor: 'success.light',
+                                                                    color: 'success.contrastText',
+                                                                    px: 1,
+                                                                    py: 0.25,
+                                                                    borderRadius: 1,
+                                                                    fontSize: '0.75rem',
+                                                                    fontWeight: 'bold'
+                                                                }} className="print-force-background">
+                                                                    {winner}
+                                                                </Box>
+                                                            )
                                                         ) : (
                                                             <Box sx={{
                                                                 display: 'inline-block',
-                                                                bgcolor: 'success.light',
-                                                                color: 'success.contrastText',
+                                                                bgcolor: 'warning.light',
+                                                                color: 'warning.contrastText',
                                                                 px: 1,
                                                                 py: 0.25,
                                                                 borderRadius: 1,
                                                                 fontSize: '0.75rem',
                                                                 fontWeight: 'bold'
                                                             }} className="print-force-background">
-                                                                {winner}
+                                                                Incomplete
                                                             </Box>
                                                         )}
                                                     </TableCell>
