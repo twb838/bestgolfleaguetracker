@@ -36,7 +36,7 @@ import TournamentCreationWizard from './pages/tournaments/TournamentCreationWiza
 import Scorecard from './pages/tournaments/Scorecard';
 import LeagueSettings from './pages/leagues/LeagueSettings';
 import MatchupMatrix from './pages/leagues/MatchupMatrix';
-
+import Marketing from './pages/Marketing';
 
 // Create a layout wrapper component
 const AppLayout = ({ children }) => {
@@ -51,6 +51,7 @@ const AppLayout = ({ children }) => {
     // Check if current route should use minimal layout or is login page
     const isMinimalLayout = location.pathname.includes('/score-entry/');
     const isLoginPage = location.pathname === '/login';
+    const isMarketingPage = location.pathname === '/';
 
     const handleOpenMobileMenu = (event) => {
         setMobileMenuAnchor(event.currentTarget);
@@ -74,7 +75,7 @@ const AppLayout = ({ children }) => {
     };
 
     const navItems = [
-        { name: 'Dashboard', path: '/', icon: <HomeIcon fontSize="small" /> },
+        { name: 'Dashboard', path: '/dashboard', icon: <HomeIcon fontSize="small" /> },
         { name: 'Players', path: '/players', icon: <PersonIcon fontSize="small" /> },
         { name: 'Teams', path: '/teams', icon: <GroupIcon fontSize="small" /> },
         { name: 'Courses', path: '/courses', icon: <GolfCourseIcon fontSize="small" /> },
@@ -82,8 +83,8 @@ const AppLayout = ({ children }) => {
         { name: 'Tournaments', path: '/tournaments', icon: <EmojiEventsIcon fontSize="small" /> },
     ];
 
-    // If minimal layout or login page, only render children without navigation
-    if (isMinimalLayout || isLoginPage) {
+    // If minimal layout, login page, or marketing page, only render children without navigation
+    if (isMinimalLayout || isLoginPage || isMarketingPage) {
         return (
             <div className="App">
                 {children}
@@ -105,7 +106,7 @@ const AppLayout = ({ children }) => {
                             fontSize: { xs: '1rem', sm: '1.25rem' }
                         }}
                     >
-                        Golf Tracker
+                        🏌️ GolfClubTrack
                     </Typography>
 
                     {isMobile ? (
@@ -243,11 +244,14 @@ function App() {
             <Router>
                 <AppLayout>
                     <Routes>
+                        {/* Marketing page at root */}
+                        <Route path="/" element={<Marketing />} />
+
                         {/* Public Routes */}
                         <Route path="/login" element={<Login />} />
 
                         {/* Protected Routes */}
-                        <Route path="/" element={
+                        <Route path="/dashboard" element={
                             <ProtectedRoute>
                                 <Dashboard />
                             </ProtectedRoute>
@@ -311,7 +315,7 @@ function App() {
                         <Route path="/tournaments/:tournamentId/scorecard" element={<Scorecard />} />
                         <Route path="/leagues/:leagueId/settings" element={<LeagueSettings />} />
                         <Route path="/leagues/:leagueId/matchup-matrix" element={<MatchupMatrix />} />
-                        {/* Catch all */}
+                        {/* Catch all - redirect to marketing page for unauthenticated, dashboard for authenticated */}
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                 </AppLayout>

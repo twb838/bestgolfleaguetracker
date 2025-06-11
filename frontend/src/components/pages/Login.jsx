@@ -31,11 +31,13 @@ const Login = () => {
         }
 
         setIsSubmitting(true);
-        const success = await login(username, password);
-        setIsSubmitting(false);
-
-        if (success) {
-            navigate('/');
+        try {
+            await login(username, password);
+            navigate('/dashboard', { replace: true });
+        } catch (error) {
+            setFormError('Failed to log in: ' + error.message);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
