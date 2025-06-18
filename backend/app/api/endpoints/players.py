@@ -126,6 +126,7 @@ def delete_player(player_id: int, db: Session = Depends(get_db), current_user: U
 def update_league_player_handicaps(
     league_id: int, 
     background_tasks: BackgroundTasks,
+    exclude_highest: Optional[int] = None,
     db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     """
@@ -134,6 +135,7 @@ def update_league_player_handicaps(
     - minimum scores required (handicap_required_scores)
     - number of recent scores to use (handicap_recent_scores_used)
     - handicap percentage to par (handicap_perecentage_to_par)
+    - exclude_highest: optional number of highest scores to exclude from calculation
     """
     # Get league and verify it exists
     league = db.query(League).filter(League.id == league_id).first()
@@ -152,6 +154,10 @@ def update_league_player_handicaps(
     if league.handicap_perecentage_to_par is not None:
         handicap_percentage = league.handicap_perecentage_to_par / 100
     
+    # Validate exclude_highest parameter
+    if exclude_highest is not None and exclude_highest < 0:
+        raise HTTPException(status_code=400, detail="exclude_highest must be non-negative")
+    
     # Run the update as a background task to avoid timeouts for large leagues
     background_tasks.add_task(
         _process_handicap_updates,
@@ -159,7 +165,8 @@ def update_league_player_handicaps(
         league_id=league_id,
         min_scores_required=min_scores_required, # type: ignore
         scores_to_use=scores_to_use, # type: ignore
-        handicap_percentage=handicap_percentage # type: ignore
+        handicap_percentage=handicap_percentage, # type: ignore
+        exclude_highest=exclude_highest
     )
     
     return {
@@ -167,7 +174,8 @@ def update_league_player_handicaps(
         "league_id": league_id,
         "min_scores_required": min_scores_required,
         "scores_to_use": scores_to_use,
-        "handicap_percentage": handicap_percentage
+        "handicap_percentage": handicap_percentage,
+        "exclude_highest": exclude_highest
     }
 
 def _process_handicap_updates(
@@ -175,7 +183,8 @@ def _process_handicap_updates(
     league_id: int,
     min_scores_required: int,
     scores_to_use: int,
-    handicap_percentage: float
+    handicap_percentage: float,
+    exclude_highest: Optional[int] = None
 ):
     """Background task to process handicap updates for all players in a league"""
     updated_count = 0
@@ -235,6 +244,17 @@ def _process_handicap_updates(
                 skipped_count += 1
                 continue
             
+            # Exclude highest scores if specified
+            if exclude_highest is not None and exclude_highest > 0:
+                # Sort differentials in ascending order and exclude the highest ones
+                differentials.sort()
+                exclude_count = min(exclude_highest, len(differentials))
+                differentials = differentials[:-exclude_count]
+            
+            # Skip if no differentials remain after exclusion
+            if not differentials:
+                skipped_count += 1
+                continue
             # Calculate average differential
             avg_differential = statistics.mean(differentials)
             
