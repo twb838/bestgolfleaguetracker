@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 import statistics
-from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 
 from app.db.session import get_db
 from app.models.player import Player
@@ -17,6 +17,11 @@ from app.schemas.player import PlayerCreate, PlayerUpdate, PlayerResponse
 from app.api.deps import get_current_active_user
 
 router = APIRouter()
+
+def round_half_up(value: float, decimals: int = 0) -> float:
+    """Round a value with .5 always rounding up"""
+    multiplier = 10 ** decimals
+    return float(Decimal(str(value * multiplier)).quantize(Decimal('1'), rounding=ROUND_HALF_UP)) / multiplier
 
 @router.get("", response_model=List[PlayerResponse])
 def get_players(
@@ -270,6 +275,21 @@ def _process_handicap_updates(
                 player.handicap = handicap
                 db_session.add(player)
                 updated_count += 1
+
+            # Also update player handicap on incomplete matches for this player
+            incomplete_matches = (
+                db_session.query(MatchPlayer)
+                .join(Match, MatchPlayer.match_id == Match.id)
+                .join(Week, Match.week_id == Week.id)
+                .filter(Week.league_id == league_id)
+                .filter(MatchPlayer.player_id == player_id)
+                .filter(MatchPlayer.gross_score.is_(None))
+                .all()
+            )
+
+            for incomplete_match in incomplete_matches:
+                incomplete_match.handicap = round_half_up(handicap, 0) # type: ignore
+                db_session.add(incomplete_match)
         
         # Commit all changes
         db_session.commit()

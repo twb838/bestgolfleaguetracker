@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Dict, Any
 import secrets
 from datetime import datetime, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 
 from app.db.base import get_db
 from app.models.user import User
@@ -19,6 +20,11 @@ from app.schemas.match import MatchCreate, MatchResponse, MatchUpdate
 from app import schemas
 
 router = APIRouter()
+
+def round_half_up(value: float, decimals: int = 0) -> float:
+    """Round a value with .5 always rounding up"""
+    multiplier = 10 ** decimals
+    return float(Decimal(str(value * multiplier)).quantize(Decimal('1'), rounding=ROUND_HALF_UP)) / multiplier
 
 @router.post("/", response_model=MatchResponse, status_code=status.HTTP_201_CREATED)
 def create_match(match: MatchCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
@@ -68,7 +74,7 @@ def create_match(match: MatchCreate, db: Session = Depends(get_db), current_user
     # Add all players to match_players table with rounded handicaps
     for player in home_players:
         # Round the player's handicap to the nearest whole number
-        rounded_handicap = round(player.handicap) if player.handicap is not None else 0
+        rounded_handicap = round_half_up(player.handicap) if player.handicap is not None else 0
         
         match_player = MatchPlayer(
             match_id=db_match.id,
@@ -82,7 +88,7 @@ def create_match(match: MatchCreate, db: Session = Depends(get_db), current_user
     
     for player in away_players:
         # Round the player's handicap to the nearest whole number
-        rounded_handicap = round(player.handicap) if player.handicap is not None else 0
+        rounded_handicap = round_half_up(player.handicap) if player.handicap is not None else 0
         
         match_player = MatchPlayer(
             match_id=db_match.id,
