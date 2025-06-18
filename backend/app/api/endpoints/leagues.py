@@ -282,7 +282,7 @@ def get_league_leaderboard(league_id: int, db: Session = Depends(get_db)):
         total_points = stats["points_won"] + stats["points_lost"]
         win_percentage = 0
         if total_points > 0:
-            win_percentage = round((stats["points_won"] / total_points) * 100)
+            win_percentage = (stats["points_won"] / total_points * 100)
         
         result.append({
             "id": stats["id"],

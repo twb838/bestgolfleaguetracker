@@ -218,7 +218,7 @@ const Standings = ({ league }) => {
                                             : Math.round(teamStats.points_lost)}
                                     </TableCell>
                                     <TableCell align="center" sx={{ padding: '6px 8px' }}>
-                                        {teamStats.win_percentage}%
+                                        {teamStats.win_percentage.toFixed(2)}%
                                         {teamStats.matches_played > 0 &&
                                             <LinearProgress
                                                 variant="determinate"

@@ -761,7 +761,7 @@ const PrinterFriendlyLeagueSummary = () => {
                                                         ? team.points_lost
                                                         : team.points_lost.toFixed(1)}
                                                 </TableCell>
-                                                <TableCell align="center">{team.win_percentage}%</TableCell>
+                                                <TableCell align="center">{team.win_percentage.toFixed(2)}%</TableCell>
                                                 <TableCell align="center">{team.lowest_gross || '—'}</TableCell>
                                                 <TableCell align="center">{team.lowest_net || '—'}</TableCell>
                                             </TableRow>
