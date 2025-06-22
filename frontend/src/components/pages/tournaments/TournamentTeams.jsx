@@ -25,6 +25,7 @@ function TournamentTeams({ tournament, onUpdate }) {
     const [createTeamDialogOpen, setCreateTeamDialogOpen] = useState(false);
     const [editTeamDialogOpen, setEditTeamDialogOpen] = useState(false);
     const [addPlayerDialogOpen, setAddPlayerDialogOpen] = useState(false);
+    const [createPlayerDialogOpen, setCreatePlayerDialogOpen] = useState(false);
 
     // Team management state
     const [currentTeams, setCurrentTeams] = useState([]);
@@ -49,6 +50,14 @@ function TournamentTeams({ tournament, onUpdate }) {
     const [editTeam, setEditTeam] = useState({
         name: '',
         description: ''
+    });
+
+    // New player creation state
+    const [newPlayer, setNewPlayer] = useState({
+        first_name: '',
+        last_name: '',
+        email: '',
+        handicap: ''
     });
 
     const [teamLoading, setTeamLoading] = useState(false);
@@ -164,6 +173,10 @@ function TournamentTeams({ tournament, onUpdate }) {
         fetchAvailablePlayers();
     };
 
+    const handleCreateNewPlayer = () => {
+        setCreatePlayerDialogOpen(true);
+    };
+
     const handleCloseCreateTeamDialog = () => {
         setCreateTeamDialogOpen(false);
         setNewTeam({
@@ -191,6 +204,17 @@ function TournamentTeams({ tournament, onUpdate }) {
     const handleCloseAddPlayerDialog = () => {
         setAddPlayerDialogOpen(false);
         setSelectedTeamForPlayers(null);
+        setTeamError(null);
+    };
+
+    const handleCloseCreatePlayerDialog = () => {
+        setCreatePlayerDialogOpen(false);
+        setNewPlayer({
+            first_name: '',
+            last_name: '',
+            email: '',
+            handicap: ''
+        });
         setTeamError(null);
     };
 
@@ -344,6 +368,45 @@ function TournamentTeams({ tournament, onUpdate }) {
         } catch (error) {
             console.error('Error adding player to team:', error);
             setTeamError(error.message || 'Failed to add player to team');
+        }
+    };
+
+    const handleCreateAndAddPlayer = async () => {
+        try {
+            setTeamLoading(true);
+            setTeamError(null);
+
+            if (!newPlayer.first_name.trim() || !newPlayer.last_name.trim()) {
+                setTeamError('First name and last name are required');
+                return;
+            }
+
+            // Create the player
+            const playerData = {
+                first_name: newPlayer.first_name.trim(),
+                last_name: newPlayer.last_name.trim(),
+                email: newPlayer.email.trim() || null,
+                handicap: newPlayer.handicap ? parseFloat(newPlayer.handicap) : null
+            };
+
+            console.log('Creating new player:', playerData);
+            const createdPlayer = await post('/players', playerData);
+            console.log('Created player:', createdPlayer);
+
+            // Add the player to the team
+            await handleAddPlayerToTeam(createdPlayer.id);
+
+            // Refresh available players list
+            await fetchAvailablePlayers();
+
+            handleCloseCreatePlayerDialog();
+            console.log(`New player ${createdPlayer.first_name} ${createdPlayer.last_name} created and added to team`);
+
+        } catch (error) {
+            console.error('Error creating player:', error);
+            setTeamError(error.message || 'Failed to create player');
+        } finally {
+            setTeamLoading(false);
         }
     };
 
@@ -751,17 +814,28 @@ function TournamentTeams({ tournament, onUpdate }) {
                     <Divider sx={{ my: 2 }} />
 
                     {/* Available Players to Add */}
-                    <Typography variant="h6" gutterBottom>
-                        Available Players
-                        {selectedTeamForPlayers && tournament?.team_size && !canAddPlayerToTeam(selectedTeamForPlayers) && (
-                            <Chip
-                                label="Team Full"
-                                size="small"
-                                color="error"
-                                sx={{ ml: 1 }}
-                            />
-                        )}
-                    </Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                        <Typography variant="h6">
+                            Available Players
+                            {selectedTeamForPlayers && tournament?.team_size && !canAddPlayerToTeam(selectedTeamForPlayers) && (
+                                <Chip
+                                    label="Team Full"
+                                    size="small"
+                                    color="error"
+                                    sx={{ ml: 1 }}
+                                />
+                            )}
+                        </Typography>
+                        <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<PersonAddIcon />}
+                            onClick={handleCreateNewPlayer}
+                            disabled={selectedTeamForPlayers && !canAddPlayerToTeam(selectedTeamForPlayers)}
+                        >
+                            Create New Player
+                        </Button>
+                    </Box>
 
                     {playersLoading ? (
                         <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
@@ -776,12 +850,20 @@ function TournamentTeams({ tournament, onUpdate }) {
                             return availablePlayersFiltered.length === 0 ? (
                                 <Paper sx={{ p: 3, textAlign: 'center' }}>
                                     <PersonIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                                    <Typography variant="body1" color="text.secondary">
+                                    <Typography variant="body1" color="text.secondary" paragraph>
                                         {availablePlayers.length === 0 ?
                                             'No players found.' :
                                             'All available players are already in this team.'
                                         }
                                     </Typography>
+                                    <Button
+                                        variant="outlined"
+                                        startIcon={<PersonAddIcon />}
+                                        onClick={handleCreateNewPlayer}
+                                        disabled={teamIsFull}
+                                    >
+                                        Create New Player
+                                    </Button>
                                 </Paper>
                             ) : (
                                 <List>
@@ -1054,6 +1136,149 @@ function TournamentTeams({ tournament, onUpdate }) {
                 <DialogActions>
                     <Button onClick={handleCloseAddTeamDialog}>
                         Close
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Create Player Dialog */}
+            <Dialog
+                open={createPlayerDialogOpen}
+                onClose={handleCloseCreatePlayerDialog}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <PersonAddIcon sx={{ mr: 1 }} />
+                        Create New Player
+                        {selectedTeamForPlayers && (
+                            <Chip
+                                label={`for ${selectedTeamForPlayers.name}`}
+                                size="small"
+                                sx={{ ml: 1 }}
+                            />
+                        )}
+                    </Box>
+                </DialogTitle>
+                <DialogContent>
+                    {teamError && (
+                        <Alert severity="error" sx={{ mb: 2 }}>
+                            {teamError}
+                        </Alert>
+                    )}
+
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                        <Typography variant="body2">
+                            The new player will be created and automatically added to the team.
+                        </Typography>
+                    </Alert>
+
+                    <Grid container spacing={2} sx={{ mt: 1 }}>
+                        <Grid item xs={12} sm={6}>
+                            <TextField
+                                fullWidth
+                                label="First Name"
+                                value={newPlayer.first_name}
+                                onChange={(e) => setNewPlayer({
+                                    ...newPlayer,
+                                    first_name: e.target.value
+                                })}
+                                required
+                                autoFocus
+                            />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                            <TextField
+                                fullWidth
+                                label="Last Name"
+                                value={newPlayer.last_name}
+                                onChange={(e) => setNewPlayer({
+                                    ...newPlayer,
+                                    last_name: e.target.value
+                                })}
+                                required
+                            />
+                        </Grid>
+                        <Grid item xs={12}>
+                            <TextField
+                                fullWidth
+                                label="Email"
+                                type="email"
+                                value={newPlayer.email}
+                                onChange={(e) => setNewPlayer({
+                                    ...newPlayer,
+                                    email: e.target.value
+                                })}
+                                helperText="Optional"
+                            />
+                        </Grid>
+                        <Grid item xs={12}>
+                            <TextField
+                                fullWidth
+                                label="Handicap"
+                                type="number"
+                                inputProps={{
+                                    step: 0.1,
+                                    min: -10,
+                                    max: 54
+                                }}
+                                value={newPlayer.handicap}
+                                onChange={(e) => setNewPlayer({
+                                    ...newPlayer,
+                                    handicap: e.target.value
+                                })}
+                                helperText="Optional - Golf handicap index"
+                            />
+                        </Grid>
+                    </Grid>
+
+                    {/* Preview */}
+                    {(newPlayer.first_name || newPlayer.last_name) && (
+                        <Paper sx={{ mt: 2, p: 2, bgcolor: 'background.default' }}>
+                            <Typography variant="subtitle2" gutterBottom>
+                                Preview:
+                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <PersonIcon sx={{ mr: 1, color: 'primary.main' }} />
+                                <Box>
+                                    <Typography variant="body1">
+                                        {`${newPlayer.first_name} ${newPlayer.last_name}`.trim()}
+                                    </Typography>
+                                    {newPlayer.email && (
+                                        <Typography variant="body2" color="text.secondary">
+                                            {newPlayer.email}
+                                        </Typography>
+                                    )}
+                                    {newPlayer.handicap && (
+                                        <Chip
+                                            label={`HCP: ${newPlayer.handicap}`}
+                                            size="small"
+                                            sx={{ mt: 0.5 }}
+                                        />
+                                    )}
+                                </Box>
+                            </Box>
+                        </Paper>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseCreatePlayerDialog}>
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleCreateAndAddPlayer}
+                        variant="contained"
+                        disabled={
+                            teamLoading ||
+                            !newPlayer.first_name.trim() ||
+                            !newPlayer.last_name.trim() ||
+                            (selectedTeamForPlayers && !canAddPlayerToTeam(selectedTeamForPlayers))
+                        }
+                    >
+                        {teamLoading ? (
+                            <CircularProgress size={20} sx={{ mr: 1 }} />
+                        ) : null}
+                        Create & Add to Team
                     </Button>
                 </DialogActions>
             </Dialog>
