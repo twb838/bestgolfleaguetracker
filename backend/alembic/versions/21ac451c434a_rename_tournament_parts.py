@@ -24,60 +24,6 @@ def upgrade():
     inspector = sa.inspect(connection)
     existing_tables = inspector.get_table_names()
     
-    if 'tournament_participants' in existing_tables:
-        print("Renaming tournament_participants to tournament_players and removing team_id...")
-        
-        # Create new tournament_players table without team_id
-        op.create_table(
-            'tournament_players',
-            sa.Column('id', sa.Integer(), primary_key=True, index=True),
-            sa.Column('tournament_id', sa.Integer(), sa.ForeignKey('tournaments.id', ondelete='CASCADE')),
-            sa.Column('player_id', sa.Integer(), sa.ForeignKey('players.id')),
-            sa.Column('flight_id', sa.Integer(), sa.ForeignKey('tournament_flights.id'), nullable=True)
-        )
-        
-        # Copy data from tournament_participants to tournament_players (excluding team_id)
-        connection.execute(sa.text("""
-            INSERT INTO tournament_players (id, tournament_id, player_id, flight_id)
-            SELECT id, tournament_id, player_id, flight_id
-            FROM tournament_participants
-        """))
-        
-        # Update foreign key references in tournament_scores
-        connection.execute(sa.text("""
-            UPDATE tournament_scores ts
-            SET player_id = (
-                SELECT tp.id 
-                FROM tournament_players tp 
-                WHERE tp.id = ts.participant_id
-            )
-            WHERE EXISTS (
-                SELECT 1 
-                FROM tournament_players tp 
-                WHERE tp.id = ts.participant_id
-            )
-        """))
-        
-        # Drop the participant_id column from tournament_scores
-        op.drop_column('tournament_scores', 'participant_id')
-        
-        # Drop the old tournament_participants table
-        op.drop_table('tournament_participants')
-        
-        print("Migration completed successfully!")
-        
-    elif 'tournament_players' in existing_tables:
-        print("tournament_players table already exists")
-    else:
-        print("Creating tournament_players table...")
-        op.create_table(
-            'tournament_players',
-            sa.Column('id', sa.Integer(), primary_key=True, index=True),
-            sa.Column('tournament_id', sa.Integer(), sa.ForeignKey('tournaments.id', ondelete='CASCADE')),
-            sa.Column('player_id', sa.Integer(), sa.ForeignKey('players.id')),
-            sa.Column('flight_id', sa.Integer(), sa.ForeignKey('tournament_flights.id'), nullable=True)
-        )
-
 def downgrade():
     # Reverse the migration
     connection = op.get_bind()

@@ -67,6 +67,8 @@ class TournamentFlight(Base):
     name = Column(String(100), nullable=False)
     min_handicap = Column(Float, nullable=True)
     max_handicap = Column(Float, nullable=True)
+    min_score = Column(Integer, nullable=True)
+    max_score = Column(Integer, nullable=True)
     
     # Relationships
     tournament = relationship("Tournament", back_populates="flights")
