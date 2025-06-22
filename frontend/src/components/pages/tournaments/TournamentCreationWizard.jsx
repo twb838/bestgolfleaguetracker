@@ -39,7 +39,6 @@ function TournamentCreationWizard() {
     const [fetchError, setFetchError] = useState(null);
     const [courses, setCourses] = useState([]);
     const [players, setPlayers] = useState([]);
-    const [teams, setTeams] = useState([]);
 
     // Tournament data state
     const [tournamentData, setTournamentData] = useState({
@@ -55,7 +54,6 @@ function TournamentCreationWizard() {
         auto_flight_size: 16,
         courses: [],
         individual_participants: [],
-        teams: [],
         handicap_allowance: 100,
         participant_type: 'individual', // Default to individual
         team_size: 2 // Default team size
@@ -77,22 +75,20 @@ function TournamentCreationWizard() {
         'Review & Create'
     ];
 
-    // Fetch courses, players, and teams data
+    // Fetch courses and players data (removed teams)
     useEffect(() => {
         const fetchData = async () => {
             try {
                 setFetchingData(true);
                 setFetchError(null);
 
-                const [coursesData, playersData, teamsData] = await Promise.all([
+                const [coursesData, playersData] = await Promise.all([
                     get('/courses'),
-                    get('/players'),
-                    get('/teams')
+                    get('/players')
                 ]);
 
                 setCourses(coursesData);
                 setPlayers(playersData);
-                setTeams(teamsData);
             } catch (error) {
                 console.error('Error fetching data:', error);
                 setFetchError(error.message || 'Failed to fetch required data');
@@ -214,14 +210,6 @@ function TournamentCreationWizard() {
         });
     };
 
-    // For teams
-    const handleTeamSelection = (event) => {
-        setTournamentData({
-            ...tournamentData,
-            teams: event.target.value
-        });
-    };
-
     // Handle step navigation
     const handleNext = () => {
         setActiveStep((prevStep) => prevStep + 1);
@@ -270,7 +258,7 @@ function TournamentCreationWizard() {
     }
 
     // Show error state if initial data fetch failed
-    if (fetchError && !courses.length && !players.length && !teams.length) {
+    if (fetchError && !courses.length && !players.length) {
         return (
             <Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -746,6 +734,9 @@ function TournamentCreationWizard() {
                                 </Typography>
                                 <Typography variant="body2">
                                     You can create the tournament now and add participants later through the tournament management page.
+                                    {tournamentData.participant_type === 'team' &&
+                                        ' Teams will be created specifically for this tournament in the tournament management page.'
+                                    }
                                 </Typography>
                             </Alert>
 
@@ -786,90 +777,42 @@ function TournamentCreationWizard() {
                                 </>
                             ) : (
                                 <>
-                                    <Typography variant="h6" gutterBottom>Teams (Optional)</Typography>
-                                    <FormControl fullWidth>
-                                        <InputLabel id="teams-select-label">Select Teams</InputLabel>
-                                        <Select
-                                            labelId="teams-select-label"
-                                            multiple
-                                            value={tournamentData.teams}
-                                            onChange={handleTeamSelection}
-                                            label="Select Teams"
-                                            renderValue={(selected) => (
-                                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                                    {selected.map((teamId) => {
-                                                        const team = teams.find(t => t.id === teamId);
-                                                        return team ? (
-                                                            <Chip
-                                                                key={teamId}
-                                                                label={team.name}
-                                                                size="small"
-                                                            />
-                                                        ) : null;
-                                                    })}
-                                                </Box>
-                                            )}
-                                        >
-                                            {teams.map((team) => (
-                                                <MenuItem key={team.id} value={team.id}>
-                                                    {team.name} ({team.players?.length || 0} players)
-                                                </MenuItem>
-                                            ))}
-                                        </Select>
-                                    </FormControl>
+                                    <Typography variant="h6" gutterBottom>Teams</Typography>
+                                    <Alert severity="info" sx={{ mb: 2 }}>
+                                        <Typography variant="subtitle2" gutterBottom>
+                                            Teams will be created in the tournament management page
+                                        </Typography>
+                                        <Typography variant="body2">
+                                            For team tournaments, you'll create and manage teams specifically for this tournament
+                                            after it's created. Each team will have {tournamentData.team_size} players.
+                                        </Typography>
+                                    </Alert>
 
-                                    {tournamentData.teams.length > 0 && (
-                                        <Box sx={{ mt: 2 }}>
-                                            <Typography variant="subtitle2" gutterBottom>
-                                                Selected Teams ({tournamentData.teams.length})
-                                            </Typography>
-                                            <Grid container spacing={1}>
-                                                {tournamentData.teams.map((teamId) => {
-                                                    const team = teams.find(t => t.id === teamId);
-                                                    return team ? (
-                                                        <Grid item xs={12} sm={6} md={4} key={teamId}>
-                                                            <Paper sx={{ p: 2 }}>
-                                                                <Typography variant="subtitle2" gutterBottom>
-                                                                    {team.name}
-                                                                </Typography>
-                                                                <Typography variant="body2" color="text.secondary">
-                                                                    Players: {team.players?.length || 0}
-                                                                </Typography>
-                                                                {team.players && team.players.length > 0 && (
-                                                                    <Box sx={{ mt: 1 }}>
-                                                                        {team.players.map(player => (
-                                                                            <Chip
-                                                                                key={player.id}
-                                                                                label={`${player.first_name} ${player.last_name}`}
-                                                                                size="small"
-                                                                                sx={{ mr: 0.5, mb: 0.5 }}
-                                                                            />
-                                                                        ))}
-                                                                    </Box>
-                                                                )}
-                                                            </Paper>
-                                                        </Grid>
-                                                    ) : null;
-                                                })}
-                                            </Grid>
-                                        </Box>
-                                    )}
+                                    <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'grey.50' }}>
+                                        <GroupIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                                        <Typography variant="body1" color="text.secondary" paragraph>
+                                            Team management will be available after tournament creation
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary">
+                                            You'll be able to create new teams with {tournamentData.team_size} players each
+                                            in the tournament teams section.
+                                        </Typography>
+                                    </Paper>
                                 </>
                             )}
 
-                            {/* Show message when no participants are selected */}
-                            {((tournamentData.participant_type === 'individual' && tournamentData.individual_participants.length === 0) ||
-                                (tournamentData.participant_type === 'team' && tournamentData.teams.length === 0)) && (
-                                    <Paper sx={{ p: 3, mt: 3, textAlign: 'center', bgcolor: 'grey.50' }}>
-                                        <GroupIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                                        <Typography variant="body1" color="text.secondary" paragraph>
-                                            No {tournamentData.participant_type === 'individual' ? 'players' : 'teams'} selected yet
-                                        </Typography>
-                                        <Typography variant="body2" color="text.secondary">
-                                            You can proceed to create the tournament and add {tournamentData.participant_type === 'individual' ? 'players' : 'teams'} later.
-                                        </Typography>
-                                    </Paper>
-                                )}
+                            {/* Show message when no individual participants are selected */}
+                            {tournamentData.participant_type === 'individual' && tournamentData.individual_participants.length === 0 && (
+                                <Paper sx={{ p: 3, mt: 3, textAlign: 'center', bgcolor: 'grey.50' }}>
+                                    <GroupIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                                    <Typography variant="body1" color="text.secondary" paragraph>
+                                        No players selected yet
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                        You can proceed to create the tournament and add players later.
+                                    </Typography>
+                                </Paper>
+                            )}
                         </Grid>
                     </Grid>
                 );
@@ -996,10 +939,7 @@ function TournamentCreationWizard() {
                                                         ? "No players selected (can be added later)"
                                                         : `${individualCount} player${individualCount !== 1 ? 's' : ''} selected`;
                                                 } else {
-                                                    const teamCount = tournamentData.teams?.length || 0;
-                                                    return teamCount === 0
-                                                        ? "No teams selected (can be added later)"
-                                                        : `${teamCount} team${teamCount !== 1 ? 's' : ''} selected`;
+                                                    return "Teams will be created after tournament creation";
                                                 }
                                             })()}
                                         </Typography>
