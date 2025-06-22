@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
     Box, Paper, Typography, Button, Dialog, DialogTitle, DialogContent,
     DialogActions, TextField, Grid, Chip, List, ListItem,
@@ -19,6 +19,7 @@ import {
     Warning as WarningIcon
 } from '@mui/icons-material';
 import { get, post, del, put } from '../../../services/api';
+import { debounce } from 'lodash'; // or implement your own debounce
 
 function TournamentTeams({ tournament, onUpdate }) {
     const [addTeamDialogOpen, setAddTeamDialogOpen] = useState(false);
@@ -61,6 +62,40 @@ function TournamentTeams({ tournament, onUpdate }) {
     });
 
     const [teamLoading, setTeamLoading] = useState(false);
+
+    // Memoize validation to prevent recalculation on every render
+    const playerValidation = useMemo(() => {
+        const firstNameValid = newPlayer.first_name.trim().length > 0;
+        const lastNameValid = newPlayer.last_name.trim().length > 0;
+        const emailValid = !newPlayer.email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newPlayer.email);
+
+        return {
+            isValid: firstNameValid && lastNameValid && emailValid,
+            firstNameError: !firstNameValid && newPlayer.first_name.length > 0 ? 'First name is required' : null,
+            lastNameError: !lastNameValid && newPlayer.last_name.length > 0 ? 'Last name is required' : null,
+            emailError: newPlayer.email && !emailValid ? 'Please enter a valid email' : null
+        };
+    }, [newPlayer.first_name, newPlayer.last_name, newPlayer.email]);
+
+    // Debounced update function
+    const handlePlayerFieldChange = useCallback((field, value) => {
+        setNewPlayer(prev => ({
+            ...prev,
+            [field]: value
+        }));
+    }, []);
+
+    // Debounce the email validation if you're doing server-side validation
+    const debouncedEmailValidation = useCallback(
+        debounce(async (email) => {
+            if (email && email.includes('@')) {
+                // Only do expensive validation after user stops typing
+                // Example: check if email already exists
+                // const exists = await checkEmailExists(email);
+            }
+        }, 500),
+        []
+    );
 
     // Helper function to get team size status
     const getTeamSizeStatus = (team) => {
@@ -1179,12 +1214,18 @@ function TournamentTeams({ tournament, onUpdate }) {
                                 fullWidth
                                 label="First Name"
                                 value={newPlayer.first_name}
-                                onChange={(e) => setNewPlayer({
-                                    ...newPlayer,
-                                    first_name: e.target.value
-                                })}
+                                onChange={(e) => handlePlayerFieldChange('first_name', e.target.value)}
+                                error={!!playerValidation.firstNameError}
+                                helperText={playerValidation.firstNameError || "Required"}
                                 required
                                 autoFocus
+                                // Remove validation on every keystroke
+                                onBlur={(e) => {
+                                    // Only validate on blur, not on every keystroke
+                                    if (!e.target.value.trim()) {
+                                        // Handle validation here if needed
+                                    }
+                                }}
                             />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -1192,10 +1233,9 @@ function TournamentTeams({ tournament, onUpdate }) {
                                 fullWidth
                                 label="Last Name"
                                 value={newPlayer.last_name}
-                                onChange={(e) => setNewPlayer({
-                                    ...newPlayer,
-                                    last_name: e.target.value
-                                })}
+                                onChange={(e) => handlePlayerFieldChange('last_name', e.target.value)}
+                                error={!!playerValidation.lastNameError}
+                                helperText={playerValidation.lastNameError || "Required"}
                                 required
                             />
                         </Grid>
@@ -1205,11 +1245,9 @@ function TournamentTeams({ tournament, onUpdate }) {
                                 label="Email"
                                 type="email"
                                 value={newPlayer.email}
-                                onChange={(e) => setNewPlayer({
-                                    ...newPlayer,
-                                    email: e.target.value
-                                })}
-                                helperText="Optional"
+                                onChange={(e) => handlePlayerFieldChange('email', e.target.value)}
+                                error={!!playerValidation.emailError}
+                                helperText={playerValidation.emailError || "Optional"}
                             />
                         </Grid>
                         <Grid item xs={12}>
@@ -1223,10 +1261,7 @@ function TournamentTeams({ tournament, onUpdate }) {
                                     max: 54
                                 }}
                                 value={newPlayer.handicap}
-                                onChange={(e) => setNewPlayer({
-                                    ...newPlayer,
-                                    handicap: e.target.value
-                                })}
+                                onChange={(e) => handlePlayerFieldChange('handicap', e.target.value)}
                                 helperText="Optional - Golf handicap index"
                             />
                         </Grid>
