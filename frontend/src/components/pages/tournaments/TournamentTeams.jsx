@@ -22,7 +22,6 @@ import {
     Clear as ClearIcon
 } from '@mui/icons-material';
 import { get, post, del, put } from '../../../services/api';
-import { debounce } from 'lodash'; // or implement your own debounce
 
 function TournamentTeams({ tournament, onUpdate }) {
     const [createTeamDialogOpen, setCreateTeamDialogOpen] = useState(false);
@@ -88,18 +87,6 @@ function TournamentTeams({ tournament, onUpdate }) {
             [field]: value
         }));
     }, []);
-
-    // Debounce the email validation if you're doing server-side validation
-    const debouncedEmailValidation = useCallback(
-        debounce(async (email) => {
-            if (email && email.includes('@')) {
-                // Only do expensive validation after user stops typing
-                // Example: check if email already exists
-                // const exists = await checkEmailExists(email);
-            }
-        }, 500),
-        []
-    );
 
     // Helper function to get team size status
     const getTeamSizeStatus = (team) => {
@@ -376,9 +363,23 @@ function TournamentTeams({ tournament, onUpdate }) {
             console.log(`Adding player ${playerId} to team ${selectedTeamForPlayers.id}`);
             await post(`/teams/${selectedTeamForPlayers.id}/players/${playerId}`, {});
 
-            // Refresh data
+            // Refresh the main teams data
             await fetchCurrentTeams();
-            await fetchAvailablePlayers();
+
+            // Update the selectedTeamForPlayers with fresh data from the refreshed teams
+            const updatedTeams = await get(`/tournaments/${tournament.id}/teams`);
+            const updatedSelectedTeam = updatedTeams.find(team => team.id === selectedTeamForPlayers.id);
+            if (updatedSelectedTeam) {
+                setSelectedTeamForPlayers(updatedSelectedTeam);
+            }
+
+            // Remove the added player from available players list
+            setAvailablePlayers(prevPlayers =>
+                prevPlayers.filter(player => player.id !== playerId)
+            );
+
+            // Clear any previous errors
+            setTeamError(null);
 
             // Notify parent component to refresh tournament data
             if (onUpdate) {
@@ -414,13 +415,12 @@ function TournamentTeams({ tournament, onUpdate }) {
             const createdPlayer = await post('/players', playerData);
             console.log('Created player:', createdPlayer);
 
-            // Add the player to the team
+            // Close the create player dialog first
+            handleCloseCreatePlayerDialog();
+
+            // Add the player to the team (this will keep the manage players dialog open)
             await handleAddPlayerToTeam(createdPlayer.id);
 
-            // Refresh available players list
-            await fetchAvailablePlayers();
-
-            handleCloseCreatePlayerDialog();
             console.log(`New player ${createdPlayer.first_name} ${createdPlayer.last_name} created and added to team`);
 
         } catch (error) {
@@ -436,8 +436,27 @@ function TournamentTeams({ tournament, onUpdate }) {
             console.log(`Removing player ${playerId} from team ${teamId}`);
             await del(`/teams/${teamId}/players/${playerId}`);
 
-            // Refresh data
-            await fetchCurrentTeams();
+            // If we're currently viewing this team in the dialog, update it
+            if (selectedTeamForPlayers && selectedTeamForPlayers.id === teamId) {
+                // Refresh the main teams data
+                await fetchCurrentTeams();
+
+                // Update the selectedTeamForPlayers with fresh data
+                const updatedTeams = await get(`/tournaments/${tournament.id}/teams`);
+                const updatedSelectedTeam = updatedTeams.find(team => team.id === teamId);
+                if (updatedSelectedTeam) {
+                    setSelectedTeamForPlayers(updatedSelectedTeam);
+                }
+
+                // Refresh available players to include the removed player
+                await fetchAvailablePlayers();
+            } else {
+                // Just refresh teams if dialog isn't open for this team
+                await fetchCurrentTeams();
+            }
+
+            // Clear any previous errors
+            setTeamError(null);
 
             // Notify parent component to refresh tournament data
             if (onUpdate) {
@@ -482,22 +501,6 @@ function TournamentTeams({ tournament, onUpdate }) {
             </Box>
         );
     }
-
-    // Show error state if there's an error
-    if (teamError && !createTeamDialogOpen && !editTeamDialogOpen && !addPlayerDialogOpen) {
-        return (
-            <Paper sx={{ p: 3 }}>
-                <Alert severity="error" sx={{ mb: 2 }}>
-                    {teamError}
-                </Alert>
-                <Button onClick={fetchCurrentTeams} variant="outlined">
-                    Retry
-                </Button>
-            </Paper>
-        );
-    }
-
-    console.log('Rendering with currentTeams:', currentTeams);
 
     // Calculate team size validation summary
     const teamsWithIssues = currentTeams.filter(team => {
@@ -574,7 +577,7 @@ function TournamentTeams({ tournament, onUpdate }) {
                                                         {team.name}
                                                     </Typography>
                                                     <Chip
-                                                        label={`${team.player_count}/${tournament?.team_size || '?'} players`}
+                                                        label={`${team.player_count || 0}/${tournament?.team_size || '?'} players`}
                                                         size="small"
                                                         variant="outlined"
                                                         color={sizeStatus.color}
@@ -733,7 +736,7 @@ function TournamentTeams({ tournament, onUpdate }) {
                 )}
             </Paper>
 
-            {/* Manage Team Players Dialog */}
+            {/* Manage Team Players Dialog - UPDATED */}
             <Dialog
                 open={addPlayerDialogOpen}
                 onClose={handleCloseAddPlayerDialog}
@@ -878,158 +881,76 @@ function TournamentTeams({ tournament, onUpdate }) {
                             const searchFilteredPlayers = filterPlayers(availablePlayersFiltered, playerSearchFilter);
                             const teamIsFull = selectedTeamForPlayers && !canAddPlayerToTeam(selectedTeamForPlayers);
 
-                            // Show search results info
-                            const showSearchInfo = playerSearchFilter.trim() && availablePlayersFiltered.length > 0;
-
-                            return (
-                                <>
-                                    {/* Search Results Info */}
-                                    {showSearchInfo && (
-                                        <Box sx={{ mb: 2 }}>
-                                            <Typography variant="body2" color="text.secondary">
-                                                {searchFilteredPlayers.length === 0 ? (
-                                                    <>No players found matching "{playerSearchFilter}"</>
-                                                ) : (
-                                                    <>
-                                                        Showing {searchFilteredPlayers.length} of {availablePlayersFiltered.length} players
-                                                        {searchFilteredPlayers.length !== availablePlayersFiltered.length && (
-                                                            <Button
-                                                                size="small"
-                                                                onClick={clearPlayerSearch}
-                                                                sx={{ ml: 1 }}
-                                                            >
-                                                                Show all
-                                                            </Button>
+                            return searchFilteredPlayers.length === 0 ? (
+                                <Paper sx={{ p: 3, textAlign: 'center' }}>
+                                    <PersonIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                                    <Typography variant="body1" color="text.secondary" paragraph>
+                                        {availablePlayers.length === 0 ? (
+                                            'No players found.'
+                                        ) : playerSearchFilter.trim() ? (
+                                            <>No players found matching "{playerSearchFilter}".</>
+                                        ) : (
+                                            'All available players are already in this team.'
+                                        )}
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
+                                        <Button
+                                            variant="outlined"
+                                            startIcon={<PersonAddIcon />}
+                                            onClick={handleCreateNewPlayer}
+                                            disabled={teamIsFull}
+                                        >
+                                            Create New Player
+                                        </Button>
+                                        {playerSearchFilter.trim() && (
+                                            <Button
+                                                variant="outlined"
+                                                onClick={clearPlayerSearch}
+                                            >
+                                                Clear Search
+                                            </Button>
+                                        )}
+                                    </Box>
+                                </Paper>
+                            ) : (
+                                <List sx={{ maxHeight: 400, overflow: 'auto' }}>
+                                    {searchFilteredPlayers.map((player) => (
+                                        <ListItem key={player.id}>
+                                            <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                                            <ListItemText
+                                                primary={`${player.first_name} ${player.last_name}`}
+                                                secondary={
+                                                    <Box>
+                                                        {player.email && (
+                                                            <Typography variant="body2" color="text.secondary">
+                                                                {player.email}
+                                                            </Typography>
                                                         )}
-                                                    </>
-                                                )}
-                                            </Typography>
-                                        </Box>
-                                    )}
-
-                                    {/* Players List */}
-                                    {searchFilteredPlayers.length === 0 ? (
-                                        <Paper sx={{ p: 3, textAlign: 'center' }}>
-                                            <PersonIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                                            <Typography variant="body1" color="text.secondary" paragraph>
-                                                {availablePlayers.length === 0 ? (
-                                                    'No players found.'
-                                                ) : playerSearchFilter.trim() ? (
-                                                    <>
-                                                        No players found matching "{playerSearchFilter}".
-                                                        <br />
-                                                        Try a different search term or create a new player.
-                                                    </>
-                                                ) : (
-                                                    'All available players are already in this team.'
-                                                )}
-                                            </Typography>
-                                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
+                                                        {player.handicap !== null && (
+                                                            <Chip
+                                                                label={`HCP: ${player.handicap}`}
+                                                                size="small"
+                                                                sx={{ mt: 0.5 }}
+                                                            />
+                                                        )}
+                                                    </Box>
+                                                }
+                                            />
+                                            <ListItemSecondaryAction>
                                                 <Button
                                                     variant="outlined"
+                                                    size="small"
                                                     startIcon={<PersonAddIcon />}
-                                                    onClick={handleCreateNewPlayer}
+                                                    onClick={() => handleAddPlayerToTeam(player.id)}
                                                     disabled={teamIsFull}
+                                                    title={teamIsFull ? 'Team has reached maximum size' : 'Add to Team'}
                                                 >
-                                                    Create New Player
+                                                    Add to Team
                                                 </Button>
-                                                {playerSearchFilter.trim() && (
-                                                    <Button
-                                                        variant="outlined"
-                                                        onClick={clearPlayerSearch}
-                                                    >
-                                                        Clear Search
-                                                    </Button>
-                                                )}
-                                            </Box>
-                                        </Paper>
-                                    ) : (
-                                        <List sx={{ maxHeight: 400, overflow: 'auto' }}>
-                                            {searchFilteredPlayers.map((player) => {
-                                                // Highlight search terms in player info
-                                                const searchTerm = playerSearchFilter.toLowerCase();
-                                                const fullName = `${player.first_name} ${player.last_name}`;
-
-                                                return (
-                                                    <ListItem key={player.id}>
-                                                        <PersonIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                                                        <ListItemText
-                                                            primary={
-                                                                <Typography variant="body1">
-                                                                    {searchTerm && fullName.toLowerCase().includes(searchTerm) ? (
-                                                                        <Box component="span">
-                                                                            {fullName.split(new RegExp(`(${searchTerm})`, 'gi')).map((part, index) =>
-                                                                                part.toLowerCase() === searchTerm ? (
-                                                                                    <Box component="span" key={index} sx={{
-                                                                                        backgroundColor: 'warning.light',
-                                                                                        fontWeight: 'bold',
-                                                                                        px: 0.5,
-                                                                                        borderRadius: 0.5
-                                                                                    }}>
-                                                                                        {part}
-                                                                                    </Box>
-                                                                                ) : part
-                                                                            )}
-                                                                        </Box>
-                                                                    ) : fullName}
-                                                                </Typography>
-                                                            }
-                                                            secondary={
-                                                                <Box>
-                                                                    {player.email && (
-                                                                        <Typography variant="body2" color="text.secondary">
-                                                                            {searchTerm && player.email.toLowerCase().includes(searchTerm) ? (
-                                                                                <Box component="span">
-                                                                                    {player.email.split(new RegExp(`(${searchTerm})`, 'gi')).map((part, index) =>
-                                                                                        part.toLowerCase() === searchTerm ? (
-                                                                                            <Box component="span" key={index} sx={{
-                                                                                                backgroundColor: 'warning.light',
-                                                                                                fontWeight: 'bold',
-                                                                                                px: 0.5,
-                                                                                                borderRadius: 0.5
-                                                                                            }}>
-                                                                                                {part}
-                                                                                            </Box>
-                                                                                        ) : part
-                                                                                    )}
-                                                                                </Box>
-                                                                            ) : player.email}
-                                                                        </Typography>
-                                                                    )}
-                                                                    {player.handicap !== null && (
-                                                                        <Chip
-                                                                            label={`HCP: ${player.handicap}`}
-                                                                            size="small"
-                                                                            sx={{
-                                                                                mt: 0.5,
-                                                                                ...(searchTerm && player.handicap.toString().includes(searchTerm) && {
-                                                                                    backgroundColor: 'warning.light',
-                                                                                    fontWeight: 'bold'
-                                                                                })
-                                                                            }}
-                                                                        />
-                                                                    )}
-                                                                </Box>
-                                                            }
-                                                        />
-                                                        <ListItemSecondaryAction>
-                                                            <Button
-                                                                variant="outlined"
-                                                                size="small"
-                                                                startIcon={<PersonAddIcon />}
-                                                                onClick={() => handleAddPlayerToTeam(player.id)}
-                                                                disabled={teamIsFull}
-                                                                title={teamIsFull ? 'Team has reached maximum size' : 'Add to Team'}
-                                                            >
-                                                                Add to Team
-                                                            </Button>
-                                                        </ListItemSecondaryAction>
-                                                    </ListItem>
-                                                );
-                                            })}
-                                        </List>
-                                    )}
-                                </>
+                                            </ListItemSecondaryAction>
+                                        </ListItem>
+                                    ))}
+                                </List>
                             );
                         })()
                     )}
@@ -1219,11 +1140,6 @@ function TournamentTeams({ tournament, onUpdate }) {
                                 helperText={playerValidation.firstNameError || "Required"}
                                 required
                                 autoFocus
-                                onBlur={(e) => {
-                                    if (!e.target.value.trim()) {
-                                        // Handle validation here if needed
-                                    }
-                                }}
                             />
                         </Grid>
                         <Grid item xs={12} sm={6}>
