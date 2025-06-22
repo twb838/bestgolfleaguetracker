@@ -22,7 +22,6 @@ import { get, post, del, put } from '../../../services/api';
 import { debounce } from 'lodash'; // or implement your own debounce
 
 function TournamentTeams({ tournament, onUpdate }) {
-    const [addTeamDialogOpen, setAddTeamDialogOpen] = useState(false);
     const [createTeamDialogOpen, setCreateTeamDialogOpen] = useState(false);
     const [editTeamDialogOpen, setEditTeamDialogOpen] = useState(false);
     const [addPlayerDialogOpen, setAddPlayerDialogOpen] = useState(false);
@@ -30,7 +29,6 @@ function TournamentTeams({ tournament, onUpdate }) {
 
     // Team management state
     const [currentTeams, setCurrentTeams] = useState([]);
-    const [availableTeams, setAvailableTeams] = useState([]);
     const [teamsLoading, setTeamsLoading] = useState(true);
     const [teamError, setTeamError] = useState(null);
     const [expandedTeams, setExpandedTeams] = useState(new Set());
@@ -157,18 +155,6 @@ function TournamentTeams({ tournament, onUpdate }) {
         }
     };
 
-    const fetchAvailableTeams = async () => {
-        try {
-            console.log('Fetching all teams...');
-            const teamsData = await get('/teams');
-            console.log('Fetched teams:', teamsData);
-            setAvailableTeams(teamsData);
-        } catch (error) {
-            console.error('Error fetching teams:', error);
-            setTeamError(error.message || 'Failed to fetch teams');
-        }
-    };
-
     const fetchAvailablePlayers = async () => {
         try {
             setPlayersLoading(true);
@@ -186,11 +172,6 @@ function TournamentTeams({ tournament, onUpdate }) {
 
     const handleCreateTeam = () => {
         setCreateTeamDialogOpen(true);
-    };
-
-    const handleAddExistingTeam = () => {
-        setAddTeamDialogOpen(true);
-        fetchAvailableTeams();
     };
 
     const handleEditTeam = (team) => {
@@ -218,11 +199,6 @@ function TournamentTeams({ tournament, onUpdate }) {
             name: '',
             description: ''
         });
-        setTeamError(null);
-    };
-
-    const handleCloseAddTeamDialog = () => {
-        setAddTeamDialogOpen(false);
         setTeamError(null);
     };
 
@@ -332,26 +308,6 @@ function TournamentTeams({ tournament, onUpdate }) {
             setTeamError(error.message || 'Failed to update team');
         } finally {
             setTeamLoading(false);
-        }
-    };
-
-    const handleAddExistingTeamToTournament = async (team) => {
-        try {
-            console.log(`Adding existing team ${team.id} to tournament ${tournament.id}`);
-            await post(`/tournaments/${tournament.id}/teams/${team.id}`, {});
-
-            // Refresh data
-            await fetchCurrentTeams();
-
-            // Notify parent component to refresh tournament data
-            if (onUpdate) {
-                onUpdate();
-            }
-
-            console.log(`Team ${team.name} added to tournament`);
-        } catch (error) {
-            console.error('Error adding team to tournament:', error);
-            setTeamError(error.message || 'Failed to add team to tournament');
         }
     };
 
@@ -486,7 +442,7 @@ function TournamentTeams({ tournament, onUpdate }) {
     }
 
     // Show loading state while fetching initial data
-    if (teamsLoading && !addTeamDialogOpen) {
+    if (teamsLoading && !createTeamDialogOpen) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
                 <CircularProgress />
@@ -498,7 +454,7 @@ function TournamentTeams({ tournament, onUpdate }) {
     }
 
     // Show error state if there's an error
-    if (teamError && !addTeamDialogOpen && !createTeamDialogOpen && !editTeamDialogOpen && !addPlayerDialogOpen) {
+    if (teamError && !createTeamDialogOpen && !editTeamDialogOpen && !addPlayerDialogOpen) {
         return (
             <Paper sx={{ p: 3 }}>
                 <Alert severity="error" sx={{ mb: 2 }}>
@@ -527,22 +483,13 @@ function TournamentTeams({ tournament, onUpdate }) {
                     <Typography variant="h6">
                         Tournament Teams ({currentTeams.length})
                     </Typography>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button
-                            variant="outlined"
-                            startIcon={<AddIcon />}
-                            onClick={handleAddExistingTeam}
-                        >
-                            Add Existing Team
-                        </Button>
-                        <Button
-                            variant="contained"
-                            startIcon={<GroupAddIcon />}
-                            onClick={handleCreateTeam}
-                        >
-                            Create New Team
-                        </Button>
-                    </Box>
+                    <Button
+                        variant="contained"
+                        startIcon={<GroupAddIcon />}
+                        onClick={handleCreateTeam}
+                    >
+                        Create New Team
+                    </Button>
                 </Box>
 
                 {/* Team Size Requirements Alert */}
@@ -743,24 +690,15 @@ function TournamentTeams({ tournament, onUpdate }) {
                     <Paper sx={{ p: 4, textAlign: 'center', bgcolor: 'grey.50' }}>
                         <GroupsIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
                         <Typography variant="body1" color="text.secondary" paragraph>
-                            No teams have been added to this tournament yet.
+                            No teams have been created for this tournament yet.
                         </Typography>
-                        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                            <Button
-                                variant="outlined"
-                                startIcon={<AddIcon />}
-                                onClick={handleAddExistingTeam}
-                            >
-                                Add Existing Team
-                            </Button>
-                            <Button
-                                variant="outlined"
-                                startIcon={<GroupAddIcon />}
-                                onClick={handleCreateTeam}
-                            >
-                                Create New Team
-                            </Button>
-                        </Box>
+                        <Button
+                            variant="contained"
+                            startIcon={<GroupAddIcon />}
+                            onClick={handleCreateTeam}
+                        >
+                            Create New Team
+                        </Button>
                     </Paper>
                 )}
             </Paper>
@@ -1084,97 +1022,6 @@ function TournamentTeams({ tournament, onUpdate }) {
                 </DialogActions>
             </Dialog>
 
-            {/* Add Existing Team Dialog */}
-            <Dialog
-                open={addTeamDialogOpen}
-                onClose={handleCloseAddTeamDialog}
-                maxWidth="md"
-                fullWidth
-            >
-                <DialogTitle>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <GroupsIcon sx={{ mr: 1 }} />
-                        Add Existing Team - {tournament.name}
-                    </Box>
-                </DialogTitle>
-                <DialogContent>
-                    {teamError && (
-                        <Alert severity="error" sx={{ mb: 2 }}>
-                            {teamError}
-                        </Alert>
-                    )}
-
-                    <Typography variant="h6" gutterBottom>
-                        Available Teams
-                    </Typography>
-
-                    {(() => {
-                        const currentTeamIds = currentTeams.map(t => t.id) || [];
-                        const availableTeamsFiltered = availableTeams.filter(team => !currentTeamIds.includes(team.id));
-
-                        return availableTeamsFiltered.length === 0 ? (
-                            <Paper sx={{ p: 3, textAlign: 'center' }}>
-                                <GroupsIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                                <Typography variant="body1" color="text.secondary" paragraph>
-                                    {availableTeams.length === 0 ?
-                                        'No teams found.' :
-                                        'All existing teams are already in this tournament.'
-                                    }
-                                </Typography>
-                                <Button
-                                    variant="outlined"
-                                    onClick={handleCreateTeam}
-                                    startIcon={<GroupAddIcon />}
-                                >
-                                    Create New Team
-                                </Button>
-                            </Paper>
-                        ) : (
-                            <List>
-                                {availableTeamsFiltered.map((team) => (
-                                    <ListItem key={team.id}>
-                                        <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
-                                            <GroupsIcon />
-                                        </Avatar>
-                                        <ListItemText
-                                            primary={team.name}
-                                            secondary={
-                                                <Box>
-                                                    {team.description && (
-                                                        <Typography variant="body2" color="text.secondary">
-                                                            {team.description}
-                                                        </Typography>
-                                                    )}
-                                                    <Chip
-                                                        label={`${team.players?.length || 0} players`}
-                                                        size="small"
-                                                        sx={{ mt: 0.5 }}
-                                                    />
-                                                </Box>
-                                            }
-                                        />
-                                        <ListItemSecondaryAction>
-                                            <Button
-                                                variant="outlined"
-                                                size="small"
-                                                onClick={() => handleAddExistingTeamToTournament(team)}
-                                            >
-                                                Add to Tournament
-                                            </Button>
-                                        </ListItemSecondaryAction>
-                                    </ListItem>
-                                ))}
-                            </List>
-                        );
-                    })()}
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCloseAddTeamDialog}>
-                        Close
-                    </Button>
-                </DialogActions>
-            </Dialog>
-
             {/* Create Player Dialog */}
             <Dialog
                 open={createPlayerDialogOpen}
@@ -1219,9 +1066,7 @@ function TournamentTeams({ tournament, onUpdate }) {
                                 helperText={playerValidation.firstNameError || "Required"}
                                 required
                                 autoFocus
-                                // Remove validation on every keystroke
                                 onBlur={(e) => {
-                                    // Only validate on blur, not on every keystroke
                                     if (!e.target.value.trim()) {
                                         // Handle validation here if needed
                                     }
