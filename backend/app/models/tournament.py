@@ -18,7 +18,8 @@ tournament_team = Table(
     "tournament_team",
     Base.metadata,
     Column("tournament_id", Integer, ForeignKey("tournaments.id", ondelete="CASCADE"), primary_key=True),
-    Column("team_id", Integer, ForeignKey("teams.id", ondelete="CASCADE"), primary_key=True)
+    Column("team_id", Integer, ForeignKey("teams.id", ondelete="CASCADE"), primary_key=True),
+    Column("flight_id", Integer, ForeignKey("tournament_flights.id", ondelete="CASCADE"), nullable=True)  # Optional flight association
 )
 
 # Enum for tournament participant type
@@ -111,25 +112,20 @@ class TournamentScore(Base):
     __tablename__ = "tournament_scores"
     
     id = Column(Integer, primary_key=True, index=True)
+    tournament_id = Column(Integer, ForeignKey("tournaments.id", ondelete="CASCADE"))
     round_id = Column(Integer, ForeignKey("tournament_rounds.id", ondelete="CASCADE"))
-    player_id = Column(Integer, ForeignKey("tournament_players.id", ondelete="CASCADE"))  # Updated foreign key reference
-    hole_number = Column(Integer, nullable=False)
-    score = Column(Integer, nullable=False)
-    
+    player_id = Column(Integer, ForeignKey("tournament_players.id", ondelete="CASCADE"), nullable=True)  # Updated foreign key reference
+    team_id = Column(Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=True)  # Optional team association
+    total_strokes = Column(Integer, nullable=True)  # Calculated field for total strokes
     # Relationships
     round = relationship("TournamentRound", back_populates="individual_scores")
     player = relationship("TournamentPlayer", back_populates="scores")  # Updated relationship name
 
 # Team Score model
 class TournamentTeamScore(Base):
-    __tablename__ = "tournament_team_scores"
+    __tablename__ = "tournament_score_details"
     
     id = Column(Integer, primary_key=True, index=True)
-    round_id = Column(Integer, ForeignKey("tournament_rounds.id", ondelete="CASCADE"))
-    team_id = Column(Integer, ForeignKey("teams.id", ondelete="CASCADE"))
-    hole_number = Column(Integer, nullable=False)
-    score = Column(Integer, nullable=False)
-    
-    # Relationships
-    round = relationship("TournamentRound", back_populates="team_scores")
-    team = relationship("Team")
+    tournament_score_id = Column(Integer, ForeignKey("tournaments.id", ondelete="CASCADE"))
+    hole_id = Column(Integer, ForeignKey("holes.id"), nullable=False)
+    strokes = Column(Integer, nullable=False)
