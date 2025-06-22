@@ -13,6 +13,10 @@ from app.models.match import Match
 from app.models.week import Week
 from app.models.course import Course
 from app.models.user import User
+from app.models.team import Team
+from app.models.tournament import Tournament, tournament_team
+from app.models.league import League
+from app.models.association_tables import league_teams
 from app.schemas.player import PlayerCreate, PlayerUpdate, PlayerResponse
 from app.api.deps import get_current_active_user
 
@@ -302,4 +306,58 @@ def _process_handicap_updates(
         
     finally:
         db_session.close()
+
+@router.get("/{player_id}/teams")
+def get_player_teams(player_id: int, db: Session = Depends(get_db)):
+    """Get all teams a player belongs to"""
+    player = db.query(Player).filter(Player.id == player_id).first()
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    
+    # Get teams through tournament_team relationships and direct team membership
+    teams_data = []
+
+    
+    # Get tournament teams where this player is a member
+    tournament_teams_query = db.query(Team, Tournament.name.label('event_name'))\
+        .join(tournament_team, Team.id == tournament_team.c.team_id)\
+        .join(Tournament, tournament_team.c.tournament_id == Tournament.id)\
+        .filter(Team.players.any(Player.id == player_id))
+        
+    tournament_teams = tournament_teams_query.all()
+    
+    for team, tournament_name in tournament_teams:
+        teams_data.append({
+            "id": team.id,
+            "name": team.name,
+            "description": team.description,
+            "status": "active",
+            "type": "tournament",
+            "player_count": len(team.players) if team.players else 0,
+            "event_name": tournament_name
+        })
+        
+        # Check if this team is associated with a league
+    league_teams_query = db.query(Team, League.name.label('event_name'))\
+        .join(league_teams, Team.id == league_teams.c.team_id)\
+        .join(League, league_teams.c.league_id == League.id)\
+        .filter(Team.players.any(Player.id == player_id))
+
+    league_teams_results = league_teams_query.all()
+
+    for team, event_name in league_teams_results:
+        teams_data.append({
+            "id": team.id,
+            "name": team.name,
+            "description": team.description,
+            "status": "active",
+            "type": "league",
+            "player_count": len(team.players) if team.players else 0,
+            "event_name": event_name
+        })
+
+    return {
+        "player_id": player_id,
+        "teams": teams_data
+    }
 
