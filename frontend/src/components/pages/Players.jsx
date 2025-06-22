@@ -23,13 +23,25 @@ import {
     IconButton,
     Alert,
     CircularProgress,
-    TableSortLabel
+    TableSortLabel,
+    Chip,
+    Divider,
+    List,
+    ListItem,
+    ListItemText,
+    Card,
+    CardContent,
+    Grid
 } from '@mui/material';
 import {
     Add as AddIcon,
     Edit as EditIcon,
     Delete as DeleteIcon,
-    Refresh as RefreshIcon
+    Refresh as RefreshIcon,
+    Person as PersonIcon,
+    Groups as GroupsIcon,
+    EmojiEvents as TournamentIcon,
+    SportsGolf as GolfIcon
 } from '@mui/icons-material';
 import env from '../../config/env';
 
@@ -54,6 +66,13 @@ const Players = () => {
         key: 'last_name',
         direction: 'asc'
     });
+
+    // New state variables
+    const [playerDetailsOpen, setPlayerDetailsOpen] = useState(false);
+    const [selectedPlayer, setSelectedPlayer] = useState(null);
+    const [playerTeams, setPlayerTeams] = useState([]);
+    const [playerStats, setPlayerStats] = useState(null);
+    const [loadingPlayerDetails, setLoadingPlayerDetails] = useState(false);
 
     // Fetch players and teams
     const fetchData = async () => {
@@ -236,6 +255,76 @@ const Players = () => {
         return sortedPlayers;
     };
 
+    // New function to fetch player details
+    const fetchPlayerDetails = async (playerId) => {
+        setLoadingPlayerDetails(true);
+        setError(null);
+        try {
+            const playerData = await get(`/players/${playerId}`);
+            setSelectedPlayer(playerData);
+
+            // Fetch player's teams
+            const teamsData = await get(`/players/${playerId}/teams`);
+            setPlayerTeams(teamsData);
+
+            // Fetch player's stats
+            const statsData = await get(`/players/${playerId}/stats`);
+            setPlayerStats(statsData);
+        } catch (err) {
+            console.error('Error fetching player details:', err);
+            setError(err.message);
+        } finally {
+            setLoadingPlayerDetails(false);
+        }
+    };
+
+    const fetchPlayerTeams = async (playerId) => {
+        try {
+            console.log('Fetching teams for player:', playerId);
+            const playerTeamsData = await get(`/players/${playerId}/teams`);
+            setPlayerTeams(playerTeamsData.teams || []);
+        } catch (err) {
+            console.error('Error fetching player teams:', err);
+            setError(err.message);
+            setPlayerTeams([]);
+        }
+    };
+
+    const fetchPlayerStats = async (playerId) => {
+        try {
+            console.log('Fetching stats for player:', playerId);
+            // You'll need to create this endpoint or modify existing one
+            const playerStatsData = await get(`/players/${playerId}/stats`);
+            setPlayerStats(playerStatsData);
+        } catch (err) {
+            console.error('Error fetching player stats:', err);
+            // Don't set error for stats - it's optional
+            setPlayerStats(null);
+        }
+    };
+
+    const handlePlayerClick = async (player) => {
+        setSelectedPlayer(player);
+        setPlayerDetailsOpen(true);
+        setLoadingPlayerDetails(true);
+
+        try {
+            await Promise.all([
+                fetchPlayerTeams(player.id),
+                fetchPlayerStats(player.id)
+            ]);
+        } finally {
+            setLoadingPlayerDetails(false);
+        }
+    };
+
+    const handleClosePlayerDetails = () => {
+        setPlayerDetailsOpen(false);
+        setSelectedPlayer(null);
+        setPlayerTeams([]);
+        setPlayerStats(null);
+    };
+
     return (
         <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -338,9 +427,47 @@ const Players = () => {
                                 </TableRow>
                             ) : (
                                 getSortedPlayers().map((player) => (
-                                    <TableRow key={player.id}>
-                                        <TableCell>{player.first_name}</TableCell>
-                                        <TableCell>{player.last_name}</TableCell>
+                                    <TableRow key={player.id} hover>
+                                        <TableCell>
+                                            <Button
+                                                variant="text"
+                                                color="primary"
+                                                onClick={() => handlePlayerClick(player)}
+                                                sx={{
+                                                    textTransform: 'none',
+                                                    fontWeight: 'normal',
+                                                    justifyContent: 'flex-start',
+                                                    p: 0,
+                                                    minWidth: 'auto',
+                                                    '&:hover': {
+                                                        backgroundColor: 'transparent',
+                                                        textDecoration: 'underline'
+                                                    }
+                                                }}
+                                            >
+                                                {player.first_name}
+                                            </Button>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Button
+                                                variant="text"
+                                                color="primary"
+                                                onClick={() => handlePlayerClick(player)}
+                                                sx={{
+                                                    textTransform: 'none',
+                                                    fontWeight: 'normal',
+                                                    justifyContent: 'flex-start',
+                                                    p: 0,
+                                                    minWidth: 'auto',
+                                                    '&:hover': {
+                                                        backgroundColor: 'transparent',
+                                                        textDecoration: 'underline'
+                                                    }
+                                                }}
+                                            >
+                                                {player.last_name}
+                                            </Button>
+                                        </TableCell>
                                         <TableCell>{player.email}</TableCell>
                                         <TableCell>{player.handicap || 0}</TableCell>
                                         <TableCell>{getTeamName(player.team_id)}</TableCell>
@@ -349,6 +476,7 @@ const Players = () => {
                                                 color="primary"
                                                 onClick={() => handleOpenDialog(player)}
                                                 size="small"
+                                                title="Edit Player"
                                             >
                                                 <EditIcon />
                                             </IconButton>
@@ -356,6 +484,7 @@ const Players = () => {
                                                 color="error"
                                                 onClick={() => handleDeletePlayer(player.id)}
                                                 size="small"
+                                                title="Delete Player"
                                             >
                                                 <DeleteIcon />
                                             </IconButton>
@@ -436,6 +565,254 @@ const Players = () => {
                         disabled={!currentPlayer.first_name || !currentPlayer.last_name || !currentPlayer.email}
                     >
                         Save
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Player Details Dialog */}
+            <Dialog
+                open={playerDetailsOpen}
+                onClose={handleClosePlayerDetails}
+                maxWidth="lg"
+                fullWidth
+            >
+                <DialogTitle>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <PersonIcon sx={{ mr: 1, color: 'primary.main' }} />
+                            <Box>
+                                <Typography variant="h6">
+                                    {selectedPlayer?.first_name} {selectedPlayer?.last_name}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    Player Profile & Statistics
+                                </Typography>
+                            </Box>
+                        </Box>
+                        <IconButton
+                            color="primary"
+                            onClick={() => {
+                                handleClosePlayerDetails();
+                                handleOpenDialog(selectedPlayer);
+                            }}
+                            size="small"
+                            title="Edit Player"
+                        >
+                            <EditIcon />
+                        </IconButton>
+                    </Box>
+                </DialogTitle>
+                <DialogContent>
+                    {loadingPlayerDetails ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : selectedPlayer && (
+                        <Box>
+                            {/* Player Basic Information */}
+                            <Card sx={{ mb: 3 }}>
+                                <CardContent>
+                                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                                        <PersonIcon sx={{ mr: 1 }} />
+                                        Player Information
+                                    </Typography>
+                                    <Grid container spacing={3}>
+                                        <Grid item xs={12} sm={6} md={3}>
+                                            <Typography variant="body2" color="text.secondary">
+                                                First Name
+                                            </Typography>
+                                            <Typography variant="body1" fontWeight="medium">
+                                                {selectedPlayer.first_name}
+                                            </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6} md={3}>
+                                            <Typography variant="body2" color="text.secondary">
+                                                Last Name
+                                            </Typography>
+                                            <Typography variant="body1" fontWeight="medium">
+                                                {selectedPlayer.last_name}
+                                            </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6} md={3}>
+                                            <Typography variant="body2" color="text.secondary">
+                                                Email
+                                            </Typography>
+                                            <Typography variant="body1" fontWeight="medium">
+                                                {selectedPlayer.email}
+                                            </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6} md={3}>
+                                            <Typography variant="body2" color="text.secondary">
+                                                Handicap
+                                            </Typography>
+                                            <Typography variant="body1" fontWeight="medium">
+                                                {selectedPlayer.handicap || 'No handicap set'}
+                                            </Typography>
+                                        </Grid>
+                                        <Grid item xs={12} sm={6} md={3}>
+                                            <Typography variant="body2" color="text.secondary">
+                                                Primary Team
+                                            </Typography>
+                                            <Typography variant="body1" fontWeight="medium">
+                                                {getTeamName(selectedPlayer.team_id)}
+                                            </Typography>
+                                        </Grid>
+                                    </Grid>
+                                </CardContent>
+                            </Card>
+
+                            {/* Player Statistics */}
+                            {playerStats && (
+                                <Card sx={{ mb: 3 }}>
+                                    <CardContent>
+                                        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                                            <GolfIcon sx={{ mr: 1 }} />
+                                            Playing Statistics
+                                        </Typography>
+                                        <Grid container spacing={3}>
+                                            <Grid item xs={12} sm={6} md={3}>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    Rounds Played
+                                                </Typography>
+                                                <Typography variant="h4" color="primary.main">
+                                                    {playerStats.total_rounds || 0}
+                                                </Typography>
+                                            </Grid>
+                                            <Grid item xs={12} sm={6} md={3}>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    Average Score
+                                                </Typography>
+                                                <Typography variant="h4" color="primary.main">
+                                                    {playerStats.average_score ? Number(playerStats.average_score).toFixed(1) : 'N/A'}
+                                                </Typography>
+                                            </Grid>
+                                            <Grid item xs={12} sm={6} md={3}>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    Best Score
+                                                </Typography>
+                                                <Typography variant="h4" color="success.main">
+                                                    {playerStats.best_score || 'N/A'}
+                                                </Typography>
+                                            </Grid>
+                                            <Grid item xs={12} sm={6} md={3}>
+                                                <Typography variant="body2" color="text.secondary">
+                                                    Current Handicap
+                                                </Typography>
+                                                <Typography variant="h4" color="secondary.main">
+                                                    {playerStats.current_handicap || selectedPlayer.handicap || 'N/A'}
+                                                </Typography>
+                                            </Grid>
+                                        </Grid>
+                                    </CardContent>
+                                </Card>
+                            )}
+
+                            {/* Team Memberships */}
+                            <Card>
+                                <CardContent>
+                                    <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                                        <GroupsIcon sx={{ mr: 1 }} />
+                                        Team Memberships ({playerTeams.length})
+                                    </Typography>
+
+                                    {playerTeams.length > 0 ? (
+                                        <Box>
+                                            {playerTeams.map((team, index) => (
+                                                <Paper
+                                                    key={team.id || index}
+                                                    elevation={1}
+                                                    sx={{
+                                                        p: 2,
+                                                        mb: 2,
+                                                        border: '1px solid',
+                                                        borderColor: 'divider',
+                                                        '&:last-child': { mb: 0 }
+                                                    }}
+                                                >
+                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                                                        <Box sx={{ flex: 1 }}>
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                                                <Typography variant="subtitle1" fontWeight="bold">
+                                                                    {team.name}
+                                                                </Typography>
+                                                                {team.status === 'primary' && (
+                                                                    <Chip
+                                                                        label="Primary"
+                                                                        size="small"
+                                                                        color="primary"
+                                                                        sx={{ ml: 1 }}
+                                                                    />
+                                                                )}
+                                                                <Chip
+                                                                    label={team.type}
+                                                                    size="small"
+                                                                    variant="outlined"
+                                                                    color={team.type === 'league' ? 'success' : 'info'}
+                                                                    sx={{ ml: 1 }}
+                                                                />
+                                                            </Box>
+
+                                                            {team.description && (
+                                                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                                                    {team.description}
+                                                                </Typography>
+                                                            )}
+
+                                                            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                                                                {team.league_name && (
+                                                                    <Typography variant="body2" color="success.main">
+                                                                        <strong>League:</strong> {team.league_name}
+                                                                    </Typography>
+                                                                )}
+                                                                {team.tournament_name && (
+                                                                    <Typography variant="body2" color="primary.main">
+                                                                        <strong>Tournament:</strong> {team.tournament_name}
+                                                                    </Typography>
+                                                                )}
+                                                                {team.event_name && (
+                                                                    <Typography variant="body2" color="secondary.main">
+                                                                        <strong>Event:</strong> {team.event_name}
+                                                                    </Typography>
+                                                                )}
+                                                            </Box>
+                                                        </Box>
+
+                                                        <Box sx={{ textAlign: 'right', ml: 2 }}>
+                                                            <Typography variant="body2" color="text.secondary">
+                                                                {team.player_count} players
+                                                            </Typography>
+                                                        </Box>
+                                                    </Box>
+                                                </Paper>
+                                            ))}
+                                        </Box>
+                                    ) : (
+                                        <Box sx={{ textAlign: 'center', py: 3 }}>
+                                            <GroupsIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                                            <Typography variant="body1" color="text.secondary">
+                                                This player is not currently a member of any teams.
+                                            </Typography>
+                                        </Box>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </Box>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleClosePlayerDetails}>
+                        Close
+                    </Button>
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<EditIcon />}
+                        onClick={() => {
+                            handleClosePlayerDetails();
+                            handleOpenDialog(selectedPlayer);
+                        }}
+                    >
+                        Edit Player
                     </Button>
                 </DialogActions>
             </Dialog>
