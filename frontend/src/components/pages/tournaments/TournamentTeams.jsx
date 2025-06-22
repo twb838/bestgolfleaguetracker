@@ -436,11 +436,11 @@ function TournamentTeams({ tournament, onUpdate }) {
             console.log(`Removing player ${playerId} from team ${teamId}`);
             await del(`/teams/${teamId}/players/${playerId}`);
 
-            // If we're currently viewing this team in the dialog, update it
-            if (selectedTeamForPlayers && selectedTeamForPlayers.id === teamId) {
-                // Refresh the main teams data
-                await fetchCurrentTeams();
+            // Always refresh the main teams data to update the team list
+            await fetchCurrentTeams();
 
+            // If we're currently viewing this team in the manage players dialog, update it
+            if (selectedTeamForPlayers && selectedTeamForPlayers.id === teamId) {
                 // Update the selectedTeamForPlayers with fresh data
                 const updatedTeams = await get(`/tournaments/${tournament.id}/teams`);
                 const updatedSelectedTeam = updatedTeams.find(team => team.id === teamId);
@@ -450,9 +450,6 @@ function TournamentTeams({ tournament, onUpdate }) {
 
                 // Refresh available players to include the removed player
                 await fetchAvailablePlayers();
-            } else {
-                // Just refresh teams if dialog isn't open for this team
-                await fetchCurrentTeams();
             }
 
             // Clear any previous errors
@@ -463,7 +460,7 @@ function TournamentTeams({ tournament, onUpdate }) {
                 onUpdate();
             }
 
-            console.log(`Player removed from team`);
+            console.log(`Player removed from team successfully`);
         } catch (error) {
             console.error('Error removing player from team:', error);
             setTeamError(error.message || 'Failed to remove player from team');
@@ -555,6 +552,7 @@ function TournamentTeams({ tournament, onUpdate }) {
                     <List>
                         {currentTeams.map((team) => {
                             const sizeStatus = getTeamSizeStatus(team);
+                            const isExpanded = expandedTeams.has(team.id);
                             return (
                                 <React.Fragment key={team.id}>
                                     <ListItem
@@ -565,7 +563,7 @@ function TournamentTeams({ tournament, onUpdate }) {
                                                 backgroundColor: 'action.hover'
                                             }
                                         }}
-                                        onClick={() => handleEditTeam(team)}
+                                        onClick={() => toggleTeamExpansion(team.id)}
                                     >
                                         <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
                                             <GroupsIcon />
@@ -600,7 +598,7 @@ function TournamentTeams({ tournament, onUpdate }) {
                                                         </Typography>
                                                     )}
                                                     <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                                                        Click to edit team details
+                                                        {isExpanded ? 'Click to collapse team members' : 'Click to view team members'}
                                                     </Typography>
                                                 </Box>
                                             }
@@ -625,7 +623,7 @@ function TournamentTeams({ tournament, onUpdate }) {
                                                     }}
                                                     size="small"
                                                     color="primary"
-                                                    title="Edit Team"
+                                                    title="Edit Team Details"
                                                 >
                                                     <EditIcon fontSize="small" />
                                                 </IconButton>
@@ -635,9 +633,9 @@ function TournamentTeams({ tournament, onUpdate }) {
                                                         toggleTeamExpansion(team.id);
                                                     }}
                                                     size="small"
-                                                    title="View Players"
+                                                    title={isExpanded ? 'Collapse Team' : 'Expand Team'}
                                                 >
-                                                    {expandedTeams.has(team.id) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                                    {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                                                 </IconButton>
                                                 <IconButton
                                                     edge="end"
@@ -656,19 +654,30 @@ function TournamentTeams({ tournament, onUpdate }) {
                                     </ListItem>
 
                                     {/* Team Players Collapse */}
-                                    <Collapse in={expandedTeams.has(team.id)} timeout="auto" unmountOnExit>
+                                    <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                                         <Box sx={{ pl: 8, pr: 2, pb: 2 }}>
                                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                                                 <Typography variant="subtitle2" color="text.secondary">
-                                                    Team Players:
+                                                    Team Members ({team.players?.length || 0}):
                                                 </Typography>
-                                                <Button
-                                                    size="small"
-                                                    startIcon={<PersonAddIcon />}
-                                                    onClick={() => handleManageTeamPlayers(team)}
-                                                >
-                                                    Manage Players
-                                                </Button>
+                                                <Box sx={{ display: 'flex', gap: 1 }}>
+                                                    <Button
+                                                        size="small"
+                                                        startIcon={<PersonAddIcon />}
+                                                        onClick={() => handleManageTeamPlayers(team)}
+                                                        variant="outlined"
+                                                    >
+                                                        Manage Players
+                                                    </Button>
+                                                    <Button
+                                                        size="small"
+                                                        startIcon={<EditIcon />}
+                                                        onClick={() => handleEditTeam(team)}
+                                                        variant="outlined"
+                                                    >
+                                                        Edit Team
+                                                    </Button>
+                                                </Box>
                                             </Box>
                                             {team.players && team.players.length > 0 ? (
                                                 <List dense>
@@ -676,11 +685,29 @@ function TournamentTeams({ tournament, onUpdate }) {
                                                         <ListItem key={player.id} sx={{ py: 0.5 }}>
                                                             <PersonIcon sx={{ mr: 1, fontSize: 16, color: 'text.secondary' }} />
                                                             <ListItemText
-                                                                primary={player.player_name}
+                                                                primary={
+                                                                    <Typography variant="body2" fontWeight="medium">
+                                                                        {player.player_name}
+                                                                    </Typography>
+                                                                }
                                                                 secondary={
-                                                                    player.handicap !== null ?
-                                                                        `Handicap: ${player.handicap}` :
-                                                                        'No handicap'
+                                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                                                                        {player.handicap !== null ? (
+                                                                            <Chip
+                                                                                label={`HCP: ${player.handicap}`}
+                                                                                size="small"
+                                                                                variant="outlined"
+                                                                                color="primary"
+                                                                            />
+                                                                        ) : (
+                                                                            <Chip
+                                                                                label="No handicap"
+                                                                                size="small"
+                                                                                variant="outlined"
+                                                                                color="default"
+                                                                            />
+                                                                        )}
+                                                                    </Box>
                                                                 }
                                                             />
                                                             <ListItemSecondaryAction>
@@ -697,19 +724,27 @@ function TournamentTeams({ tournament, onUpdate }) {
                                                     ))}
                                                 </List>
                                             ) : (
-                                                <Box sx={{ textAlign: 'center', py: 2 }}>
-                                                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mb: 1 }}>
-                                                        No players assigned to this team
+                                                <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'grey.50', borderRadius: 1 }}>
+                                                    <PersonIcon sx={{ fontSize: 32, color: 'text.secondary', mb: 1 }} />
+                                                    <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mb: 2 }}>
+                                                        No players assigned to this team yet
                                                     </Typography>
-                                                    <Button
-                                                        size="small"
-                                                        variant="outlined"
-                                                        startIcon={<PersonAddIcon />}
-                                                        onClick={() => handleManageTeamPlayers(team)}
-                                                    >
-                                                        Add Players
-                                                    </Button>
-                                                </Box>
+                                                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
+                                                        <Button
+                                                            size="small"
+                                                            variant="contained"
+                                                            startIcon={<PersonAddIcon />}
+                                                            onClick={() => handleManageTeamPlayers(team)}
+                                                        >
+                                                            Add Players
+                                                        </Button>
+                                                        {tournament?.team_size && (
+                                                            <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center', ml: 1 }}>
+                                                                Need {tournament.team_size} player{tournament.team_size !== 1 ? 's' : ''}
+                                                            </Typography>
+                                                        )}
+                                                    </Box>
+                                                </Paper>
                                             )}
                                         </Box>
                                     </Collapse>
